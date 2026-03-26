@@ -74,8 +74,10 @@
 //#include <cwchar>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 //#include <iterator>
 #include <list>
+#include <map>
 #include <memory>
 #include <set>
 #include <stdexcept>

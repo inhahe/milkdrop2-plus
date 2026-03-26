@@ -5677,135 +5677,242 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
 
     PresetList temp_presets;
     int temp_nPresets = 0;
+    LARGE_INTEGER perfFreq, perfStart, perfEnd;
+    QueryPerformanceFrequency(&perfFreq);
+    QueryPerformanceCounter(&perfStart);
 
-    // Recursively scan the preset directory for .milk files.
+    // === CACHE LOGIC ===
+    // Put cache file in the preset directory itself (simple and always valid).
+    std::wstring cacheFile = presetDir + L"preset_cache.dat";
+
+    // Step 1: Fast filename-only scan (no file opens).
+    std::vector<std::wstring> currentFiles;
     try
     {
         for (const auto& entry : std::filesystem::recursive_directory_iterator(
                  presetDir, std::filesystem::directory_options::skip_permission_denied))
         {
-            if (g_bThreadShouldQuit)
-                break;
+            if (g_bThreadShouldQuit) break;
+            if (!entry.is_regular_file()) continue;
+            if (_wcsicmp(entry.path().extension().c_str(), L".milk") != 0) continue;
+            currentFiles.push_back(entry.path().wstring().substr(presetDir.length()));
+        }
+    }
+    catch (const std::filesystem::filesystem_error&) {}
+    std::sort(currentFiles.begin(), currentFiles.end(), [](const std::wstring& a, const std::wstring& b) {
+        return _wcsicmp(a.c_str(), b.c_str()) < 0;
+    });
 
-            if (!entry.is_regular_file())
-                continue;
-
-            const auto& path = entry.path();
-            if (_wcsicmp(path.extension().c_str(), L".milk") != 0)
-                continue;
-
-            std::wstring fullPath = path.wstring();
-
-            // Compute relative path from preset root.
-            std::wstring relativePath = fullPath.substr(presetDir.length());
-
-            // Filter by selected categories.
-            if (!MatchesSelectedCategories(relativePath, filterCategories))
-                continue;
-
-            // Filter by favorites if in favorites-only mode.
-            if (bFavoritesOnly)
+    // Step 2: Try to load cache.
+    bool cacheValid = false;
+    std::map<std::wstring, float> cachedRatings; // relativePath -> rating
+    if (std::filesystem::exists(cacheFile))
+    {
+        std::wifstream cfs(cacheFile);
+        if (cfs.is_open())
+        {
+            std::wstring line;
+            std::vector<std::wstring> cachedFiles;
+            // First line: cached directory path.
+            if (std::getline(cfs, line))
             {
-                // Normalize for comparison.
-                std::wstring normalRel = relativePath;
-                std::replace(normalRel.begin(), normalRel.end(), L'/', L'\\');
-                if (filterFavorites.find(normalRel) == filterFavorites.end())
-                    continue;
+                // Trim trailing whitespace/CR.
+                while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n' || line.back() == L' '))
+                    line.pop_back();
+                // Check if path matches current preset directory.
+                if (_wcsicmp(line.c_str(), presetDir.c_str()) != 0)
+                {
+                    // Different directory — cache is invalid.
+                }
+                // Second line: file count.
+                else if (std::getline(cfs, line))
+                {
+                    int cachedCount = _wtoi(line.c_str());
+                    for (int i = 0; i < cachedCount && std::getline(cfs, line); i++)
+                    {
+                        // Format: relativePath|rating
+                        size_t sep = line.rfind(L'|');
+                        if (sep != std::wstring::npos)
+                        {
+                            std::wstring relPath = line.substr(0, sep);
+                            float rating = static_cast<float>(_wtof(line.substr(sep + 1).c_str()));
+                            cachedFiles.push_back(relPath);
+                            cachedRatings[relPath] = rating;
+                        }
+                    }
+                    // Validate: same file count and same filenames?
+                    if (static_cast<int>(cachedFiles.size()) == cachedCount &&
+                        cachedFiles.size() == currentFiles.size())
+                    {
+                        cacheValid = true;
+                        for (size_t i = 0; i < cachedFiles.size(); i++)
+                        {
+                            if (_wcsicmp(cachedFiles[i].c_str(), currentFiles[i].c_str()) != 0)
+                            {
+                                cacheValid = false;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
 
-            // Read preset header to check PS version and rating.
-            bool bSkip = false;
-            float fRating = 0.0f;
+    // Step 3: Build preset list — use cache for ratings if valid, otherwise read headers.
+    for (const auto& relativePath : currentFiles)
+    {
+        if (g_bThreadShouldQuit) break;
 
+        // Filter by selected categories.
+        if (!MatchesSelectedCategories(relativePath, filterCategories))
+            continue;
+
+        // Filter by favorites if in favorites-only mode.
+        if (bFavoritesOnly)
+        {
+            std::wstring normalRel = relativePath;
+            std::replace(normalRel.begin(), normalRel.end(), L'/', L'\\');
+            if (filterFavorites.find(normalRel) == filterFavorites.end())
+                continue;
+        }
+
+        float fRating = 3.0f;
+        bool bSkip = false;
+
+        if (cacheValid)
+        {
+            // Use cached rating.
+            auto it = cachedRatings.find(relativePath);
+            if (it != cachedRatings.end())
+                fRating = it->second;
+        }
+        else
+        {
+            // Read preset header for PS version and rating.
+            std::wstring fullPath = presetDir + relativePath;
             FILE* f;
             errno_t err = _wfopen_s(&f, fullPath.c_str(), L"r");
             if (err)
                 continue;
 
+            constexpr size_t PRESET_HEADER_SCAN_BYTES = 160U;
+            char szLine[PRESET_HEADER_SCAN_BYTES] = {0};
+            char* p = szLine;
+
+            int bytes_to_read = sizeof(szLine) - 1;
+            size_t count = fread(szLine, bytes_to_read, 1, f);
+            if (count < 1)
             {
-                constexpr size_t PRESET_HEADER_SCAN_BYTES = 160U;
-                char szLine[PRESET_HEADER_SCAN_BYTES] = {0};
-                char* p = szLine;
+                fseek(f, SEEK_SET, 0);
+                count = fread(szLine, 1, bytes_to_read, f);
+                szLine[count] = 0;
+            }
+            else
+                szLine[bytes_to_read - 1] = 0;
 
-                int bytes_to_read = sizeof(szLine) - 1;
-                size_t count = fread(szLine, bytes_to_read, 1, f);
-                if (count < 1)
-                {
-                    fseek(f, SEEK_SET, 0);
-                    count = fread(szLine, 1, bytes_to_read, f);
-                    szLine[count] = 0;
-                }
-                else
-                    szLine[bytes_to_read - 1] = 0;
+            bool bScanForPreset00AndRating = false;
+            bool bRatingKnown = false;
 
-                bool bScanForPreset00AndRating = false;
-                bool bRatingKnown = false;
-
-                if (!strncmp(p, "MILKDROP_PRESET_VERSION", 23))
+            if (!strncmp(p, "MILKDROP_PRESET_VERSION", 23))
+            {
+                p = NextLine(p);
+                int ps_version = 2;
+                if (p && !strncmp(p, "PSVERSION", 9))
                 {
-                    p = NextLine(p);
-                    int ps_version = 2;
-                    if (p && !strncmp(p, "PSVERSION", 9))
-                    {
-                        sscanf_s(&p[10], "%d", &ps_version);
-                        if (ps_version > nMaxPSVersion)
-                            bSkip = true;
-                        else
-                        {
-                            p = NextLine(p);
-                            bScanForPreset00AndRating = true;
-                        }
-                    }
-                }
-                else
-                {
-                    bScanForPreset00AndRating = true;
-                }
-
-                int reps = (bScanForPreset00AndRating) ? 10 : 0;
-                for (int z = 0; z < reps; z++)
-                {
-                    if (p && !strncmp(p, "[preset00]", 10))
+                    sscanf_s(&p[10], "%d", &ps_version);
+                    if (ps_version > nMaxPSVersion)
+                        bSkip = true;
+                    else
                     {
                         p = NextLine(p);
-                        if (p && !strncmp(p, "fRating=", 8))
-                        {
-                            _sscanf_s_l(&p[8], "%f", g_use_C_locale, &fRating);
-                            bRatingKnown = true;
-                            break;
-                        }
+                        bScanForPreset00AndRating = true;
                     }
-                    p = NextLine(p);
                 }
-
-                fclose(f);
-
-                if (!bRatingKnown)
-                    fRating = GetPrivateProfileFloat(L"preset00", L"fRating", 3.0f, fullPath.c_str());
-                fRating = std::max(0.0f, std::min(5.0f, fRating));
+            }
+            else
+            {
+                bScanForPreset00AndRating = true;
             }
 
-            if (bSkip)
-                continue;
+            int reps = (bScanForPreset00AndRating) ? 10 : 0;
+            for (int z = 0; z < reps; z++)
+            {
+                if (p && !strncmp(p, "[preset00]", 10))
+                {
+                    p = NextLine(p);
+                    if (p && !strncmp(p, "fRating=", 8))
+                    {
+                        _sscanf_s_l(&p[8], "%f", g_use_C_locale, &fRating);
+                        bRatingKnown = true;
+                        break;
+                    }
+                }
+                p = NextLine(p);
+            }
 
-            float fPrevPresetRatingCum = 0;
-            if (temp_nPresets > 0)
-                fPrevPresetRatingCum = temp_presets[static_cast<size_t>(temp_nPresets) - 1].fRatingCum;
+            fclose(f);
 
-            PresetInfo x;
-            // Store the relative path as the filename so LoadPreset can reconstruct the full path.
-            x.szFilename = relativePath;
-            x.fRatingThis = fRating;
-            x.fRatingCum = fPrevPresetRatingCum + fRating;
-            temp_presets.push_back(x);
-            temp_nPresets++;
+            if (!bRatingKnown)
+                fRating = GetPrivateProfileFloat(L"preset00", L"fRating", 3.0f, fullPath.c_str());
+            fRating = std::max(0.0f, std::min(5.0f, fRating));
+        }
 
-            // No incremental pushes — we'll do an atomic swap at the end.
+        if (bSkip)
+            continue;
+
+        float fPrevPresetRatingCum = 0;
+        if (temp_nPresets > 0)
+            fPrevPresetRatingCum = temp_presets[static_cast<size_t>(temp_nPresets) - 1].fRatingCum;
+
+        PresetInfo x;
+        x.szFilename = relativePath;
+        x.fRatingThis = fRating;
+        x.fRatingCum = fPrevPresetRatingCum + fRating;
+        temp_presets.push_back(x);
+        temp_nPresets++;
+    }
+
+    // Step 4: Write cache if we did a full scan (cache was invalid).
+    if (!cacheValid && !g_bThreadShouldQuit && !currentFiles.empty())
+    {
+        // Build full rating map from scanned presets (before filtering).
+        // We need to rescan without filters for the cache.
+        std::wofstream cfs(cacheFile, std::ios::out | std::ios::trunc);
+        if (cfs.is_open())
+        {
+            cfs << presetDir << std::endl;
+            cfs << currentFiles.size() << std::endl;
+            // Build a map of scanned ratings.
+            std::map<std::wstring, float> scannedRatings;
+            for (const auto& p : temp_presets)
+                scannedRatings[p.szFilename] = p.fRatingThis;
+            for (const auto& relPath : currentFiles)
+            {
+                auto it = scannedRatings.find(relPath);
+                float r = (it != scannedRatings.end()) ? it->second : 3.0f;
+                cfs << relPath << L"|" << r << std::endl;
+            }
         }
     }
-    catch (const std::filesystem::filesystem_error&)
+
+    QueryPerformanceCounter(&perfEnd);
+    double elapsedMs = static_cast<double>(perfEnd.QuadPart - perfStart.QuadPart) * 1000.0 / static_cast<double>(perfFreq.QuadPart);
     {
-        // Silently handle permission errors, etc.
+        char buf[256];
+        sprintf_s(buf, "milk2: Preset scan: %s, %d files, %d matched, %.1f ms",
+                  cacheValid ? "CACHED" : "FULL SCAN",
+                  static_cast<int>(currentFiles.size()), temp_nPresets, elapsedMs);
+        OutputDebugStringA(buf);
+        OutputDebugStringA("\n");
+        // Log to file for easy checking.
+        FILE* fLog;
+        std::wstring logPath = presetDir + L"scan_timing.log";
+        if (_wfopen_s(&fLog, logPath.c_str(), L"a") == 0 && fLog)
+        {
+            fprintf(fLog, "%s\n", buf);
+            fclose(fLog);
+        }
     }
 
     if (g_bThreadShouldQuit)

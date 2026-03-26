@@ -184,6 +184,16 @@ int milk2_ui_element::OnCreate(LPCREATESTRUCT cs)
         w = r.right - r.left;
         h = r.bottom - r.top;
     }
+    // Load saved preset library path BEFORE engine init, so the engine scans the right directory.
+    {
+        LoadBrowserConfig();
+        if (!m_presetLibraryPath.empty())
+        {
+            wcscpy_s(s_config.settings.m_szPresetDir, m_presetLibraryPath.c_str());
+            wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+        }
+    }
+
     if (!Initialize(get_wnd(), w, h))
     {
         FB2K_console_print(core_api::get_my_file_name(), ": Could not initialize MilkDrop");
@@ -2121,6 +2131,7 @@ void milk2_ui_element::SyncFiltersToEngine()
 
     // Trigger a background rescan of the preset list with the new filters.
     // Must be non-blocking to avoid race conditions with the render timer thread.
+    g_plugin.m_bInitialPresetSelected = false; // so deferred load fires after rescan
     g_plugin.UpdatePresetList(true, true); // background + force
 }
 
@@ -3279,6 +3290,9 @@ void milk2_ui_element::BrowseForPresetLibrary()
 
             // Update the engine's preset directory to match.
             wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+
+            // Reset so the deferred load in MilkDropRenderFrame fires again.
+            g_plugin.m_bInitialPresetSelected = false;
 
             SaveBrowserConfig();
 
