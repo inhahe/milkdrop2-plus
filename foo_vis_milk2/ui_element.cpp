@@ -567,6 +567,25 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     CMenu menu;
     WIN32_OP_D(menu.CreatePopupMenu());
 
+    // Check if engine is ready (scan complete and a preset is loaded).
+    bool bEngineReady = g_plugin.m_nPresets > 0;
+    UINT disableIfNotReady = bEngineReady ? MF_STRING : (MF_STRING | MF_GRAYED);
+
+    // If no presets found, show prominent guidance at the very top.
+    if (!bEngineReady && g_plugin.m_bPresetListReady)
+    {
+        menu.AppendMenu(MF_STRING, IDM_SET_PRESET_LIBRARY, TEXT(">>> No presets found - Set Preset Library Folder..."));
+        menu.AppendMenu(MF_STRING, IDM_OPEN_PRESETS_URL, TEXT(">>> Download presets (opens browser)..."));
+        menu.AppendMenu(MF_SEPARATOR);
+    }
+    else if (!bEngineReady)
+    {
+        wchar_t scanLabel[128];
+        swprintf_s(scanLabel, L"Scanning presets... (%d found)", g_plugin.m_nPresets);
+        menu.AppendMenu(MF_GRAYED, static_cast<UINT_PTR>(0), scanLabel);
+        menu.AppendMenu(MF_SEPARATOR);
+    }
+
     // Current preset name (grayed).
     std::wstring currentPreset = GetCurrentPreset();
     bool isFav = m_favorites.IsFavorite(GetCurrentPresetRelativePath());
@@ -575,10 +594,6 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
         presetLabel += L" \x2605"; // Unicode star for favorites
     menu.AppendMenu(MF_GRAYED, IDM_CURRENT_PRESET, presetLabel.c_str());
     menu.AppendMenu(MF_SEPARATOR);
-
-    // Check if engine is ready (scan complete and a preset is loaded).
-    bool bEngineReady = g_plugin.m_nPresets > 0;
-    UINT disableIfNotReady = bEngineReady ? MF_STRING : (MF_STRING | MF_GRAYED);
 
     // Favorite add/remove for current preset.
     // Show hotkeys only in fullscreen (keys don't reach the plugin when embedded).
@@ -593,14 +608,6 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
         menu.AppendMenu(disableIfNotReady | (!isFav ? MF_GRAYED : 0), IDM_REMOVE_FAVORITE, TEXT("Remove from Favorites"));
     }
     menu.AppendMenu(MF_SEPARATOR);
-
-    if (!bEngineReady)
-    {
-        wchar_t scanLabel[128];
-        swprintf_s(scanLabel, L"Scanning presets... (%d found)", g_plugin.m_nPresets);
-        menu.AppendMenu(MF_GRAYED, static_cast<UINT_PTR>(0), scanLabel);
-        menu.AppendMenu(MF_SEPARATOR);
-    }
 
     // Preset navigation.
     if (s_fullscreen)
@@ -787,6 +794,9 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             break;
         case IDM_SET_PRESET_LIBRARY:
             BrowseForPresetLibrary();
+            break;
+        case IDM_OPEN_PRESETS_URL:
+            ShellExecute(get_wnd(), L"open", L"https://github.com/projectM-visualizer/presets-cream-of-the-crop", NULL, NULL, SW_SHOWNORMAL);
             break;
         case IDM_ENABLE_DOWNMIX:
             s_config.settings.m_bEnableDownmix = !s_config.settings.m_bEnableDownmix;
@@ -2034,52 +2044,60 @@ void milk2_ui_element::InitPresetBrowser()
     if (scanDir.empty())
         return;
 
-    m_presetBrowser.ScanDirectory(scanDir);
-    m_browserInitialized = true;
-
-    // On first run (never configured), select all discovered categories.
-    if (!m_categoriesConfigured)
+    // If a custom library path is configured, update the engine's preset directory.
+    if (!m_presetLibraryPath.empty())
     {
-        auto cats = m_presetBrowser.GetCategories();
-        for (const auto& c : cats)
-            m_selectedCategories.insert(c);
-        m_categoriesConfigured = true;
-        SaveBrowserConfig();
+        wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
     }
 
-    // Push filter state to the engine.
-    // Only trigger a rescan if the engine's filter state differs from ours.
-    // On first init, the engine already did a full unfiltered scan in AllocateMilkDropDX11,
-    // so we only need to rescan if we're actually filtering.
-    if (m_categoriesConfigured && m_selectedCategories.empty())
-    {
-        // User explicitly deselected everything — use a sentinel that matches nothing.
-        g_plugin.m_filterCategories.clear();
-        g_plugin.m_filterCategories.insert(L"__NONE__");
-    }
-    else
-    {
-        g_plugin.m_filterCategories = m_selectedCategories;
-    }
-    g_plugin.m_bFilterFavoritesOnly = (m_shuffleMode == ShuffleMode::Favorites || m_shuffleMode == ShuffleMode::FavoritesCategory);
-    if (g_plugin.m_bFilterFavoritesOnly)
-    {
-        auto favs = m_favorites.GetAll();
-        for (const auto& fav : favs)
-            g_plugin.m_filterFavorites.insert(fav.relativePath);
-    }
-    // Only rescan if we have active filters that differ from the initial unfiltered scan.
-    bool needsRescan = g_plugin.m_bFilterFavoritesOnly ||
-                       (!m_selectedCategories.empty() && m_selectedCategories.size() < m_presetBrowser.GetCategoryCount());
-    if (needsRescan && g_plugin.m_bPresetListReady)
-    {
-        g_plugin.UpdatePresetList(true, true); // background + force
-    }
+    // Scan in a background thread to avoid freezing the UI.
+    m_browserInitialized = true; // set early to prevent re-entry
+    std::wstring scanDirCopy = scanDir;
+    std::thread([this, scanDirCopy]() {
+        m_presetBrowser.ScanDirectory(scanDirCopy);
 
-    FB2K_console_print(core_api::get_my_file_name(), ": Preset browser initialized - ",
-                       m_presetBrowser.GetPresetCount(), " presets in ",
-                       m_presetBrowser.GetCategoryCount(), " categories, ",
-                       m_favorites.Count(), " favorites");
+        // Post-scan init on completion.
+        if (!m_categoriesConfigured)
+        {
+            auto cats = m_presetBrowser.GetCategories();
+            for (const auto& c : cats)
+                m_selectedCategories.insert(c);
+            m_categoriesConfigured = true;
+            SaveBrowserConfig();
+        }
+
+        // Push filter state to the engine.
+        if (m_categoriesConfigured && m_selectedCategories.empty())
+        {
+            g_plugin.m_filterCategories.clear();
+            g_plugin.m_filterCategories.insert(L"__NONE__");
+        }
+        else
+        {
+            g_plugin.m_filterCategories = m_selectedCategories;
+        }
+        g_plugin.m_bFilterFavoritesOnly = (m_shuffleMode == ShuffleMode::Favorites || m_shuffleMode == ShuffleMode::FavoritesCategory);
+        if (g_plugin.m_bFilterFavoritesOnly)
+        {
+            auto favs = m_favorites.GetAll();
+            for (const auto& fav : favs)
+                g_plugin.m_filterFavorites.insert(fav.relativePath);
+        }
+
+        bool needsRescan = g_plugin.m_bFilterFavoritesOnly ||
+                           (!m_selectedCategories.empty() && m_selectedCategories.size() < m_presetBrowser.GetCategoryCount());
+        if (needsRescan && g_plugin.m_bPresetListReady)
+        {
+            g_plugin.UpdatePresetList(true, true);
+        }
+
+        FB2K_console_print(core_api::get_my_file_name(), ": Preset browser initialized - ",
+                           m_presetBrowser.GetPresetCount(), " presets in ",
+                           m_presetBrowser.GetCategoryCount(), " categories, ",
+                           m_favorites.Count(), " favorites");
+    }).detach();
+
+    // Post-scan initialization is handled in the background thread above.
 }
 
 void milk2_ui_element::SyncFiltersToEngine()
@@ -3223,33 +3241,63 @@ void milk2_ui_element::ShowFavoritesManager()
 
 void milk2_ui_element::BrowseForPresetLibrary()
 {
-    // Use Windows folder picker dialog.
-    BROWSEINFO bi = {};
-    bi.hwndOwner = get_wnd();
-    bi.lpszTitle = L"Select Preset Library Directory\n\nChoose a folder containing .milk presets organized into subfolders (categories).";
-    bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE | BIF_NONEWFOLDERBUTTON;
+    // Use modern IFileDialog folder picker (allows typing paths).
+    Microsoft::WRL::ComPtr<IFileDialog> pfd;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
+    if (FAILED(hr))
+        return;
 
-    LPITEMIDLIST pidl = SHBrowseForFolder(&bi);
-    if (pidl)
+    DWORD options;
+    pfd->GetOptions(&options);
+    pfd->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+    pfd->SetTitle(L"Select Preset Library Directory (folder with .milk files)");
+
+    // Set initial folder to current library path or preset dir.
+    if (!m_presetLibraryPath.empty() || g_plugin.m_szPresetDir[0])
     {
-        wchar_t szPath[MAX_PATH] = {};
-        if (SHGetPathFromIDList(pidl, szPath))
+        Microsoft::WRL::ComPtr<IShellItem> psi;
+        std::wstring initPath = m_presetLibraryPath.empty() ? g_plugin.m_szPresetDir : m_presetLibraryPath;
+        SHCreateItemFromParsingName(initPath.c_str(), NULL, IID_PPV_ARGS(&psi));
+        if (psi)
+            pfd->SetFolder(psi.Get());
+    }
+
+    hr = pfd->Show(get_wnd());
+    if (SUCCEEDED(hr))
+    {
+        Microsoft::WRL::ComPtr<IShellItem> psi;
+        hr = pfd->GetResult(&psi);
+        if (SUCCEEDED(hr))
         {
+            PWSTR szPath = nullptr;
+            psi->GetDisplayName(SIGDN_FILESYSPATH, &szPath);
+            if (szPath)
+            {
             m_presetLibraryPath = szPath;
             if (!m_presetLibraryPath.empty() && m_presetLibraryPath.back() != L'\\')
                 m_presetLibraryPath += L'\\';
 
+            // Update the engine's preset directory to match.
+            wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+
             SaveBrowserConfig();
 
-            // Re-scan with the new directory.
+            // Re-scan browser with the new directory.
             m_browserInitialized = false;
             m_presetBrowser.ScanDirectory(m_presetLibraryPath);
             m_browserInitialized = true;
 
-            // Reset category selections since categories have changed.
+            // Reset category selections — select all in the new directory.
             m_selectedCategories.clear();
             m_selectedFavCategories.clear();
+            auto cats = m_presetBrowser.GetCategories();
+            for (const auto& c : cats)
+                m_selectedCategories.insert(c);
+            m_categoriesConfigured = true;
             SaveBrowserConfig();
+
+            // Trigger engine rescan with the new directory.
+            SyncFiltersToEngine();
 
             wchar_t buf[512];
             swprintf_s(buf, L"Preset library: %s (%zu presets, %zu categories)",
@@ -3257,8 +3305,10 @@ void milk2_ui_element::BrowseForPresetLibrary()
                        m_presetBrowser.GetPresetCount(),
                        m_presetBrowser.GetCategoryCount());
             g_plugin.AddError(buf, 4.0f, ERR_NOTIFY, false);
+
+                CoTaskMemFree(szPath);
+            }
         }
-        CoTaskMemFree(pidl);
     }
 }
 

@@ -1768,9 +1768,8 @@ int CPlugin::AllocateMilkDropDX11()
 
     if (!m_bInitialPresetSelected)
     {
-        UpdatePresetList(false, true); // blocking + force recursive scan
-        LoadRandomPreset(0.0f);
-        m_bInitialPresetSelected = true;
+        UpdatePresetList(true, true); // background + force recursive scan
+        // First preset will be loaded in MilkDropRenderFrame once scan completes.
     }
     else
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
@@ -3294,7 +3293,12 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 {
     EnterCriticalSection(&g_cs);
 
-    // (Preset loading is handled in AllocateMilkDropDX11.)
+    // Deferred initial preset load: once background scan completes, load first preset.
+    if (!m_bInitialPresetSelected && m_bPresetListReady && m_nPresets > 0)
+    {
+        LoadRandomPreset(0.0f);
+        m_bInitialPresetSelected = true;
+    }
 
     // 1a. Take care of timing, other paperwork, etc... for new frame.
     if (!redraw)
@@ -4276,10 +4280,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             if (m_nPresets - m_nDirs == 0)
             {
-                // Note: This error message is repeated in "milkdropfs.cpp" in `LoadRandomPreset()`.
-                swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK), m_szPresetDir);
-                AddError(buf, 6.0f, ERR_MISC, true);
-                m_UI_mode = UI_REGULAR;
+                if (m_bPresetListReady)
+                    m_UI_mode = UI_REGULAR;
             }
             else
             {
@@ -4498,11 +4500,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             if (m_nPresets == 0)
             {
-                // Note: This error message is repeated in "milkdropfs.cpp" in `LoadRandomPreset()`.
-                wchar_t buf2[1024] = {0};
-                swprintf_s(buf2, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK), m_szPresetDir);
-                AddError(buf2, 6.0f, ERR_MISC, true);
-                m_UI_mode = UI_REGULAR;
+                if (m_bPresetListReady)
+                    m_UI_mode = UI_REGULAR;
             }
             else
             {
@@ -5101,23 +5100,11 @@ void CPlugin::LoadRandomPreset(float fBlendTime)
     // Ensure file list is OK.
     if (m_nPresets - m_nDirs == 0)
     {
-        // Show error only once to avoid spamming.
-        static bool s_noPresetErrShown = false;
-        if (!s_noPresetErrShown)
-        {
-            wchar_t buf[1024] = {0};
-            swprintf_s(buf, L"No presets match current filter. Use right-click > Select Categories to adjust.");
-            AddError(buf, 8.0f, ERR_MISC, true);
-            s_noPresetErrShown = true;
-        }
+        // If scan is still running, just return silently — presets will appear soon.
+        if (!m_bPresetListReady)
+            return;
 
-        // Also bring up the directory navigation menu...
-        if (m_UI_mode == UI_REGULAR || m_UI_mode == UI_MENU)
-        {
-            m_UI_mode = UI_LOAD;
-            m_bUserPagedUp = false;
-            m_bUserPagedDown = false;
-        }
+        // Don't spam errors — the right-click menu will show guidance.
         return;
     }
 
@@ -5663,7 +5650,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
         // DON'T clear m_presets here — the render thread may still be reading them.
         // We'll do an atomic swap at the end of the scan instead.
 
-        g_plugin.AddError(GetStringW(WASABI_API_LNG_HINST, g_plugin.GetInstance(), IDS_SCANNING_PRESETS), 4.0f, ERR_SCANNING_PRESETS, false);
+        // Don't show scanning message — text rendering may not be ready yet.
     }
 
     if (g_plugin.m_bPresetListReady)
@@ -5854,10 +5841,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
 
     if (g_plugin.m_nPresets == 0)
     {
-        wchar_t buf[1024];
-        swprintf_s(buf, L"No preset files found in: %s\n\nPlace .milk preset files there, or use\nright-click > Set Preset Library Folder.", g_plugin.m_szPresetDir);
-        g_plugin.AddError(buf, 10.0f, ERR_MISC, true);
-
+        // No messages here — text rendering may not be initialized yet.
         LeaveCriticalSection(&g_cs);
         g_plugin.m_bPresetListReady = true;
         g_bThreadAlive = false;

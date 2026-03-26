@@ -737,25 +737,9 @@ void CPlugin::RenderFrame(int bRedraw)
     // This happens when no .milk files are found or during initial load.
     if (!m_pState || !m_pState->var_pf_zoom)
     {
-        if (!m_bPresetListReady)
-        {
-            // Show scanning message (refreshes each time so it stays visible).
-            ClearErrors(ERR_SCANNING_PRESETS);
-            wchar_t buf[256];
-            swprintf_s(buf, L"Scanning presets... (%d found so far)", m_nPresets);
-            AddError(buf, 2.0f, ERR_SCANNING_PRESETS, false);
-        }
-        else if (m_bPresetListReady && m_nPresets == 0)
-        {
-            static bool s_noPresetMsgShown = false;
-            if (!s_noPresetMsgShown)
-            {
-                wchar_t buf[1024];
-                swprintf_s(buf, L"No presets found in: %s\nPlace .milk files there or use right-click > Set Preset Library Folder.", m_szPresetDir);
-                AddError(buf, 30.0f, ERR_MISC, true);
-                s_noPresetMsgShown = true;
-            }
-        }
+        // No preset loaded yet — just return silently.
+        // Don't try to show text messages here; the text rendering system
+        // may not be initialized yet, causing garbled output.
         return;
     }
 

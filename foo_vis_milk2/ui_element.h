@@ -201,6 +201,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         IDM_SET_PRESET_LIBRARY = 112,
         IDM_MANAGE_FAVORITES = 114,
         IDM_SELECT_CATEGORIES_DLG = 115,
+        IDM_OPEN_PRESETS_URL = 116,
         // Dynamic IDs
         IDM_BROWSE_CATEGORY_BASE = 200,        // 200..399: browse-by-category (loads random from category)
         IDM_SHUFFLE_CATEGORY_BASE = 400,       // 400..599: shuffle category toggles (checkboxes)

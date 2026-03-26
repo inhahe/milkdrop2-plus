@@ -58,7 +58,12 @@ This fork by Richard Albert Nichols III (Inhahe) adds category selection, preset
 ### Quick Install
 
 1. Download [foobar2000](https://www.foobar2000.org/download) v2.x (64-bit) and install.
-2. Run `install.bat` (after building) or manually install as described below.
+2. Clone this repo with presets included:
+   ```
+   git clone --recursive https://github.com/inhahe/milkdrop2-plus.git
+   ```
+   The `--recursive` flag downloads the [Cream of the Crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) preset collection (~10,000 presets) as a submodule. If you clone without `--recursive`, you can fetch the presets later with `git submodule update --init`, or `install.bat` will offer to download them for you.
+3. Run `install.bat` to install the plugin and presets into foobar2000.
 
 ### Manual Install
 

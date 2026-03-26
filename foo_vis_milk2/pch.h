@@ -52,6 +52,7 @@
 #include <mutex>
 #include <random>
 #include <set>
+#include <thread>
 #include <vector>
 
 #ifdef _MSC_VER
