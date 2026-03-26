@@ -1,0 +1,175 @@
+#################
+## Visual Studio
+#################
+
+/.vs*/
+
+# User-specific files
+*.suo
+*.user
+*.sln.docstates
+
+# Build results
+[Dd]ebug*/
+[Rr]elease*/
+Win32/
+x64/
+build/
+[Bb]in/
+[Oo]bj/
+
+# MSTest test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# CodeCoverage results
+[Cc]ode[Cc]overage/
+*.coverage
+
+*_i.c
+*_p.c
+*.ilk
+*.meta
+*.obj
+*.pch
+*.pdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.log
+*.scc
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opensdf
+*.sdf
+*.cachefile
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+
+# Guidance Automation Toolkit
+*.gpState
+
+# Doxygen output
+Doxygen/
+
+# Click-Once directory
+publish/
+
+# Publish Web Output
+*.Publish.xml
+*.pubxml
+
+# NuGet Packages Directory
+#external/
+
+# Windows Azure Build Output
+csx
+*.build.csdef
+
+# Windows Store app package directory
+AppPackages/
+
+# Others
+data/
+sql/
+*.Cache
+ClientBin/
+[Ss]tyle[Cc]op.*
+~$*
+*~
+*.dbmdl
+*.[Pp]ublish.xml
+*.pfx
+*.publishsettings
+/*.patch
+*.diff
+*.o
+
+####################
+## Windows detritus
+####################
+
+# Windows image caches
+Thumbs.db
+ehthumbs.db
+
+# Folder configurations
+Desktop.ini
+
+# Recycle Bin
+$RECYCLE.BIN/
+
+# MacOS
+.DS_Store
+
+# CMake
+CMakeLists.txt
+
+############
+## MilkDrop
+############
+/component/
+*.fb2k-component
+
+# FXC-generated files
+/vis_milk2/*.inc
+
+################
+## Dependencies
+################
+/external/foobar2000/
+/external/pfc/
+/external/libppui/
+/external/directxtk*/
+/external/*Implementation*/
+/external/fx11*/
+/external/wtl*/
+/external/eel2/*
+/external/projectm-eval/
+/external/winamp/*
+/external/columns_ui/
+/external/unused/
+!/external/winamp/data/
+!/external/winamp/wa_ipc.h
+!/external/eel2/nseel-cfunc.c
+!/external/eel2/nseel-compiler.c
+!/external/eel2/nseel-eval.c
+!/external/eel2/nseel-ram.c
+!/external/eel2/nseel-yylex.c
+!/external/eel2/nseel-ytab.c
+!/external/eel2/ns-eel.h
+!/external/eel2/ns-eel-int.h
+!/external/eel2/ns-eel-addfuncs.h
+!/external/eel2/y.tab.c
+!/external/eel2/y.tab.h
+!/external/eel2/denormal.h
+!/external/eel2/glue_x86.h
+!/external/eel2/glue_x86_64_sse.h
+!/external/eel2/glue_aarch64.h
+!/external/eel2/mutex.h
+!/external/eel2/utf8_extended.h
+!/external/eel2/wdltypes.h
+!/external/eel2/wdlcstring.h
+!/external/eel2/asm-nseel-x86-msvc.c
+!/external/eel2/asm-nseel-x64.obj
+!/external/eel2/asm-nseel-aarch64-msvc.obj
+!/external/eel2/asm-nseel-arm64ec.obj
+!/external/eel2/eel2.vcxproj
+!/external/eel2/eel2.vcxproj.filters

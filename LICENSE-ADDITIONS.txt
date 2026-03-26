@@ -1,0 +1,41 @@
+MIT License
+
+Copyright (c) 2025 Richard Albert Nichols III (Inhahe)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+This license applies to the additions and modifications made in this fork,
+including but not limited to:
+  - favorites_manager.h / favorites_manager.cpp
+  - preset_browser.h / preset_browser.cpp
+  - Category selector TreeView dialog
+  - Favorites Manager dialog
+  - Recursive preset scanning in UpdatePresetList
+  - All modifications to ui_element.cpp, ui_element.h, keyboard.cpp,
+    config.h, plugin.cpp, plugin.h, milkdropfs.cpp, and framework.h
+    made as part of this fork.
+
+These additions were built with the assistance of Claude Code using Claude
+Opus 4.6 by Anthropic.
+
+The original foo_vis_milk2 code is licensed under the Mozilla Public License
+2.0 (MPL-2.0) by Jimmy Cassis, and the original MilkDrop 2 code is licensed
+under the BSD 3-Clause License by Nullsoft, Inc. See LICENSE.txt for details.
