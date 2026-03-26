@@ -157,16 +157,8 @@ inline void SafeReplace(T** ppD, U* pS)
     }
 }
 
-// Column UI SDK (optional — gracefully disabled if not present).
-#if __has_include(<columns_ui-sdk/ui_extension.h>)
-#pragma warning(push)
-#pragma warning(disable: 4100 4127 4189 4245 4505)
-#include <columns_ui-sdk/ui_extension.h>
-#pragma warning(pop)
-#define HAS_COLUMNS_UI 1
-#else
+// Column UI support planned for a future release.
 #define HAS_COLUMNS_UI 0
-#endif
 
 #ifndef HINST_THISCOMPONENT
 extern "C" IMAGE_DOS_HEADER __ImageBase;

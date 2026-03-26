@@ -3328,9 +3328,8 @@ void milk2_ui_element::BrowseForPresetLibrary()
 
 #pragma endregion
 
-// Column UI support disabled pending further development.
-// #pragma region Column UI Support
+// Column UI support planned for a future release.
+// Requires refactoring DX11 device initialization for child window compatibility.
 // #include "cui_element.cpp"
-// #pragma endregion
 
 } // namespace

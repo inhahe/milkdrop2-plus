@@ -345,18 +345,45 @@ void DeviceResources::CreateWindowSizeDependentResources()
         swapChainDesc.SampleDesc.Count = 1;
         swapChainDesc.SampleDesc.Quality = 0;
         swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-        swapChainDesc.SwapEffect = (m_options & (c_FlipPresent | c_AllowTearing | c_EnableHDR)) ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
+        bool isChildWindow = (GetWindowLong(m_window, GWL_STYLE) & WS_CHILD) != 0;
+        if (isChildWindow)
+            swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        else
+            swapChainDesc.SwapEffect = (m_options & (c_FlipPresent | c_AllowTearing | c_EnableHDR)) ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
         swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
         swapChainDesc.Flags = (m_options & c_AllowTearing) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
 
-        DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-        fsSwapChainDesc.Windowed = TRUE;
+        // For child windows, don't pass fullscreen desc (incompatible with WS_CHILD).
 
-        // Create a SwapChain from a Win32 window.
-        ThrowIfFailed(m_dxgiFactory->CreateSwapChainForHwnd(m_d3dDevice.Get(), m_window, &swapChainDesc, &fsSwapChainDesc, nullptr, m_swapChain.ReleaseAndGetAddressOf()));
+        if (isChildWindow)
+        {
+            {
+                FILE* f;
+                if (_wfopen_s(&f, L"C:\\foobar2000\\profile\\dx_init.log", L"a") == 0 && f)
+                {
+                    fprintf(f, "  SwapChain: %dx%d fmt=%d bufCnt=%d swap=%d scale=%d alpha=%d flags=%d\n",
+                            swapChainDesc.Width, swapChainDesc.Height,
+                            swapChainDesc.Format, swapChainDesc.BufferCount,
+                            swapChainDesc.SwapEffect, swapChainDesc.Scaling,
+                            swapChainDesc.AlphaMode, swapChainDesc.Flags);
+                    fclose(f);
+                }
+            }
+            ThrowIfFailed(m_dxgiFactory->CreateSwapChainForHwnd(
+                m_d3dDevice.Get(), m_window, &swapChainDesc,
+                nullptr, nullptr, m_swapChain.ReleaseAndGetAddressOf()));
+        }
+        else
+        {
+            DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+            fsSwapChainDesc.Windowed = TRUE;
 
-        // This class does not support exclusive full-screen mode and prevents DXGI from responding to the "ALT+ENTER" shortcut.
-        ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window, DXGI_MWA_NO_ALT_ENTER));
+            ThrowIfFailed(m_dxgiFactory->CreateSwapChainForHwnd(
+                m_d3dDevice.Get(), m_window, &swapChainDesc,
+                &fsSwapChainDesc, nullptr, m_swapChain.ReleaseAndGetAddressOf()));
+
+            ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window, DXGI_MWA_NO_ALT_ENTER));
+        }
     }
 
     // Handle color space settings for HDR.

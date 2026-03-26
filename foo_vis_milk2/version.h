@@ -12,7 +12,7 @@
 //#include <winver.h>
 #include <vis_milk2/defines.h>
 
-#define APPLICATION_FILE_NAME "milkdrop2_plus"
+#define APPLICATION_FILE_NAME "foo_milkdrop2_plus"
 #define APPLICATION_PRODUCT_NAME SHORTNAME
 #define APPLICATION_COMPANY_NAME "KernelOops" //"Jimmy Cassis"
 #define APPLICATION_FILE_IS_DLL 1

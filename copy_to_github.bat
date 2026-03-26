@@ -104,8 +104,8 @@ if exist "%SRC%tools" (
 REM Copy release build
 echo Copying release build...
 if not exist "%DST%\Bin\x64\Release" mkdir "%DST%\Bin\x64\Release"
-if exist "%SRC%Bin\x64\Release\milkdrop2_plus.dll" (
-    copy /y "%SRC%Bin\x64\Release\milkdrop2_plus.dll" "%DST%\Bin\x64\Release\" >nul
+if exist "%SRC%Bin\x64\Release\foo_milkdrop2_plus.dll" (
+    copy /y "%SRC%Bin\x64\Release\foo_milkdrop2_plus.dll" "%DST%\Bin\x64\Release\" >nul
 )
 
 echo.

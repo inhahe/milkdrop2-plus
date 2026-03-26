@@ -566,14 +566,55 @@ int CPluginShell::PluginPreInitialize(HWND hWinampWnd, HINSTANCE hWinampInstance
     return TRUE;
 }
 
+static void LogInit(const char* msg)
+{
+    FILE* f;
+    if (_wfopen_s(&f, L"C:\\foobar2000\\profile\\dx_init.log", L"a") == 0 && f)
+    {
+        fprintf(f, "%s\n", msg);
+        fclose(f);
+    }
+}
+
 int CPluginShell::PluginInitialize(int iWidth, int iHeight)
 {
-    if (!InitDirectX()) return FALSE;
+    char buf[256];
+
+    sprintf_s(buf, "PluginInit: w=%d h=%d hwnd=%p style=%08X",
+              iWidth, iHeight, (void*)m_hWndWinamp, (unsigned)GetWindowLong(m_hWndWinamp, GWL_STYLE));
+    LogInit(buf);
+
+    try
+    {
+        LogInit("PluginInit: calling InitDirectX...");
+        if (!InitDirectX()) { LogInit("PluginInit: InitDirectX returned FALSE"); return FALSE; }
+        LogInit("PluginInit: InitDirectX OK");
+    }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitDirectX exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitDirectX std exception: %s", e.what()); LogInit(buf); return FALSE; }
+
     m_lpDX->m_client_width = iWidth;
     m_lpDX->m_client_height = iHeight;
-    if (!InitNonDX11()) return FALSE;
-    if (!AllocateDX11()) return FALSE;
 
+    try
+    {
+        LogInit("PluginInit: calling InitNonDX11...");
+        if (!InitNonDX11()) { LogInit("PluginInit: InitNonDX11 returned FALSE"); return FALSE; }
+        LogInit("PluginInit: InitNonDX11 OK");
+    }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 std exception: %s", e.what()); LogInit(buf); return FALSE; }
+
+    try
+    {
+        LogInit("PluginInit: calling AllocateDX11...");
+        if (!AllocateDX11()) { LogInit("PluginInit: AllocateDX11 returned FALSE"); return FALSE; }
+        LogInit("PluginInit: AllocateDX11 OK");
+    }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 std exception: %s", e.what()); LogInit(buf); return FALSE; }
+
+    LogInit("PluginInit: SUCCESS");
     return TRUE;
 }
 
