@@ -23,7 +23,7 @@ for %%f in (
     .vsconfig
     BUILDING.md
     CHANGELOG.md
-    foo_vis_milk2.sln
+    milkdrop2-plus.sln
     LICENSE.txt
     LICENSE-ADDITIONS.txt
     LICENSES.md
@@ -104,8 +104,8 @@ if exist "%SRC%tools" (
 REM Copy release build
 echo Copying release build...
 if not exist "%DST%\Bin\x64\Release" mkdir "%DST%\Bin\x64\Release"
-if exist "%SRC%Bin\x64\Release\foo_vis_milk2.dll" (
-    copy /y "%SRC%Bin\x64\Release\foo_vis_milk2.dll" "%DST%\Bin\x64\Release\" >nul
+if exist "%SRC%Bin\x64\Release\milkdrop2_plus.dll" (
+    copy /y "%SRC%Bin\x64\Release\milkdrop2_plus.dll" "%DST%\Bin\x64\Release\" >nul
 )
 
 echo.

@@ -3327,4 +3327,10 @@ void milk2_ui_element::BrowseForPresetLibrary()
 }
 
 #pragma endregion
+
+// Column UI support disabled pending further development.
+// #pragma region Column UI Support
+// #include "cui_element.cpp"
+// #pragma endregion
+
 } // namespace

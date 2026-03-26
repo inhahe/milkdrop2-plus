@@ -28,8 +28,8 @@
     " * https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/ (Proprietary License)"
 
 // clang-format off
-DECLARE_COMPONENT_VERSION("MilkDrop 2 Visualisation", APPLICATION_VERSION,
-                          "MilkDrop 2 music visualizer ported from Winamp.\n\n"
+DECLARE_COMPONENT_VERSION("MilkDrop 2 Plus", APPLICATION_VERSION,
+                          "MilkDrop 2 music visualizer with preset management, categories, and favorites.\n\n"
                           APPLICATION_FILE_NAME " " APPLICATION_VERSION "\n"
                           "Copyright (c) " APPLICATION_COPYRIGHT ". All rights reserved.\n\n"
                           "MilkDrop 2.25k\n"

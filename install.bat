@@ -13,7 +13,7 @@ REM ============================================================================
 set FB2K_PATH=%~1
 if "%FB2K_PATH%"=="" set FB2K_PATH=C:\foobar2000
 
-set COMPONENT_DIR=%FB2K_PATH%\profile\user-components-x64\foo_vis_milk2
+set COMPONENT_DIR=%FB2K_PATH%\profile\user-components-x64\milkdrop2_plus
 set MILKDROP_DIR=%FB2K_PATH%\profile\milkdrop2
 set BUILD_DIR=%~dp0Bin\x64\Release
 set DATA_DIR=%~dp0external\winamp\data
@@ -39,8 +39,8 @@ if not exist "%FB2K_PATH%\foobar2000.exe" (
 )
 
 REM Check that the DLL was built
-if not exist "%BUILD_DIR%\foo_vis_milk2.dll" (
-    echo ERROR: foo_vis_milk2.dll not found in %BUILD_DIR%
+if not exist "%BUILD_DIR%\milkdrop2_plus.dll" (
+    echo ERROR: milkdrop2_plus.dll not found in %BUILD_DIR%
     echo        Build the project first (Release x64).
     pause
     exit /b 1
@@ -64,8 +64,8 @@ if not exist "%MILKDROP_DIR%" mkdir "%MILKDROP_DIR%"
 if not exist "%MILKDROP_DIR%\presets" mkdir "%MILKDROP_DIR%\presets"
 
 REM Copy plugin DLL
-echo Copying foo_vis_milk2.dll...
-copy /y "%BUILD_DIR%\foo_vis_milk2.dll" "%COMPONENT_DIR%\" >nul
+echo Copying milkdrop2_plus.dll...
+copy /y "%BUILD_DIR%\milkdrop2_plus.dll" "%COMPONENT_DIR%\" >nul
 
 REM Copy shader data files
 echo Copying shader files...

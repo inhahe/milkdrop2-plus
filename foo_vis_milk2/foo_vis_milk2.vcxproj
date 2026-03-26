@@ -53,6 +53,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{85FBFD09-0099-4FE9-9DB6-78DB6F60F817}</ProjectGuid>
     <ProjectName>foo_vis_milk2</ProjectName>
+    <TargetName>milkdrop2_plus</TargetName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -642,6 +643,9 @@
     <ClCompile Include="ui_element.cpp" />
     <ClCompile Include="favorites_manager.cpp" />
     <ClCompile Include="preset_browser.cpp" />
+    <ClCompile Include="cui_element.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />

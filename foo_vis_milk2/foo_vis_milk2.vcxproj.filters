@@ -51,6 +51,9 @@
     <ClCompile Include="preset_browser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cui_element.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h">

@@ -278,8 +278,10 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     // Preferences page
     void ShowPreferencesPage();
 
+  public:
     // Component paths
     static void ResolvePwd();
+  private:
     std::wstring m_pwd;
 
     // Audio data

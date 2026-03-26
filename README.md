@@ -3,14 +3,14 @@
 Port of Winamp's MilkDrop 2 visualization library from its original DirectX 9 version to use DirectX 11.1.
 MilkDrop 2 takes you flying through visualizations of the soundwaves you're hearing, and uses beat detection to trigger myriad psychedelic effects, creating a rich visual journey through sound.
 
-Prerequisites to build the `foo_vis_milk2.dll` component for foobar2000:
+Prerequisites to build the `milkdrop2_plus.dll` component for foobar2000:
 
 - [foobar2000 SDK](https://www.foobar2000.org/SDK): download the latest version and uncompress the contents in the `external/` folder and apply the [patch](external/fb2ksdk.patch).
 - [NS-EEL2](https://github.com/justinfrankel/WDL/tree/main/WDL/eel2) (included in [WDL](https://www.cockos.com/wdl/)): the files required to build the DLL are included in this repository.
 - [projectM EEL](https://github.com/projectM-visualizer/projectm-eval): clone the repository into the `external/` folder, checkout the `HEAD` of the `master` branch and apply the [patch](external/pmeel.patch). _This is the default expression evaluation library._
 - [DirectXTK](https://github.com/Microsoft/DirectXTK): the files required to build the DLL are fetched via the NuGet package manager.
 - [Windows Template Library (WTL)](https://wtl.sourceforge.io/): the files required to build the DLL are fetched via the NuGet package manager.
-- [Visual Studio 2022](https://visualstudio.microsoft.com/vs/): open the [`foo_vis_milk2`](foo_vis_milk2.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL and DirectXTK as NuGet packages, select a configuration, and build the solution.
+- [Visual Studio 2022](https://visualstudio.microsoft.com/vs/): open the [`milkdrop2-plus`](milkdrop2-plus.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL and DirectXTK as NuGet packages, select a configuration, and build the solution.
 
 > Import the Visual Studio [installation configuration](.vsconfig) file to install required components such as the [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/), [Active Template Library (ATL)](https://learn.microsoft.com/en-us/cpp/atl/atl-com-desktop-components) and [NuGet Package Manager](https://www.nuget.org/).
 
@@ -67,8 +67,8 @@ This fork by Richard Albert Nichols III (Inhahe) adds category selection, preset
 
 ### Manual Install
 
-1. Copy `foo_vis_milk2.dll` (from `Bin\x64\Release\`) to: `<foobar2000>\profile\user-components-x64\foo_vis_milk2\`
-2. Copy shader files (`*.fx`) from `external\winamp\data\` to: `<foobar2000>\profile\user-components-x64\foo_vis_milk2\data\`
+1. Copy `milkdrop2_plus.dll` (from `Bin\x64\Release\`) to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\`
+2. Copy shader files (`*.fx`) from `external\winamp\data\` to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\data\`
 3. Download presets (see below) and extract into: `<foobar2000>\profile\milkdrop2\presets\`
 4. Start foobar2000, enable Layout Editing (View > Layout > Enable Layout Editing), right-click a panel, and add MilkDrop from the Visualization category.
 
@@ -78,8 +78,8 @@ This fork by Richard Albert Nichols III (Inhahe) adds category selection, preset
 <foobar2000 install>\
     profile\
         user-components-x64\
-            foo_vis_milk2\
-                foo_vis_milk2.dll      <- the plugin
+            milkdrop2_plus\
+                milkdrop2_plus.dll      <- the plugin
                 data\
                     comp_vs.fx         <- shader files (required!)
                     comp_ps.fx
