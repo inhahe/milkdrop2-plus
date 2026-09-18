@@ -3,14 +3,14 @@
 Port of Winamp's MilkDrop 2 visualization library from its original DirectX 9 version to use DirectX 11.1.
 MilkDrop 2 takes you flying through visualizations of the soundwaves you're hearing, and uses beat detection to trigger myriad psychedelic effects, creating a rich visual journey through sound.
 
-Prerequisites to build the `foo_vis_milk2.dll` component for foobar2000:
+Prerequisites to build the `milkdrop2_plus.dll` component for foobar2000:
 
 - [foobar2000 SDK](https://www.foobar2000.org/SDK): download the latest version and uncompress the contents in the `external/` folder and apply the [patch](external/fb2ksdk.patch).
 - [NS-EEL2](https://github.com/justinfrankel/WDL/tree/main/WDL/eel2) (included in [WDL](https://www.cockos.com/wdl/)): the files required to build the DLL are included in this repository.
 - [projectM EEL](https://github.com/projectM-visualizer/projectm-eval): clone the repository into the `external/` folder, checkout the `HEAD` of the `master` branch and apply the [patch](external/pmeel.patch). _This is the default expression evaluation library._
 - [DirectXTK](https://github.com/Microsoft/DirectXTK): the files required to build the DLL are fetched via the NuGet package manager.
 - [Windows Template Library (WTL)](https://wtl.sourceforge.io/): the files required to build the DLL are fetched via the NuGet package manager.
-- [Visual Studio 2022](https://visualstudio.microsoft.com/vs/): open the [`foo_vis_milk2`](foo_vis_milk2.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL and DirectXTK as NuGet packages, select a configuration, and build the solution.
+- [Visual Studio 2022](https://visualstudio.microsoft.com/vs/): open the [`milkdrop2-plus`](milkdrop2-plus.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL and DirectXTK as NuGet packages, select a configuration, and build the solution.
 
 > Import the Visual Studio [installation configuration](.vsconfig) file to install required components such as the [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/), [Active Template Library (ATL)](https://learn.microsoft.com/en-us/cpp/atl/atl-com-desktop-components) and [NuGet Package Manager](https://www.nuget.org/).
 
@@ -23,6 +23,8 @@ See [BUILDING](BUILDING.md) for solution build instructions.
 See [TESTING](TESTING.md) for an outline of how to run a simple unit test and collect runtime coverage.
 
 See [LICENSES](LICENSES.md) to become thoroughly confused.
+
+Fork additions are licensed under the [MIT License](LICENSE-ADDITIONS.txt) by Inhahe. Original code retains its MPL-2.0 / BSD-3-Clause licenses.
 
 ## Features
 
@@ -38,11 +40,66 @@ See [LICENSES](LICENSES.md) to become thoroughly confused.
 - Intel architecture versions support Windows 7 SP1 or later and ARM architecture versions support Windows 10 or later.
   - However, some features such as hybrid graphics, high DPI displays and HDR might not work if the DXGI version required to support them is not on the system.
 
+## Enhanced Features (Fork)
+
+This fork by Inhahe adds category selection, preset management, and favorites. Built with the assistance of [Claude Code](https://claude.ai/code) using Claude Opus 4.6.
+
+- **Recursive preset scanning** - Automatically finds `.milk` files in nested subdirectory structures (e.g., the Cream of the Crop collection organized by category).
+- **Category selector** - Tri-state checkbox TreeView dialog for selecting which preset categories to include in shuffle. Selections persist across sessions.
+- **Favorites system** - Add/remove presets to favorites via right-click menu. Manage Favorites dialog with scrollable list, double-click to load, remove button.
+- **Random preset from category** - Right-click menu to load a random preset from a specific category.
+- **Shuffle modes** - All presets, selected categories only, favorites only, or favorites in selected categories.
+- **Configurable preset library** - Point the plugin at any directory containing `.milk` presets via right-click > Set Preset Library Folder.
+- **Fullscreen hotkeys** - In fullscreen mode, keyboard shortcuts are shown in the right-click menu (Space, Backspace, R, F11, Shift+F11, etc.).
+- **DX11 rendering fix** - Removed DX9-era half-texel offset that caused a thin unrendered border on right/bottom edges.
+
 ## Run Requirements and Installation
 
-- Download [foobar2000](https://www.foobar2000.org/download) and install.
-- Import `foo_vis_milk2.fbk2-component` into foobar2000 using the **File > Preferences > Components > Install...** menu item.
-- Download and extract presets into this component's directory of foobar2000. This should be `<foobar2000 profile folder>\milkdrop2\presets`.
+### Quick Install
+
+1. Download [foobar2000](https://www.foobar2000.org/download) v2.x (64-bit) and install.
+2. Clone this repo with presets included:
+   ```
+   git clone --recursive https://github.com/inhahe/milkdrop2-plus.git
+   ```
+   The `--recursive` flag downloads the [Cream of the Crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) preset collection (~10,000 presets) as a submodule. If you clone without `--recursive`, you can fetch the presets later with `git submodule update --init`, or `install.bat` will offer to download them for you.
+3. Run `install.bat` to install the plugin and presets into foobar2000.
+
+### Manual Install
+
+1. Copy `milkdrop2_plus.dll` (from `Bin\x64\Release\`) to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\`
+2. Copy shader files (`*.fx`) from `external\winamp\data\` to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\data\`
+3. Download presets (see below) and extract into: `<foobar2000>\profile\milkdrop2\presets\`
+4. Start foobar2000, enable Layout Editing (View > Layout > Enable Layout Editing), right-click a panel, and add MilkDrop from the Visualization category.
+
+### Directory Structure
+
+```
+<foobar2000 install>\
+    profile\
+        user-components-x64\
+            milkdrop2_plus\
+                milkdrop2_plus.dll      <- the plugin
+                data\
+                    comp_vs.fx         <- shader files (required!)
+                    comp_ps.fx
+                    warp_vs.fx
+                    warp_ps.fx
+                    blur_vs.fx
+                    blur1_ps.fx
+                    blur2_ps.fx
+                    include.fx
+        milkdrop2\
+            presets\                    <- .milk preset files go here
+                Fractal\               <- category subdirectories are supported
+                    Blobby\            <- nested subdirectories work too
+                        preset.milk
+                Geometric\
+                    ...
+            browser_config.ini         <- auto-generated settings
+            favorites.ini              <- auto-generated favorites list
+```
+
 - Textures can also be added to `<foobar2000 profile folder>\milkdrop2\textures` and referenced in their accompanying configuration file `<foobar2000 profile folder>\milkdrop2\milk2_img.ini`.
 - Custom messages can be entered into `<foobar2000 profile folder>\milkdrop2\milk2_msg.ini`.
 

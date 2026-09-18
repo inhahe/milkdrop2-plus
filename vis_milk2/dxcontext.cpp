@@ -47,14 +47,24 @@ DXContext::DXContext(HWND hWndWinamp, DXCONTEXT_PARAMS* pParams) noexcept(false)
     m_ready = FALSE;
 
     // Create the device.
-    // Provide parameters for swap chain format, depth/stencil format, and back buffer count.
+    // For child windows (CUI panels), disable FlipPresent and AllowTearing
+    // as these modes are incompatible with WS_CHILD windows.
+    // For child windows (CUI panels), use FlipPresent but without tearing/HDR.
+    // The swap chain creation will use FLIP_SEQUENTIAL for child windows.
+    bool isChildWindow = (GetWindowLong(hWndWinamp, GWL_STYLE) & WS_CHILD) != 0;
+    unsigned flags = DX::DeviceResources::c_FlipPresent;
+    if (!isChildWindow)
+    {
+        flags |= ((m_current_mode.allow_page_tearing << 1) & DX::DeviceResources::c_AllowTearing) |
+                 ((m_current_mode.enable_hdr << 2) & DX::DeviceResources::c_EnableHDR);
+    }
+    m_isChildWindow = isChildWindow;
     m_deviceResources = std::make_unique<DX::DeviceResources>(
-        m_current_mode.back_buffer_format, // backBufferFormat (default: DXGI_FORMAT_B8G8R8A8_UNORM)
-        m_current_mode.depth_buffer_format, // depthBufferFormat (default: DXGI_FORMAT_D24_UNORM_S8_UINT)
-        m_current_mode.back_buffer_count, // backBufferCount (default: 2)
-        m_current_mode.min_feature_level, // minFeatureLevel (default: D3D_FEATURE_LEVEL_9_1)
-        DX::DeviceResources::c_FlipPresent | ((m_current_mode.allow_page_tearing << 1) & DX::DeviceResources::c_AllowTearing) |
-            ((m_current_mode.enable_hdr << 2) & DX::DeviceResources::c_EnableHDR) // flags (default: flip, noTearing, noHDR)
+        m_current_mode.back_buffer_format,
+        m_current_mode.depth_buffer_format,
+        m_current_mode.back_buffer_count,
+        m_current_mode.min_feature_level,
+        flags
     );
 }
 
@@ -73,6 +83,16 @@ void DXContext::Internal_CleanUp()
         m_lpDevice.reset();
 }
 
+static void LogDX(const char* msg)
+{
+    FILE* f;
+    if (_wfopen_s(&f, L"C:\\foobar2000\\profile\\dx_init.log", L"a") == 0 && f)
+    {
+        fprintf(f, "%s\n", msg);
+        fclose(f);
+    }
+}
+
 BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS* /* pParams */, BOOL /* bFirstInit */)
 {
     RECT r;
@@ -80,19 +100,29 @@ BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS* /* pParams */, BOOL /* bFirstIni
     m_client_width = std::max(1l, r.right - r.left);
     m_client_height = std::max(1l, r.bottom - r.top);
 
+    char buf[256];
+    sprintf_s(buf, "Internal_Init: %dx%d child=%d", m_client_width, m_client_height, m_isChildWindow ? 1 : 0);
+    LogDX(buf);
+
+    LogDX("  SetWindow...");
     m_deviceResources->SetWindow(m_hwnd, m_client_width, m_client_height);
 
+    LogDX("  CreateDeviceIndependentResources...");
     m_deviceResources->CreateDeviceIndependentResources();
     CreateDeviceIndependentResources();
 
+    LogDX("  SetDpi...");
     m_deviceResources->SetDpi();
 
+    LogDX("  CreateDeviceResources...");
     m_deviceResources->CreateDeviceResources();
     CreateDeviceDependentResources();
 
+    LogDX("  CreateWindowSizeDependentResources...");
     m_deviceResources->CreateWindowSizeDependentResources();
     CreateWindowSizeDependentResources();
 
+    LogDX("  Internal_Init OK");
     m_ready = TRUE;
     return TRUE;
 }

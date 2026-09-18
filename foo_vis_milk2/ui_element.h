@@ -9,6 +9,8 @@
 
 #include "config.h"
 #include "version.h"
+#include "favorites_manager.h"
+#include "preset_browser.h"
 #ifdef TIMER_DX
 #include "steptimer.h"
 #endif
@@ -50,7 +52,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         swprintf_s(szWnd, TEXT("0x%p"), get_wnd());
         MILK2_CONSOLE_LOG("Init ", szParent, ", ", szWnd)
 #endif
-        WIN32_OP(Create(parent, nullptr, SHORTNAME, 0, WS_EX_STATICEDGE) != NULL);
+        WIN32_OP(Create(parent, nullptr, SHORTNAME, 0, 0) != NULL);
     }
 
     // clang-format off
@@ -180,7 +182,31 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         IDM_SHOW_PREFS = ID_VIS_CFG,
         IDM_SHOW_HELP = ID_SHOWHELP,
         IDM_SHOW_PLAYLIST = ID_SHOWPLAYLIST,
-        IDM_QUIT = ID_QUIT
+        IDM_QUIT = ID_QUIT,
+
+        // Favorites and browse menu IDs
+        IDM_ADD_FAVORITE = 100,
+        IDM_REMOVE_FAVORITE = 113,
+        IDM_SHUFFLE_MODE_ALL = 101,
+        IDM_SHUFFLE_MODE_CATEGORY = 102,
+        IDM_SHUFFLE_MODE_FAVORITES = 103,
+        IDM_SHUFFLE_MODE_FAV_CATEGORY = 104,
+        IDM_BROWSE_ALL = 105,
+        IDM_BROWSE_FAVORITES = 106,
+        IDM_RESCAN_PRESETS = 107,
+        IDM_SELECT_ALL_CATEGORIES = 108,
+        IDM_DESELECT_ALL_CATEGORIES = 109,
+        IDM_SELECT_ALL_FAV_CATEGORIES = 110,
+        IDM_DESELECT_ALL_FAV_CATEGORIES = 111,
+        IDM_SET_PRESET_LIBRARY = 112,
+        IDM_MANAGE_FAVORITES = 114,
+        IDM_SELECT_CATEGORIES_DLG = 115,
+        IDM_OPEN_PRESETS_URL = 116,
+        // Dynamic IDs
+        IDM_BROWSE_CATEGORY_BASE = 200,        // 200..399: browse-by-category (loads random from category)
+        IDM_SHUFFLE_CATEGORY_BASE = 400,       // 400..599: shuffle category toggles (checkboxes)
+        IDM_SHUFFLE_FAV_CATEGORY_BASE = 600,   // 600..799: fav-category toggles (checkboxes)
+        IDM_PRESET_BASE = 1000,                // 1000+: loading specific favorite presets
     };
 
     // Initialization and management
@@ -252,8 +278,10 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     // Preferences page
     void ShowPreferencesPage();
 
+  public:
     // Component paths
     static void ResolvePwd();
+  private:
     std::wstring m_pwd;
 
     // Audio data
@@ -297,7 +325,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     void SetSelectionSingle(size_t idx, bool toggle, bool focus, bool single_only);
 
     // Artwork callback methods
-    void on_album_art(album_art_data::ptr aad) { /*MILK2_CONSOLE_LOG("% AlbumArt"); if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) == 0 && aad.is_valid()) { ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size()); }*/ }
+    void on_album_art(album_art_data::ptr aad) { (void)aad; /*MILK2_CONSOLE_LOG("% AlbumArt"); if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) == 0 && aad.is_valid()) { ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size()); }*/ }
 
     void RegisterForArtwork();
     void ExtractRasterData(const uint8_t* data, size_t size) noexcept;
@@ -307,6 +335,35 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
 
     // Text
     void LaunchSongTitle();
+
+  public:
+    // Preset browser and favorites
+    void InitPresetBrowser();
+    void ToggleFavorite();
+    void SetShuffleMode(ShuffleMode mode);
+    void ToggleCategorySelection(const std::wstring& category);
+    void SelectAllCategories();
+    void DeselectAllCategories();
+    void LoadRandomPresetFromBrowser();
+    std::wstring GetCurrentPresetRelativePath() const;
+    void BuildBrowseSubmenu(CMenu& parentMenu, int& nextId);
+    void BuildFavoritesSubmenu(CMenu& parentMenu, int& nextId);
+    void BuildShuffleModeSubmenu(CMenu& parentMenu);
+    void SaveBrowserConfig() const;
+    void LoadBrowserConfig();
+    void SyncFiltersToEngine();
+    void BrowseForPresetLibrary();
+    void ShowFavoritesManager();
+    void ShowCategorySelector();
+
+    FavoritesManager m_favorites;
+    PresetBrowser m_presetBrowser;
+    ShuffleMode m_shuffleMode = ShuffleMode::All;
+    std::set<std::wstring> m_selectedCategories;      // multi-select categories
+    std::set<std::wstring> m_selectedFavCategories;    // multi-select fav categories
+    std::wstring m_presetLibraryPath;                  // configurable external preset dir
+    bool m_browserInitialized = false;
+    bool m_categoriesConfigured = false; // true after first config save (distinguishes "never set" from "user chose none")
 };
 
 // clang-format off

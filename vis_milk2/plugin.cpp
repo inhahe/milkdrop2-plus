@@ -1471,8 +1471,8 @@ int CPlugin::AllocateMilkDropDX11()
     ZeroMemory(m_comp_verts, sizeof(MDVERTEX) * FCGSX * FCGSY);
     //float fOnePlusInvWidth  = 1.0f + 1.0f / (float)GetWidth();
     //float fOnePlusInvHeight = 1.0f + 1.0f / (float)GetHeight();
-    float fHalfTexelW = 0.5f / static_cast<float>(std::max(1, GetWidth())); // 2.5: 2 pixels bad @ bottom right
-    float fHalfTexelH = 0.5f / static_cast<float>(std::max(1, GetHeight()));
+    float fHalfTexelW = 0.0f; // DX11 does not need the DX9 half-texel offset
+    float fHalfTexelH = 0.0f;
     float fDivX = 1.0f / (float)(FCGSX - 2);
     float fDivY = 1.0f / (float)(FCGSY - 2);
     for (int j = 0; j < FCGSY; j++)
@@ -1768,9 +1768,8 @@ int CPlugin::AllocateMilkDropDX11()
 
     if (!m_bInitialPresetSelected)
     {
-        UpdatePresetList(true); // ...just does its initial burst!
-        LoadRandomPreset(0.0f);
-        m_bInitialPresetSelected = true;
+        UpdatePresetList(true, true); // background + force recursive scan
+        // First preset will be loaded in MilkDropRenderFrame once scan completes.
     }
     else
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
@@ -3294,6 +3293,13 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 {
     EnterCriticalSection(&g_cs);
 
+    // Deferred initial preset load: once background scan completes, load first preset.
+    if (!m_bInitialPresetSelected && m_bPresetListReady && m_nPresets > 0)
+    {
+        LoadRandomPreset(0.0f);
+        m_bInitialPresetSelected = true;
+    }
+
     // 1a. Take care of timing, other paperwork, etc... for new frame.
     if (!redraw)
     {
@@ -4274,10 +4280,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             if (m_nPresets - m_nDirs == 0)
             {
-                // Note: This error message is repeated in "milkdropfs.cpp" in `LoadRandomPreset()`.
-                swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK), m_szPresetDir);
-                AddError(buf, 6.0f, ERR_MISC, true);
-                m_UI_mode = UI_REGULAR;
+                if (m_bPresetListReady)
+                    m_UI_mode = UI_REGULAR;
             }
             else
             {
@@ -4496,11 +4500,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             if (m_nPresets == 0)
             {
-                // Note: This error message is repeated in "milkdropfs.cpp" in `LoadRandomPreset()`.
-                wchar_t buf2[1024] = {0};
-                swprintf_s(buf2, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK), m_szPresetDir);
-                AddError(buf2, 6.0f, ERR_MISC, true);
-                m_UI_mode = UI_REGULAR;
+                if (m_bPresetListReady)
+                    m_UI_mode = UI_REGULAR;
             }
             else
             {
@@ -5099,18 +5100,11 @@ void CPlugin::LoadRandomPreset(float fBlendTime)
     // Ensure file list is OK.
     if (m_nPresets - m_nDirs == 0)
     {
-        // Note: this error message is repeated in `milkdropfs.cpp` in `DrawText()`.
-        wchar_t buf[1024] = {0};
-        swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK), m_szPresetDir);
-        AddError(buf, 6.0f, ERR_MISC, true);
+        // If scan is still running, just return silently — presets will appear soon.
+        if (!m_bPresetListReady)
+            return;
 
-        // Also bring up the directory navigation menu...
-        if (m_UI_mode == UI_REGULAR || m_UI_mode == UI_MENU)
-        {
-            m_UI_mode = UI_LOAD;
-            m_bUserPagedUp = false;
-            m_bUserPagedDown = false;
-        }
+        // Don't spam errors — the right-click menu will show guidance.
         return;
     }
 
@@ -5600,71 +5594,63 @@ static char* NextLine(char* p)
 }
 
 // NOTE - this is run in a separate thread!!!
+// Helper: Extract the top-level category from a relative path.
+// e.g. "Fractal\\Blobby\\file.milk" -> "Fractal"
+static std::wstring ExtractTopCategory(const std::wstring& relativePath)
+{
+    size_t sep = relativePath.find_first_of(L"\\/");
+    if (sep != std::wstring::npos && sep > 0)
+        return relativePath.substr(0, sep);
+    return L"";
+}
+
+// Helper: Check if a relative path matches any of the selected category prefixes.
+// Selected categories can be top-level ("Fractal") or deeper ("Fractal\\Blobby").
+// A selected category matches if the relative path starts with it.
+static bool MatchesSelectedCategories(const std::wstring& relativePath, const std::set<std::wstring>& filterCategories)
+{
+    if (filterCategories.empty())
+        return true; // engine default: empty filter = include everything (UI layer will populate and rescan)
+
+    for (const auto& cat : filterCategories)
+    {
+        // Check if relativePath starts with the category prefix.
+        if (_wcsnicmp(relativePath.c_str(), cat.c_str(), cat.length()) == 0)
+        {
+            // Make sure it's a proper prefix (followed by \ or exact match of dir part).
+            if (relativePath.length() == cat.length() ||
+                relativePath[cat.length()] == L'\\' ||
+                relativePath[cat.length()] == L'/')
+                return true;
+        }
+    }
+    return false;
+}
+
 static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
 {
     ULONG_PTR flags = reinterpret_cast<ULONG_PTR>(lpVoid);
     bool bForce = (flags & 1) ? true : false;
     bool bTryReselectCurrentPreset = (flags & 2) ? true : false;
 
-    WIN32_FIND_DATA fd;
-    ZeroMemory(&fd, sizeof(fd));
-    HANDLE h = INVALID_HANDLE_VALUE;
-
-    //int nTry = 0;
-    bool bRetrying = false;
-
     EnterCriticalSection(&g_cs);
 
-retry:
     // Make sure the path exists; if not, go to Winamp plugins directory.
     if (GetFileAttributes(g_plugin.m_szPresetDir) == INVALID_FILE_ATTRIBUTES)
     {
         g_plugin.FindValidPresetDir();
     }
 
-    // If mask (directory) changed, do a full re-scan.
-    // If not, just finish the old scan.
     wchar_t szMask[MAX_PATH] = {0};
-    swprintf_s(szMask, L"%s*.*", g_plugin.m_szPresetDir); // because directory names could have extensions, etc.
+    swprintf_s(szMask, L"%s*.*", g_plugin.m_szPresetDir);
     if (bForce || !g_plugin.m_szUpdatePresetMask[0] || wcscmp(szMask, g_plugin.m_szUpdatePresetMask))
     {
-        // If old directory was "" or the directory changed, reset the search.
-        if (h && h != INVALID_HANDLE_VALUE)
-            FindClose(h);
-        h = INVALID_HANDLE_VALUE;
         g_plugin.m_bPresetListReady = false;
         wcscpy_s(g_plugin.m_szUpdatePresetMask, szMask);
-        ZeroMemory(&fd, sizeof(fd));
+        // DON'T clear m_presets here — the render thread may still be reading them.
+        // We'll do an atomic swap at the end of the scan instead.
 
-        g_plugin.m_nPresets = 0;
-        g_plugin.m_nDirs = 0;
-        g_plugin.m_presets.clear();
-
-        // Find first `.milk` file.
-        if ((h = FindFirstFile(g_plugin.m_szUpdatePresetMask, &fd)) == INVALID_HANDLE_VALUE) // note: returns filename -without- path
-        {
-            // Revert back to plugins directory.
-            /*
-            wchar_t buf[1024];
-            swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILES_OR_DIRS_FOUND_IN_X), g_plugin.m_szPresetDir);
-            g_plugin.AddError(buf, 4.0f, ERR_MISC, true);
-            */
-
-            if (bRetrying)
-            {
-                LeaveCriticalSection(&g_cs);
-                g_bThreadAlive = false;
-                _endthreadex(0);
-                return 0;
-            }
-
-            g_plugin.FindValidPresetDir();
-
-            bRetrying = true;
-            goto retry;
-        }
-
-        g_plugin.AddError(GetStringW(WASABI_API_LNG_HINST, g_plugin.GetInstance(), IDS_SCANNING_PRESETS), 4.0f, ERR_SCANNING_PRESETS, false);
+        // Don't show scanning message — text rendering may not be ready yet.
     }
 
     if (g_plugin.m_bPresetListReady)
@@ -5676,239 +5662,316 @@ retry:
     }
 
     int nMaxPSVersion = g_plugin.m_nMaxPSVersion;
-    wchar_t szPresetDir[MAX_PATH];
-    wcscpy_s(szPresetDir, g_plugin.m_szPresetDir);
+    std::wstring presetDir = g_plugin.m_szPresetDir;
+
+    // Snapshot filter state under lock.
+    std::set<std::wstring> filterCategories = g_plugin.m_filterCategories;
+    std::set<std::wstring> filterFavorites = g_plugin.m_filterFavorites;
+    bool bFavoritesOnly = g_plugin.m_bFilterFavoritesOnly;
 
     LeaveCriticalSection(&g_cs);
 
+    // Ensure trailing backslash.
+    if (!presetDir.empty() && presetDir.back() != L'\\')
+        presetDir += L'\\';
+
     PresetList temp_presets;
-    int temp_nDirs = 0;
     int temp_nPresets = 0;
+    LARGE_INTEGER perfFreq, perfStart, perfEnd;
+    QueryPerformanceFrequency(&perfFreq);
+    QueryPerformanceCounter(&perfStart);
 
-    // Scan for the desired number of presets, this call...
-    while (!g_bThreadShouldQuit && h != INVALID_HANDLE_VALUE)
+    // === CACHE LOGIC ===
+    // Put cache file in the preset directory itself (simple and always valid).
+    std::wstring cacheFile = presetDir + L"preset_cache.dat";
+
+    // Step 1: Fast filename-only scan (no file opens).
+    std::vector<std::wstring> currentFiles;
+    try
     {
-        bool bSkip = false;
-        bool bIsDir = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        float fRating = 0;
-
-        wchar_t szFilename[512] = {0};
-        wcscpy_s(szFilename, fd.cFileName);
-
-        if (bIsDir)
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                 presetDir, std::filesystem::directory_options::skip_permission_denied))
         {
-            // Skip "." directory.
-            if (wcscmp(fd.cFileName, L".") == 0) //|| wcslen(ffd.cFileName) < 1)
-                bSkip = true;
-            else
-                swprintf_s(szFilename, L"*%s", fd.cFileName);
+            if (g_bThreadShouldQuit) break;
+            if (!entry.is_regular_file()) continue;
+            if (_wcsicmp(entry.path().extension().c_str(), L".milk") != 0) continue;
+            currentFiles.push_back(entry.path().wstring().substr(presetDir.length()));
         }
-        else
+    }
+    catch (const std::filesystem::filesystem_error&) {}
+    std::sort(currentFiles.begin(), currentFiles.end(), [](const std::wstring& a, const std::wstring& b) {
+        return _wcsicmp(a.c_str(), b.c_str()) < 0;
+    });
+
+    // Step 2: Try to load cache.
+    bool cacheValid = false;
+    std::map<std::wstring, float> cachedRatings; // relativePath -> rating
+    if (std::filesystem::exists(cacheFile))
+    {
+        std::wifstream cfs(cacheFile);
+        if (cfs.is_open())
         {
-            // Skip normal files not ending in ".milk".
-            size_t len = wcslen(fd.cFileName);
-            if (len < 5 || wcscmp(fd.cFileName + len - 5, L".milk"))
-                bSkip = true;
-
-            // If it is `.milk`, make sure to know how to run its pixel shaders -
-            // otherwise do not show it in the preset list!
-            if (!bSkip)
+            std::wstring line;
+            std::vector<std::wstring> cachedFiles;
+            // First line: cached directory path.
+            if (std::getline(cfs, line))
             {
-                // If the first line of the file is not "MILKDROP_PRESET_VERSION XXX",
-                // then it's a MilkDrop 1-era preset, so it is definitely runnable (no shaders).
-                // Otherwise, check for the value "PSVERSION". It will be 0, 2, or 3.
-                // If missing, assume it is 2.
-                wchar_t szFullPath[MAX_PATH];
-                swprintf_s(szFullPath, L"%s%s", szPresetDir, fd.cFileName);
-                FILE* f;
-                errno_t err = _wfopen_s(&f, szFullPath, L"r");
-                if (err)
-                    bSkip = true;
-                else
+                // Trim trailing whitespace/CR.
+                while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n' || line.back() == L' '))
+                    line.pop_back();
+                // Check if path matches current preset directory.
+                if (_wcsicmp(line.c_str(), presetDir.c_str()) != 0)
                 {
-                    constexpr size_t PRESET_HEADER_SCAN_BYTES = 160U;
-                    char szLine[PRESET_HEADER_SCAN_BYTES] = {0};
-                    char* p = szLine;
-
-                    int bytes_to_read = sizeof(szLine) - 1;
-                    size_t count = fread(szLine, bytes_to_read, 1, f);
-                    if (count < 1)
+                    // Different directory — cache is invalid.
+                }
+                // Second line: file count.
+                else if (std::getline(cfs, line))
+                {
+                    int cachedCount = _wtoi(line.c_str());
+                    for (int i = 0; i < cachedCount && std::getline(cfs, line); i++)
                     {
-                        fseek(f, SEEK_SET, 0);
-                        count = fread(szLine, 1, bytes_to_read, f);
-                        szLine[count] = 0;
-                    }
-                    else
-                        szLine[bytes_to_read - 1] = 0;
-
-                    bool bScanForPreset00AndRating = false;
-                    bool bRatingKnown = false;
-
-                    // Try to read the PSVERSION and the fRating= value.
-                    // Most presets (unless hand-edited) will have these right at the top.
-                    // If not, [at least for fRating] use GetPrivateProfileFloat to search whole file.
-                    // Read line 1.
-                    //p = NextLine(p);//fgets(p, sizeof(p)-1, f);
-                    if (!strncmp(p, "MILKDROP_PRESET_VERSION", 23))
-                    {
-                        p = NextLine(p); //fgets(p, sizeof(p)-1, f);
-                        int ps_version = 2;
-                        if (p && !strncmp(p, "PSVERSION", 9))
+                        // Format: relativePath|rating
+                        size_t sep = line.rfind(L'|');
+                        if (sep != std::wstring::npos)
                         {
-                            sscanf_s(&p[10], "%d", &ps_version);
-                            if (ps_version > nMaxPSVersion)
-                                bSkip = true;
-                            else
-                            {
-                                p = NextLine(p); //fgets(p, sizeof(p)-1, f);
-                                bScanForPreset00AndRating = true;
-                            }
+                            std::wstring relPath = line.substr(0, sep);
+                            float rating = static_cast<float>(_wtof(line.substr(sep + 1).c_str()));
+                            cachedFiles.push_back(relPath);
+                            cachedRatings[relPath] = rating;
                         }
                     }
-                    else
+                    // Validate: same file count and same filenames?
+                    if (static_cast<int>(cachedFiles.size()) == cachedCount &&
+                        cachedFiles.size() == currentFiles.size())
                     {
-                        // otherwise it's a MilkDrop 1 preset - we can run it.
-                        bScanForPreset00AndRating = true;
-                    }
-
-                    // scan up to 10 more lines in the file, looking for [preset00] and fRating=...
-                    // (this is WAY faster than GetPrivateProfileFloat, when it works!)
-                    int reps = (bScanForPreset00AndRating) ? 10 : 0;
-                    for (int z = 0; z < reps; z++)
-                    {
-                        if (p && !strncmp(p, "[preset00]", 10))
+                        cacheValid = true;
+                        for (size_t i = 0; i < cachedFiles.size(); i++)
                         {
-                            p = NextLine(p);
-                            if (p && !strncmp(p, "fRating=", 8))
+                            if (_wcsicmp(cachedFiles[i].c_str(), currentFiles[i].c_str()) != 0)
                             {
-                                _sscanf_s_l(&p[8], "%f", g_use_C_locale, &fRating);
-                                bRatingKnown = true;
+                                cacheValid = false;
                                 break;
                             }
                         }
-                        p = NextLine(p);
                     }
-
-                    fclose(f);
-
-                    if (!bRatingKnown)
-                        fRating = GetPrivateProfileFloat(L"preset00", L"fRating", 3.0f, szFullPath);
-                    fRating = std::max(0.0f, std::min(5.0f, fRating));
                 }
             }
         }
+    }
 
-        if (!bSkip)
+    // Step 3: Build preset list — use cache for ratings if valid, otherwise read headers.
+    for (const auto& relativePath : currentFiles)
+    {
+        if (g_bThreadShouldQuit) break;
+
+        // Filter by selected categories.
+        if (!MatchesSelectedCategories(relativePath, filterCategories))
+            continue;
+
+        // Filter by favorites if in favorites-only mode.
+        if (bFavoritesOnly)
         {
-            float fPrevPresetRatingCum = 0;
-            if (temp_nPresets > 0)
-                fPrevPresetRatingCum += temp_presets[static_cast<size_t>(temp_nPresets) - 1].fRatingCum;
-
-            PresetInfo x;
-            x.szFilename = szFilename;
-            x.fRatingThis = fRating;
-            x.fRatingCum = fPrevPresetRatingCum + fRating;
-            temp_presets.push_back(x);
-
-            temp_nPresets++;
-            if (bIsDir)
-                temp_nDirs++;
+            std::wstring normalRel = relativePath;
+            std::replace(normalRel.begin(), normalRel.end(), L'/', L'\\');
+            if (filterFavorites.find(normalRel) == filterFavorites.end())
+                continue;
         }
 
-        if (h && !FindNextFile(h, &fd))
-        {
-            FindClose(h);
-            h = INVALID_HANDLE_VALUE;
+        float fRating = 3.0f;
+        bool bSkip = false;
 
-            break;
+        if (cacheValid)
+        {
+            // Use cached rating.
+            auto it = cachedRatings.find(relativePath);
+            if (it != cachedRatings.end())
+                fRating = it->second;
+        }
+        else
+        {
+            // Read preset header for PS version and rating.
+            std::wstring fullPath = presetDir + relativePath;
+            FILE* f;
+            errno_t err = _wfopen_s(&f, fullPath.c_str(), L"r");
+            if (err)
+                continue;
+
+            constexpr size_t PRESET_HEADER_SCAN_BYTES = 160U;
+            char szLine[PRESET_HEADER_SCAN_BYTES] = {0};
+            char* p = szLine;
+
+            int bytes_to_read = sizeof(szLine) - 1;
+            size_t count = fread(szLine, bytes_to_read, 1, f);
+            if (count < 1)
+            {
+                fseek(f, SEEK_SET, 0);
+                count = fread(szLine, 1, bytes_to_read, f);
+                szLine[count] = 0;
+            }
+            else
+                szLine[bytes_to_read - 1] = 0;
+
+            bool bScanForPreset00AndRating = false;
+            bool bRatingKnown = false;
+
+            if (!strncmp(p, "MILKDROP_PRESET_VERSION", 23))
+            {
+                p = NextLine(p);
+                int ps_version = 2;
+                if (p && !strncmp(p, "PSVERSION", 9))
+                {
+                    sscanf_s(&p[10], "%d", &ps_version);
+                    if (ps_version > nMaxPSVersion)
+                        bSkip = true;
+                    else
+                    {
+                        p = NextLine(p);
+                        bScanForPreset00AndRating = true;
+                    }
+                }
+            }
+            else
+            {
+                bScanForPreset00AndRating = true;
+            }
+
+            int reps = (bScanForPreset00AndRating) ? 10 : 0;
+            for (int z = 0; z < reps; z++)
+            {
+                if (p && !strncmp(p, "[preset00]", 10))
+                {
+                    p = NextLine(p);
+                    if (p && !strncmp(p, "fRating=", 8))
+                    {
+                        _sscanf_s_l(&p[8], "%f", g_use_C_locale, &fRating);
+                        bRatingKnown = true;
+                        break;
+                    }
+                }
+                p = NextLine(p);
+            }
+
+            fclose(f);
+
+            if (!bRatingKnown)
+                fRating = GetPrivateProfileFloat(L"preset00", L"fRating", 3.0f, fullPath.c_str());
+            fRating = std::max(0.0f, std::min(5.0f, fRating));
         }
 
-        constexpr int PRESET_UPDATE_INTERVAL = 64;
-        // Every so often, add some presets...
-        if (temp_nPresets == 30 || ((temp_nPresets % PRESET_UPDATE_INTERVAL) == 0))
+        if (bSkip)
+            continue;
+
+        float fPrevPresetRatingCum = 0;
+        if (temp_nPresets > 0)
+            fPrevPresetRatingCum = temp_presets[static_cast<size_t>(temp_nPresets) - 1].fRatingCum;
+
+        PresetInfo x;
+        x.szFilename = relativePath;
+        x.fRatingThis = fRating;
+        x.fRatingCum = fPrevPresetRatingCum + fRating;
+        temp_presets.push_back(x);
+        temp_nPresets++;
+    }
+
+    // Step 4: Write cache if we did a full scan (cache was invalid).
+    if (!cacheValid && !g_bThreadShouldQuit && !currentFiles.empty())
+    {
+        // Build full rating map from scanned presets (before filtering).
+        // We need to rescan without filters for the cache.
+        std::wofstream cfs(cacheFile, std::ios::out | std::ios::trunc);
+        if (cfs.is_open())
         {
-            EnterCriticalSection(&g_cs);
+            cfs << presetDir << std::endl;
+            cfs << currentFiles.size() << std::endl;
+            // Build a map of scanned ratings.
+            std::map<std::wstring, float> scannedRatings;
+            for (const auto& p : temp_presets)
+                scannedRatings[p.szFilename] = p.fRatingThis;
+            for (const auto& relPath : currentFiles)
+            {
+                auto it = scannedRatings.find(relPath);
+                float r = (it != scannedRatings.end()) ? it->second : 3.0f;
+                cfs << relPath << L"|" << r << std::endl;
+            }
+        }
+    }
 
-            //g_plugin.m_presets = temp_presets;
-            for (int i = g_plugin.m_nPresets; i < temp_nPresets; i++)
-                g_plugin.m_presets.push_back(temp_presets[i]);
-            g_plugin.m_nPresets = temp_nPresets;
-            g_plugin.m_nDirs = temp_nDirs;
-
-            LeaveCriticalSection(&g_cs);
+    QueryPerformanceCounter(&perfEnd);
+    double elapsedMs = static_cast<double>(perfEnd.QuadPart - perfStart.QuadPart) * 1000.0 / static_cast<double>(perfFreq.QuadPart);
+    {
+        char buf[256];
+        sprintf_s(buf, "milk2: Preset scan: %s, %d files, %d matched, %.1f ms",
+                  cacheValid ? "CACHED" : "FULL SCAN",
+                  static_cast<int>(currentFiles.size()), temp_nPresets, elapsedMs);
+        OutputDebugStringA(buf);
+        OutputDebugStringA("\n");
+        // Log to file for easy checking.
+        FILE* fLog;
+        std::wstring logPath = presetDir + L"scan_timing.log";
+        if (_wfopen_s(&fLog, logPath.c_str(), L"a") == 0 && fLog)
+        {
+            fprintf(fLog, "%s\n", buf);
+            fclose(fLog);
         }
     }
 
     if (g_bThreadShouldQuit)
     {
-        // Just abort...either exiting the program or restarting the scan.
         g_bThreadAlive = false;
         _endthreadex(0);
         return 0;
     }
 
-    EnterCriticalSection(&g_cs);
-
-    //g_plugin.m_presets = temp_presets;
-    for (int i = g_plugin.m_nPresets; i < temp_nPresets; i++)
-        g_plugin.m_presets.push_back(temp_presets[i]);
-    g_plugin.m_nPresets = temp_nPresets;
-    g_plugin.m_nDirs = temp_nDirs;
-    //g_plugin.m_bPresetListReady = true;
-
-    if (g_plugin.m_nPresets == 0) //if (g_plugin.m_bPresetListReady && g_plugin.m_nPresets == 0)
+    // Sort the temp list before committing.
+    if (temp_nPresets > 1)
     {
-        // no presets OR directories found - weird - but it happens.
-        // --> revert back to plugins dir
-        /*
-        wchar_t buf[1024];
-        swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_ERROR_NO_PRESET_FILES_OR_DIRS_FOUND_IN_X), g_plugin.m_szPresetDir);
-        g_plugin.AddError(buf, 4.0f, ERR_MISC, true);
-        */
+        // Simple sort by filename.
+        std::sort(temp_presets.begin(), temp_presets.end(), [](const PresetInfo& a, const PresetInfo& b) {
+            return _wcsicmp(a.szFilename.c_str(), b.szFilename.c_str()) < 0;
+        });
 
-        if (bRetrying)
-        {
-            LeaveCriticalSection(&g_cs);
-            g_bThreadAlive = false;
-            _endthreadex(0);
-            return 0;
-        }
-
-        g_plugin.FindValidPresetDir();
-
-        bRetrying = true;
-        goto retry;
+        // Update cumulative ratings after sort.
+        temp_presets[0].fRatingCum = temp_presets[0].fRatingThis;
+        for (int i = 1; i < temp_nPresets; i++)
+            temp_presets[i].fRatingCum = temp_presets[static_cast<size_t>(i) - 1].fRatingCum + temp_presets[i].fRatingThis;
     }
 
-    //if (g_plugin.m_bPresetListReady)
+    // Atomic swap: replace the entire preset list at once under the lock.
+    // This ensures the render thread always sees a consistent list.
+    EnterCriticalSection(&g_cs);
+
+    g_plugin.m_presets = std::move(temp_presets);
+    g_plugin.m_nPresets = temp_nPresets;
+    g_plugin.m_nDirs = 0;
+    g_plugin.m_nCurrentPreset = -1;
+    g_plugin.m_nPresetListCurPos = 0;
+
+    if (g_plugin.m_nPresets == 0)
     {
-        g_plugin.MergeSortPresets(0, g_plugin.m_nPresets - 1);
+        // No messages here — text rendering may not be initialized yet.
+        LeaveCriticalSection(&g_cs);
+        g_plugin.m_bPresetListReady = true;
+        g_bThreadAlive = false;
+        return 0;
+    }
 
-        // Update cumulative ratings, since order changed...
-        g_plugin.m_presets[0].fRatingCum = g_plugin.m_presets[0].fRatingThis;
-        for (int i = 1; i < g_plugin.m_nPresets; i++)
-            g_plugin.m_presets[i].fRatingCum = g_plugin.m_presets[static_cast<size_t>(i) - 1].fRatingCum + g_plugin.m_presets[i].fRatingThis;
-
-        // Clear the "Scanning presets..." message.
-        //g_plugin.ClearErrors(ERR_SCANNING_PRESETS);
-
-        // Finally, try to re-select the most recently-used preset in the list.
-        g_plugin.m_nPresetListCurPos = 0;
-        if (bTryReselectCurrentPreset)
+    // Try to re-select the most recently-used preset in the list.
+    g_plugin.m_nPresetListCurPos = 0;
+    if (bTryReselectCurrentPreset && g_plugin.m_szCurrentPresetFile[0])
+    {
+        for (int i = 0; i < g_plugin.m_nPresets; i++)
         {
-            if (g_plugin.m_szCurrentPresetFile[0])
+            // Match against the full relative path or just the filename part.
+            const std::wstring& fn = g_plugin.m_presets[i].szFilename;
+            wchar_t* p = wcsrchr(g_plugin.m_szCurrentPresetFile, L'\\');
+            p = (p) ? (p + 1) : g_plugin.m_szCurrentPresetFile;
+            // Check if the filename part matches.
+            size_t lastSep = fn.find_last_of(L'\\');
+            const wchar_t* fnPart = (lastSep != std::wstring::npos) ? fn.c_str() + lastSep + 1 : fn.c_str();
+            if (_wcsicmp(p, fnPart) == 0)
             {
-                // Try to automatically seek to the last preset loaded.
-                wchar_t* p = wcsrchr(g_plugin.m_szCurrentPresetFile, L'\\');
-                p = (p) ? (p + 1) : g_plugin.m_szCurrentPresetFile;
-                for (int i = g_plugin.m_nDirs; i < g_plugin.m_nPresets; i++)
-                {
-                    if (wcscmp(p, g_plugin.m_presets[i].szFilename.c_str()) == 0)
-                    {
-                        g_plugin.m_nPresetListCurPos = i;
-                        break;
-                    }
-                }
+                g_plugin.m_nPresetListCurPos = i;
+                break;
             }
         }
     }
@@ -5917,7 +5980,6 @@ retry:
     g_plugin.m_bPresetListReady = true;
 
     g_bThreadAlive = false;
-    //_endthreadex(0); // calling this here stops destructors from being called for local objects!
     return 0;
 }
 
@@ -5927,7 +5989,7 @@ void CPlugin::UpdatePresetList(bool bBackground, bool bForce, bool bTryReselectC
     if (bForce)
     {
         if (g_bThreadAlive)
-            CancelThread(3000); // flags it to exit; the param is the number of milliseconds to wait before forcefully killing it
+            CancelThread(10000); // flags it to exit; the param is the number of milliseconds to wait before forcefully killing it
     }
     else
     {

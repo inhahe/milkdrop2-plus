@@ -306,11 +306,13 @@ void DeviceResources::CreateWindowSizeDependentResources()
     if (m_swapChain)
     {
         // If the swap chain already exists, resize it.
-        HRESULT hr = m_swapChain->ResizeBuffers(m_backBufferCount,
-                                                backBufferWidth,
-                                                backBufferHeight,
-                                                backBufferFormat,
-                                                (m_options & c_AllowTearing) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u);
+        bool isChildResize = (GetWindowLong(m_window, GWL_STYLE) & WS_CHILD) != 0;
+        HRESULT hr = m_swapChain->ResizeBuffers(
+                isChildResize ? 0 : m_backBufferCount,
+                backBufferWidth,
+                backBufferHeight,
+                backBufferFormat,
+                isChildResize ? 0u : ((m_options & c_AllowTearing) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u));
 
         if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
         {
@@ -345,18 +347,58 @@ void DeviceResources::CreateWindowSizeDependentResources()
         swapChainDesc.SampleDesc.Count = 1;
         swapChainDesc.SampleDesc.Quality = 0;
         swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-        swapChainDesc.SwapEffect = (m_options & (c_FlipPresent | c_AllowTearing | c_EnableHDR)) ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
+        bool isChildWindow = (GetWindowLong(m_window, GWL_STYLE) & WS_CHILD) != 0;
+        if (isChildWindow)
+            swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+        else
+            swapChainDesc.SwapEffect = (m_options & (c_FlipPresent | c_AllowTearing | c_EnableHDR)) ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_DISCARD;
         swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
         swapChainDesc.Flags = (m_options & c_AllowTearing) ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0u;
 
-        DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
-        fsSwapChainDesc.Windowed = TRUE;
+        // For child windows, don't pass fullscreen desc (incompatible with WS_CHILD).
 
-        // Create a SwapChain from a Win32 window.
-        ThrowIfFailed(m_dxgiFactory->CreateSwapChainForHwnd(m_d3dDevice.Get(), m_window, &swapChainDesc, &fsSwapChainDesc, nullptr, m_swapChain.ReleaseAndGetAddressOf()));
+        if (isChildWindow)
+        {
+            // For child windows, use the legacy DXGI 1.0 CreateSwapChain API
+            // which is more compatible with WS_CHILD windows.
+            Microsoft::WRL::ComPtr<IDXGIDevice1> dxgiDevice;
+            ThrowIfFailed(m_d3dDevice.As(&dxgiDevice));
 
-        // This class does not support exclusive full-screen mode and prevents DXGI from responding to the "ALT+ENTER" shortcut.
-        ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window, DXGI_MWA_NO_ALT_ENTER));
+            Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
+            ThrowIfFailed(dxgiDevice->GetAdapter(dxgiAdapter.GetAddressOf()));
+
+            Microsoft::WRL::ComPtr<IDXGIFactory1> dxgiFactory1;
+            ThrowIfFailed(dxgiAdapter->GetParent(IID_PPV_ARGS(dxgiFactory1.GetAddressOf())));
+
+            DXGI_SWAP_CHAIN_DESC scd = {};
+            scd.BufferDesc.Width = backBufferWidth;
+            scd.BufferDesc.Height = backBufferHeight;
+            scd.BufferDesc.Format = backBufferFormat;
+            scd.BufferDesc.RefreshRate.Numerator = 60;
+            scd.BufferDesc.RefreshRate.Denominator = 1;
+            scd.SampleDesc.Count = 1;
+            scd.SampleDesc.Quality = 0;
+            scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            scd.BufferCount = 1;
+            scd.OutputWindow = m_window;
+            scd.Windowed = TRUE;
+            scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+
+            Microsoft::WRL::ComPtr<IDXGISwapChain> swapChain;
+            ThrowIfFailed(dxgiFactory1->CreateSwapChain(m_d3dDevice.Get(), &scd, swapChain.GetAddressOf()));
+            ThrowIfFailed(swapChain.As(&m_swapChain));
+        }
+        else
+        {
+            DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsSwapChainDesc = {};
+            fsSwapChainDesc.Windowed = TRUE;
+
+            ThrowIfFailed(m_dxgiFactory->CreateSwapChainForHwnd(
+                m_d3dDevice.Get(), m_window, &swapChainDesc,
+                &fsSwapChainDesc, nullptr, m_swapChain.ReleaseAndGetAddressOf()));
+
+            ThrowIfFailed(m_dxgiFactory->MakeWindowAssociation(m_window, DXGI_MWA_NO_ALT_ENTER));
+        }
     }
 
     // Handle color space settings for HDR.
@@ -532,14 +574,16 @@ void DeviceResources::Present()
     }
 
     // Discard the contents of the render target.
-    // This is a valid operation only when the existing contents will be entirely
-    // overwritten. If dirty or scroll rects are used, this call should be removed.
-    m_d3dContext->DiscardView(m_d3dRenderTargetView.Get());
-
-    if (m_d3dDepthStencilView)
+    // Only valid with flip-model swap chains, not legacy DXGI_SWAP_EFFECT_DISCARD.
+    bool isChild = (GetWindowLong(m_window, GWL_STYLE) & WS_CHILD) != 0;
+    if (!isChild)
     {
-        // Discard the contents of the depth stencil.
-        m_d3dContext->DiscardView(m_d3dDepthStencilView.Get());
+        m_d3dContext->DiscardView(m_d3dRenderTargetView.Get());
+
+        if (m_d3dDepthStencilView)
+        {
+            m_d3dContext->DiscardView(m_d3dDepthStencilView.Get());
+        }
     }
 
     // If the device was removed either by a disconnection or a driver upgrade, we

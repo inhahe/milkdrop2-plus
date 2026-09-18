@@ -53,6 +53,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{85FBFD09-0099-4FE9-9DB6-78DB6F60F817}</ProjectGuid>
     <ProjectName>foo_vis_milk2</ProjectName>
+    <TargetName>foo_milkdrop2_plus</TargetName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -640,6 +641,11 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Sanitize|ARM64EC'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="ui_element.cpp" />
+    <ClCompile Include="favorites_manager.cpp" />
+    <ClCompile Include="preset_browser.cpp" />
+    <ClCompile Include="cui_element.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />
@@ -650,6 +656,8 @@
     <ClInclude Include="supertext.h" />
     <ClInclude Include="ui_element.h" />
     <ClInclude Include="version.h" />
+    <ClInclude Include="favorites_manager.h" />
+    <ClInclude Include="preset_browser.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="extrusionps.hlsl">

@@ -35,6 +35,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>
 
 #include <d3d11_1.h> // Windows 8 and Platform Update for Windows 7 [desktop apps | UWP apps]
 #include <dxgi1_6.h> // Windows 10, version 1803 [desktop apps only]
@@ -43,9 +44,15 @@
 
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
+#include <fstream>
 #include <map>
+#include <mutex>
+#include <random>
+#include <set>
+#include <thread>
 #include <vector>
 
 #ifdef _MSC_VER
@@ -149,6 +156,17 @@ inline void SafeReplace(T** ppD, U* pS)
         (*ppD)->AddRef();
     }
 }
+
+// Column UI SDK (optional — gracefully disabled if not present).
+#if __has_include(<columns_ui-sdk/ui_extension.h>)
+#pragma warning(push)
+#pragma warning(disable: 4100 4127 4189 4245 4505)
+#include <columns_ui-sdk/ui_extension.h>
+#pragma warning(pop)
+#define HAS_COLUMNS_UI 1
+#else
+#define HAS_COLUMNS_UI 0
+#endif
 
 #ifndef HINST_THISCOMPONENT
 extern "C" IMAGE_DOS_HEADER __ImageBase;

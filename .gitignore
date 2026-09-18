@@ -173,3 +173,21 @@ CMakeLists.txt
 !/external/eel2/asm-nseel-arm64ec.obj
 !/external/eel2/eel2.vcxproj
 !/external/eel2/eel2.vcxproj.filters
+
+# Local-only: we publish straight from this directory now.
+copy_to_github.bat
+
+# Local-only. We publish straight from this directory now instead of copying a
+# subset into D:\github.
+copy_to_github.bat
+makedebug.bat
+todo.txt
+*.bak
+# Local working copies / backups that are not part of the project
+backup/
+presets-cream-of-the-crop/
+# Embedded SDK checkout; upstream does not publish it as a submodule
+external/columns_ui-sdk/
+
+# Claude Code local settings (machine-specific permissions)
+.claude/

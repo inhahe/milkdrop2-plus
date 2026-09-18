@@ -197,6 +197,14 @@ static constexpr GUID guid_cfg_bEnableHDR = {
     0x7b10342f, 0x826f, 0x4e24, {0x80, 0xef, 0x61, 0x46, 0x94, 0x30, 0xba, 0x7c}
 }; // {7B10342F-826F-4E24-80EF-61469430BA7C}
 
+// Shuffle mode and category filter persistence.
+static constexpr GUID guid_cfg_nShuffleMode = {
+    0xa3b7c8d9, 0xe0f1, 0x4a2b, {0x8c, 0x3d, 0x4e, 0x5f, 0x60, 0x71, 0x82, 0x93}
+}; // {A3B7C8D9-E0F1-4A2B-8C3D-4E5F60718293}
+static constexpr GUID guid_cfg_szShuffleCategoryFilter = {
+    0xb4c8d9ea, 0xf1a2, 0x4b3c, {0x9d, 0x4e, 0x5f, 0x60, 0x71, 0x82, 0x93, 0xa4}
+}; // {B4C8D9EA-F1A2-4B3C-9D4E-5F60718293A4}
+
 // Defaults
 // `milk2.ini` defaults
 //constexpr int default_nFpsLimit = -1;

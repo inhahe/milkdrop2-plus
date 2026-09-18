@@ -966,12 +966,71 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
             case VK_F9:
                 ToggleShaderHelp();
                 return;
+            case VK_F11:
+                {
+                    InitPresetBrowser();
+                    std::wstring relPath = GetCurrentPresetRelativePath();
+                    if (!relPath.empty())
+                    {
+                        if (bShiftHeldDown)
+                        {
+                            // Shift+F10: Remove from favorites.
+                            if (m_favorites.IsFavorite(relPath))
+                            {
+                                m_favorites.Remove(relPath);
+                                m_favorites.Save();
+                                wchar_t buf[512];
+                                swprintf_s(buf, L"Removed from favorites: %s", relPath.c_str());
+                                g_plugin.AddError(buf, 2.0f, ERR_NOTIFY, false);
+                            }
+                            else
+                            {
+                                g_plugin.AddError(const_cast<wchar_t*>(L"Not in favorites."), 2.0f, ERR_NOTIFY, false);
+                            }
+                        }
+                        else
+                        {
+                            // F10: Add to favorites.
+                            if (!m_favorites.IsFavorite(relPath))
+                            {
+                                m_favorites.Add(relPath);
+                                m_favorites.Save();
+                                wchar_t buf[512];
+                                swprintf_s(buf, L"Added to favorites: %s", relPath.c_str());
+                                g_plugin.AddError(buf, 2.0f, ERR_NOTIFY, false);
+                            }
+                            else
+                            {
+                                g_plugin.AddError(const_cast<wchar_t*>(L"Already in favorites."), 2.0f, ERR_NOTIFY, false);
+                            }
+                        }
+                    }
+                }
+                return;
             case VK_SCROLL:
                 {
                     SHORT lock = GetKeyState(VK_SCROLL) & 0x0001;
                     LockPreset(static_cast<bool>(lock));
                 }
                 return;
+        }
+
+        // Ctrl+key shortcuts for preset browser features.
+        if (bCtrlHeldDown)
+        {
+            switch (nChar)
+            {
+                case 'F':
+                case 'f':
+                    // Ctrl+F: Toggle favorite for current preset.
+                    ToggleFavorite();
+                    return;
+                case 'G':
+                case 'g':
+                    // Ctrl+G: Load random preset using current shuffle mode/filter.
+                    LoadRandomPresetFromBrowser();
+                    return;
+            }
         }
     }
 

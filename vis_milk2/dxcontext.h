@@ -96,6 +96,7 @@ class DXContext final
 
     // DO NOT WRITE TO THESE FROM OUTSIDE THE CLASS
     int m_ready;
+    bool m_isChildWindow = false;
     HRESULT m_lastErr;
     int m_client_width;
     int m_client_height;

@@ -32,6 +32,8 @@
 #define __NULLSOFT_DX_PLUGIN_H__
 
 #include <list>
+#include <set>
+#include <string>
 #include <vector>
 #include "md_defines.h"
 #include "pluginshell.h"
@@ -444,10 +446,16 @@ class CPlugin : public CPluginShell
     PresetList m_presets;
     void UpdatePresetList(bool bBackground = false, bool bForce = false, bool bTryReselectCurrentPreset = true) const;
     wchar_t m_szUpdatePresetMask[MAX_PATH];
-    volatile bool m_bPresetListReady;
+    volatile bool m_bPresetListReady = false;
     //void UpdatePresetRatings();
     //int m_nRatingReadProgress;  // equals 'm_nPresets' if all ratings are read in & ready to go; -1 if uninitialized; otherwise, it's still reading them in, and range is: [0 .. m_nPresets-1]
-    bool m_bInitialPresetSelected;
+    bool m_bInitialPresetSelected = false;
+
+    // Preset filtering (set by UI layer, read by UpdatePresetList).
+    // Empty m_filterCategories means "all categories selected" (default).
+    std::set<std::wstring> m_filterCategories;
+    std::set<std::wstring> m_filterFavorites; // set of relative paths that are favorites
+    bool m_bFilterFavoritesOnly = false;       // if true, only show favorites in preset list
 
     // PRESET HISTORY
     std::wstring m_presetHistory[PRESET_HIST_LEN]; // circular

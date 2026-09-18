@@ -448,6 +448,10 @@ bool CPlugin::RenderStringToTitleTexture()
 // clang-format off
 void CPlugin::LoadPerFrameEvallibVars(CState* pState)
 {
+    // Guard: if no preset is loaded, evallib vars will be null pointers.
+    if (!pState || !pState->var_pf_zoom)
+        return;
+
     // 1. Vars that affect pixel motion (eval at time == -1).
     *pState->var_pf_zoom        = (double)pState->m_fZoom.eval(-1.0f); // GetTime());
     *pState->var_pf_zoomexp     = (double)pState->m_fZoomExponent.eval(-1.0f); // GetTime());
@@ -614,6 +618,10 @@ void CPlugin::RunPerFrameEquations(int code)
         // meshes that get blended together).
         LoadPerFrameEvallibVars(pState);
 
+        // Guard: skip per-vertex init if evallib vars aren't ready (no preset loaded).
+        if (!pState->var_pf_zoom)
+            continue;
+
         // Also do just a once-per-frame init for the *per-**VERTEX*** *READ-ONLY* variables
         // (the non-read-only ones will be reset/restored at the start of each vertex)
         *pState->var_pv_time     = *pState->var_pf_time;
@@ -725,6 +733,16 @@ void CPlugin::RunPerFrameEquations(int code)
 
 void CPlugin::RenderFrame(int bRedraw)
 {
+    // Guard: if no preset is loaded, evallib vars are null pointers.
+    // This happens when no .milk files are found or during initial load.
+    if (!m_pState || !m_pState->var_pf_zoom)
+    {
+        // No preset loaded yet — just return silently.
+        // Don't try to show text messages here; the text rendering system
+        // may not be initialized yet, causing garbled output.
+        return;
+    }
+
     float fDeltaT = 1.0f / GetFps();
 
     if (bRedraw)
@@ -1171,6 +1189,9 @@ void CPlugin::RenderFrame(int bRedraw)
 
 void CPlugin::DrawMotionVectors()
 {
+    if (!m_pState || !m_pState->var_pf_mv_a)
+        return;
+
     // FLEXIBLE MOTION VECTOR FIELD
     if ((float)*m_pState->var_pf_mv_a >= 0.001f)
     {
@@ -2274,6 +2295,8 @@ void CPlugin::DrawCustomShapes()
 
 void CPlugin::LoadCustomShapePerFrameEvallibVars(CState* pState, int i, int instance)
 {
+    if (!pState || !pState->m_shape[i].var_pf_time)
+        return;
     *pState->m_shape[i].var_pf_time      = (double)(GetTime() - m_fStartTime);
     *pState->m_shape[i].var_pf_frame     = (double)GetFrame();
     *pState->m_shape[i].var_pf_fps       = (double)GetFps();
@@ -2316,6 +2339,8 @@ void CPlugin::LoadCustomShapePerFrameEvallibVars(CState* pState, int i, int inst
 
 void CPlugin::LoadCustomWavePerFrameEvallibVars(CState* pState, int i)
 {
+    if (!pState || !pState->m_wave[i].var_pf_time)
+        return;
     *pState->m_wave[i].var_pf_time      = (double)(GetTime() - m_fStartTime);
     *pState->m_wave[i].var_pf_frame     = (double)GetFrame();
     *pState->m_wave[i].var_pf_fps       = (double)GetFps();
