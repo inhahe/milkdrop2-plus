@@ -1032,7 +1032,15 @@ void CPlugin::RenderFrame(int bRedraw)
     ComputeGridAlphaValues();
 
     // Do the warping for this frame [warp shader].
-    if (!m_pState->m_bBlending)
+    if (!wcscmp(m_pState->m_szDesc, INVALID_PRESET_DESC))
+    {
+        // No preset is loaded, so there is no warp to carry the last frame over and fade it:
+        // start each frame from black. Otherwise the two textures that take turns as VS0 and VS1
+        // keep everything ever drawn into them, and the picture flickers between the two.
+        const float black[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        lpDevice->ClearRenderTarget(m_lpVS[1], black);
+    }
+    else if (!m_pState->m_bBlending)
     {
         // No blend.
         if (bNewPresetUsesWarpShader)
@@ -1788,14 +1796,6 @@ void CPlugin::WarpedBlit_NoShaders(int /* nPass */, bool bAlphaBlend, bool bFlip
     if (!lpDevice)
         return;
 
-    if (!wcscmp(m_pState->m_szDesc, INVALID_PRESET_DESC))
-    {
-        // If no valid preset loaded, clear the target to black and return.
-        // TODO: DirectX 11
-        //lpDevice->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
-        return;
-    }
-
     lpDevice->SetTexture(0, m_lpVS[0]);
     lpDevice->SetVertexShader(NULL, NULL);
     lpDevice->SetPixelShader(NULL, NULL);
@@ -2004,14 +2004,6 @@ void CPlugin::WarpedBlit_Shaders(int nPass, bool bAlphaBlend, bool bFlipAlpha, b
     D3D11Shim* lpDevice = GetDevice();
     if (!lpDevice)
         return;
-
-    if (!wcscmp(m_pState->m_szDesc, INVALID_PRESET_DESC))
-    {
-        // If no valid preset loaded, clear the target to black and return.
-        // TODO: DirectX 11
-        //lpDevice->Clear(0, NULL, D3DCLEAR_TARGET, 0x00000000, 1.0f, 0);
-        return;
-    }
 
     //float fBlend = m_pState->m_fBlendProgress; //max(0, min(1, (m_pState->m_fBlendProgress * 1.6f - 0.3f)));
     //if (nPassOverride == 0)
