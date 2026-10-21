@@ -16,7 +16,7 @@ Prerequisites to build the `milkdrop2_plus.dll` component for foobar2000:
 
 Every project in the tree, including the foobar2000 SDK projects, builds with the v145 toolset and the statically linked C/C++ runtime: [`Directory.Build.props`](Directory.Build.props) and [`Directory.Build.targets`](Directory.Build.targets) set both, whatever the individual project files say. foobar2000 loads one copy of the DLL runtime for the whole process, from its own folder, and that copy can be older than the compiler; a statically linked runtime does not depend on it.
 
-Refer to the [build pipeline](.github/workflows/build.yml) jobs for a step-by-step guide on how to build. _Only x86 and x64 Intel architecture platforms are tested._
+The upstream project's [build pipeline](.github/workflows/build.yml.disabled) shows the build step by step; this fork keeps it only for reference, with GitHub Actions turned off (it predates the fork's changes and failed on every push). _Only x86 and x64 Intel architecture platforms are tested._
 
 See [CHANGELOG](CHANGELOG.md) for additional details.
 
