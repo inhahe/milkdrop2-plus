@@ -8,11 +8,13 @@ Prerequisites to build the `milkdrop2_plus.dll` component for foobar2000:
 - [foobar2000 SDK](https://www.foobar2000.org/SDK): download the latest version and uncompress the contents in the `external/` folder and apply the [patch](external/fb2ksdk.patch).
 - [NS-EEL2](https://github.com/justinfrankel/WDL/tree/main/WDL/eel2) (included in [WDL](https://www.cockos.com/wdl/)): the files required to build the DLL are included in this repository.
 - [projectM EEL](https://github.com/projectM-visualizer/projectm-eval): clone the repository into the `external/` folder, checkout the `HEAD` of the `master` branch and apply the [patch](external/pmeel.patch). _This is the default expression evaluation library._
-- [DirectXTK](https://github.com/Microsoft/DirectXTK): the files required to build the DLL are fetched via the NuGet package manager.
+- [DirectXTK](https://github.com/Microsoft/DirectXTK): the three source files the component uses (common states and the DDS and WIC texture loaders) are included in [`external/dxtk`](external/dxtk), from release `sep2024`, and built with the rest so that they share its statically linked runtime.
 - [Windows Template Library (WTL)](https://wtl.sourceforge.io/): the files required to build the DLL are fetched via the NuGet package manager.
-- [Visual Studio 2022](https://visualstudio.microsoft.com/vs/): open the [`milkdrop2-plus`](milkdrop2-plus.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL and DirectXTK as NuGet packages, select a configuration, and build the solution.
+- [Visual Studio 2026](https://visualstudio.microsoft.com/vs/) (or its Build Tools): open the [`milkdrop2-plus`](milkdrop2-plus.sln) solution, set `foo_vis_milk2` as the Startup Project, install WTL as a NuGet package, select a configuration, and build the solution.
 
 > Import the Visual Studio [installation configuration](.vsconfig) file to install required components such as the [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/), [Active Template Library (ATL)](https://learn.microsoft.com/en-us/cpp/atl/atl-com-desktop-components) and [NuGet Package Manager](https://www.nuget.org/).
+
+Every project in the tree, including the foobar2000 SDK projects, builds with the v145 toolset and the statically linked C/C++ runtime: [`Directory.Build.props`](Directory.Build.props) and [`Directory.Build.targets`](Directory.Build.targets) set both, whatever the individual project files say. foobar2000 loads one copy of the DLL runtime for the whole process, from its own folder, and that copy can be older than the compiler; a statically linked runtime does not depend on it.
 
 Refer to the [build pipeline](.github/workflows/build.yml) jobs for a step-by-step guide on how to build. _Only x86 and x64 Intel architecture platforms are tested._
 
@@ -32,12 +34,12 @@ Fork additions are licensed under the [MIT License](LICENSE-ADDITIONS.txt) by In
 - Supports the Default User Interface (Default UI) only.
 - Configurable through foobar2000 preferences instead of `.ini` files.
 - Can build 32-bit and 64-bit x86 component configurations as well as ARM64 and ARM64EC.
-- Built for foobar2000 2.0 and later with latest Windows 11 SDK (10.0.26100.0) and MSVC (v143).
+- Built for foobar2000 2.0 and later with latest Windows 11 SDK (10.0.26100.0) and MSVC (v145), with the C/C++ runtime linked in, so it does not depend on the runtime version foobar2000 ships.
 - Updated all library dependencies to their latest available releases.
 - Deprecated or insecure functions have been rewritten and most unused functionality removed.
 - `vis_milk2` has been upgraded to use more modern C++ alongside the move to DirectX 11.
 - Tested on foobar2000 v2.1.6 (x86 32-bit and x86 64-bit) and Microsoft Windows 11 (Build 26100.1742).
-- Intel architecture versions support Windows 7 SP1 or later and ARM architecture versions support Windows 10 or later.
+- Requires Windows 10 or later (the minimum for code built with MSVC v145).
   - However, some features such as hybrid graphics, high DPI displays and HDR might not work if the DXGI version required to support them is not on the system.
 
 ## Enhanced Features (Fork)

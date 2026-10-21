@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSBuild imports this file into every project below this directory, including the foobar2000 SDK,
+  PFC, libPPUI and projectM-EEL projects whose project files come from outside this repository and
+  still name the v143 toolset and the DLL runtime. It and Directory.Build.targets make the whole
+  tree build alike.
+-->
+<Project>
+  <PropertyGroup>
+    <!-- A project sets PlatformToolset after this file is read, so the override cannot go here:
+         Microsoft.Cpp.props imports the file named below after the project's own settings and
+         before it loads the toolset, which is the last point at which the toolset can change. -->
+    <ForceImportBeforeCppProps>$(MSBuildThisFileDirectory)toolset.props</ForceImportBeforeCppProps>
+  </PropertyGroup>
+</Project>

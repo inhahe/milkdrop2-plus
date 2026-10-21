@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Imported through ForceImportBeforeCppProps; see Directory.Build.props. -->
+<Project>
+  <PropertyGroup>
+    <!-- Visual Studio 2026. Its binaries need Windows 10 or later. -->
+    <PlatformToolset>v145</PlatformToolset>
+  </PropertyGroup>
+</Project>

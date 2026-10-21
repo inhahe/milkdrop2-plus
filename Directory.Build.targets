@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Imported into every project below this directory after the project's own settings, so the item
+  definitions here override them; see Directory.Build.props.
+-->
+<Project>
+  <!--
+    Link the C and C++ runtime statically into every binary.
+
+    foobar2000 loads one copy of the DLL runtime (msvcp140.dll, vcruntime140.dll) for the whole
+    process, from its own installation folder, and a component gets that copy whatever is installed
+    in Windows. Microsoft only guarantees that code runs on a runtime at least as new as the
+    compiler that built it, and the copy foobar2000 ships can be older than our compiler: code from
+    the v145 toolset (runtime 14.50 and later) would run on foobar2000's 14.44. A statically linked
+    runtime travels inside the component and does not depend on what foobar2000 ships.
+
+    Every static library linked into the component must use the same runtime, hence one setting for
+    the whole tree. The mapping keeps each configuration's debug or release flavor.
+  -->
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <RuntimeLibrary Condition="'%(ClCompile.RuntimeLibrary)' == 'MultiThreadedDebugDLL'">MultiThreadedDebug</RuntimeLibrary>
+      <RuntimeLibrary Condition="'%(ClCompile.RuntimeLibrary)' == 'MultiThreadedDLL'">MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+</Project>

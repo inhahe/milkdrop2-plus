@@ -18,13 +18,13 @@ Prerequisites to build `vis_milk2.dll`:
 
 - [Winamp 5.55 SDK](http://forums.winamp.com/showthread.php?t=252090): the files required to build the DLL are included in this repository.
 - [NS-EEL2 Library](https://github.com/justinfrankel/WDL/tree/main/WDL/eel2) (included in [WDL](https://www.cockos.com/wdl/)): the files required to build the DLL are included in this repository.
-- [DirectXTK Library](https://github.com/Microsoft/DirectXTK): the files required to build the DLL are imported via the NuGet package manager.
+- [DirectXTK Library](https://github.com/Microsoft/DirectXTK): the few source files the DLL uses are included in `external/dxtk` and built with it.
 
 Breaking changes, relative to version 2.25c:
 
 - The shader files in the `Winamp\Plugins\Milkdrop2\data` have been updated to match the DirectX 11 data layout.
 - The [Legacy DirectX SDK](https://www.microsoft.com/en-us/download/details.aspx?id=6812) is no longer required to build due the update to DirectX 11 (see [Where is the DirectX SDK (2021 Edition)?](https://walbourn.github.io/where-is-the-directx-sdk-2021-edition/)).
-- The minimum OS version supported is Windows 7. Consequently, the [DirectX End-User Runtime](https://www.microsoft.com/en-us/download/details.aspx?id=8109) installation is not required as it is included as a core component of the OS.
+- The minimum OS version supported is Windows 10 (the minimum for the MSVC v145 toolset it is built with). Consequently, the [DirectX End-User Runtime](https://www.microsoft.com/en-us/download/details.aspx?id=8109) installation is not required as it is included as a core component of the OS.
 - Removed system callback API, which was mainly used to open websites in the internal browser.
 - NS-EEL2 is _not_ built in EEL1 compatibility mode. So presets that use that syntax will not compile. Refer to the [WDL documentation](https://www.cockos.com/EEL2/) for syntax. Known EEL1 functions that have alternate EEL2 syntax or were deprecated are:
   `assign`, `if`, `equal`, `below`, `above`, `bnot`, `megabuf`, `gmegabuf`, `sigmoid`, `band`, `bor`
