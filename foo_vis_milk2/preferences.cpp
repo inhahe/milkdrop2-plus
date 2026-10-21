@@ -1316,16 +1316,31 @@ void milk2_config::initialize_paths()
     swprintf_s(default_szImgIniFile, L"%ls%ls", szConfigDir, IMG_INIFILE);
 }
 
+std::wstring milk2_config::preset_dir_to_stored(const std::wstring& dir)
+{
+    return ToStoredPath(dir, default_szPluginsDirPath, core_api::is_portable_mode_enabled());
+}
+
+std::wstring milk2_config::preset_dir_from_stored(const std::wstring& stored)
+{
+    std::wstring dir = FromStoredPath(stored, default_szPluginsDirPath);
+    if (dir.size() + 1 >= MAX_PATH) // leave room for a trailing backslash and the terminator
+        return std::wstring();
+    return dir;
+}
+
 void milk2_config::update_paths()
 {
-    if (m_version < 2 || cfg_szPresetDir.get().empty())
+    std::wstring dir;
+    if (m_version >= 2)
+        dir = preset_dir_from_stored(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str());
+    if (dir.empty())
     {
         wcscpy_s(settings.m_szPresetDir, default_szPresetDir);
-        cfg_szPresetDir.set(pfc::utf8FromWide(ToStoredPath(default_szPresetDir, default_szPluginsDirPath, core_api::is_portable_mode_enabled()).c_str()));
+        cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(default_szPresetDir).c_str()));
     }
     else
     {
-        std::wstring dir = FromStoredPath(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str(), default_szPluginsDirPath);
         if (dir.back() != L'\\')
             dir += L'\\'; // the engine appends file names to it
         wcscpy_s(settings.m_szPresetDir, dir.c_str());
@@ -1479,7 +1494,7 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);
         cfg_szArtworkFormat = pfc::utf8FromWide(settings.m_szArtworkFormat);
 
-        cfg_szPresetDir.set(pfc::utf8FromWide(ToStoredPath(settings.m_szPresetDir, default_szPluginsDirPath, core_api::is_portable_mode_enabled()).c_str()));
+        cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(settings.m_szPresetDir).c_str()));
     }
 }
 #pragma endregion

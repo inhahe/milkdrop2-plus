@@ -28,7 +28,8 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 ## Presets
 
 - The preset folder is scanned recursively on a background thread (`__UpdatePresetList`), which keeps a cache, `preset_cache.dat`, in the preset folder. The first preset is loaded by `MilkDropRenderFrame` once the scan has finished.
-- With no presets, the engine keeps the default state (`CState::Default`): a plain waveform on black, while `MilkDropRenderUI` shows a two-line notice naming the scanned folder and pointing to Set Preset Library Folder. The right-click menu offers the same command at its top.
+- The scan thread also records, under `g_cs`, the folder it read (`m_scannedPresetDir`) and how many `.milk` files it found there before the shuffle mode's category and favorites filters (`m_nPresetFilesFound`). After initialization, which creates `g_cs`, the folder to scan is changed only through `CPlugin::SetPresetDir`, which takes the lock and refuses a path that does not fit.
+- With no presets, the engine keeps the default state (`CState::Default`): a plain waveform on black. `MilkDropRenderUI` meanwhile shows a notice in the upper-right corner: with no files, "No presets found", the command to choose a folder (Set Preset Library Folder, also at the top of the right-click menu) and the folder it looked in; with files that the shuffle mode excludes, that and how to change it. Its advice is the Default UI element's context menu.
 - Favorites are stored as paths relative to the preset folder, so they survive moving the folder.
 
 ## Settings and files
@@ -41,7 +42,7 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 | Favorites | `<profile>\favorites.ini` |
 | Textures, sprites, messages | `<profile>\milkdrop2\textures\`, `milk2_img.ini`, `milk2_msg.ini`. A texture is looked up in `textures\`, then in the preset folder. |
 
-Both stores of the preset folder go through `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
+Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path that would not fit the engine's `MAX_PATH` buffers counts as unset. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
 
 ## Build
 

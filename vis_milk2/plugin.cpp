@@ -3712,29 +3712,41 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         }
 
         // e) No presets to show, for as long as that lasts: otherwise the user sees only a bare
-        //    waveform and no hint of what is missing or where to set it. Two elements, because
-        //    an upper-right box is one line high.
+        //    waveform and no hint of what is missing or how to change it. One element per line,
+        //    because an upper-right box is one line high; the lines are short, and the one that
+        //    says what to do comes before the folder path, which a narrow panel cuts off.
         EnterCriticalSection(&g_cs); // the preset scan thread writes these
-        const bool bNoPresets = m_bPresetListReady && m_nPresets - m_nDirs == 0;
-        if (bNoPresets)
-            swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_FOUND_IN_X), m_szPresetDir);
+        const bool bScanned = m_bPresetListReady;
+        const bool bNoFiles = bScanned && m_nPresetFilesFound == 0;
+        const bool bAllFiltered = bScanned && !bNoFiles && m_nPresets - m_nDirs == 0;
+        const std::wstring scannedDir = m_scannedPresetDir;
         LeaveCriticalSection(&g_cs);
-        if (bNoPresets)
+        std::wstring lines[3];
+        if (bNoFiles)
         {
-            SelectFont(SIMPLE_FONT);
-            MilkDropTextOut_Box(buf, m_noPresetsNotice[0], 0xFFFFFFFF, MTO_UPPER_RIGHT, true, 0xFF000000);
-            wcscpy_s(buf, WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_PRESET_LIBRARY));
-            MilkDropTextOut_Box(buf, m_noPresetsNotice[1], 0xFFFFFFFF, MTO_UPPER_RIGHT, true, 0xFF000000);
+            lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_FOUND);
+            lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_PRESET_LIBRARY);
+            lines[2] = WASABI_API_LNGSTRINGW(IDS_LOOKED_IN);
+            lines[2] += scannedDir;
         }
-        else
+        else if (bAllFiltered) // the folder has presets, but the shuffle mode's filters exclude them all
         {
-            for (TextElement& line : m_noPresetsNotice)
+            lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_MATCH_SHUFFLE_MODE);
+            lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_CHANGE_SHUFFLE_MODE);
+        }
+        SelectFont(SIMPLE_FONT);
+        for (size_t i = 0; i < ARRAYSIZE(m_noPresetsNotice); ++i)
+        {
+            TextElement& line = m_noPresetsNotice[i];
+            if (!lines[i].empty())
             {
-                if (line.IsVisible())
-                {
-                    line.SetVisible(false);
-                    m_text.UnregisterElement(&line);
-                }
+                wcsncpy_s(buf, lines[i].c_str(), _TRUNCATE);
+                MilkDropTextOut_Box(buf, line, 0xFFFFFFFF, MTO_UPPER_RIGHT, true, 0xFF000000);
+            }
+            else if (line.IsVisible())
+            {
+                line.SetVisible(false);
+                m_text.UnregisterElement(&line);
             }
         }
 
@@ -5577,6 +5589,19 @@ void CPlugin::SeekToPreset(wchar_t cStartChar)
     }
 }
 
+// Sets the folder the next preset scan reads, under the lock the scan thread reads it with; only
+// after initialization, which creates that lock. `szDir`: an absolute folder path ending in a
+// backslash. Returns false, leaving the folder unchanged, if it does not fit `m_szPresetDir`.
+bool CPlugin::SetPresetDir(const wchar_t* szDir)
+{
+    if (wcsnlen_s(szDir, MAX_PATH) >= MAX_PATH)
+        return false;
+    EnterCriticalSection(&g_cs);
+    wcscpy_s(m_szPresetDir, szDir);
+    LeaveCriticalSection(&g_cs);
+    return true;
+}
+
 void CPlugin::FindValidPresetDir()
 {
     swprintf_s(m_szPresetDir, L"%spresets\\", m_szMilkdrop2Path);
@@ -5969,6 +5994,8 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
 
     g_plugin.m_presets = std::move(temp_presets);
     g_plugin.m_nPresets = temp_nPresets;
+    g_plugin.m_scannedPresetDir = presetDir;
+    g_plugin.m_nPresetFilesFound = static_cast<int>(currentFiles.size());
     g_plugin.m_nDirs = 0;
     g_plugin.m_nCurrentPreset = -1;
     g_plugin.m_nPresetListCurPos = 0;

@@ -505,7 +505,10 @@ class CPlugin : public CPluginShell
     wchar_t m_szMilkdrop2Path[MAX_PATH]; // ends in a backslash
     wchar_t m_szMsgIniFile[MAX_PATH];
     wchar_t m_szImgIniFile[MAX_PATH];
-    wchar_t m_szPresetDir[MAX_PATH];
+    wchar_t m_szPresetDir[MAX_PATH]; // the folder the next scan reads; after initialization, change it with SetPresetDir()
+    // What the last finished scan found, for the no-presets notice; the scan thread writes both under `g_cs`.
+    std::wstring m_scannedPresetDir; // the folder it read
+    int m_nPresetFilesFound = 0;     // .milk files in it, before the shuffle mode's category and favorites filters
 
     float m_fRandStart[4];
 
@@ -587,6 +590,7 @@ class CPlugin : public CPluginShell
     void SetPresetListPosition(std::wstring search);
     void FindValidPresetDir();
     wchar_t* GetPresetDir() const { return const_cast<wchar_t*>(m_szPresetDir); };
+    bool SetPresetDir(const wchar_t* szDir);
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);
@@ -690,7 +694,7 @@ class CPlugin : public CPluginShell
     TextElement m_presetRating;
     TextElement m_fpsDisplay;
     TextElement m_debugInfo;
-    TextElement m_noPresetsNotice[2]; // "no presets found in ..." and how to choose a folder
+    TextElement m_noPresetsNotice[3]; // why no preset runs, what to do about it, and the folder scanned
     TextElement m_toolTip;
     TextElement m_songTitle;
     TextElement m_songStats;

@@ -115,9 +115,10 @@ class milk2_cui_panel : public uie::window,
                         std::wstring value = line.substr(eq + 1);
                         while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n'))
                             value.pop_back();
-                        if (key == L"PresetLibraryPath" && !value.empty())
+                        const std::wstring dir = key == L"PresetLibraryPath" ? milk2_config::preset_dir_from_stored(value) : std::wstring();
+                        if (!dir.empty())
                         {
-                            wcscpy_s(s_config.settings.m_szPresetDir, FromStoredPath(value, profileDir).c_str());
+                            wcscpy_s(s_config.settings.m_szPresetDir, dir.c_str());
                         }
                     }
                 }

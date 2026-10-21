@@ -53,7 +53,7 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 - **Shuffle modes** - All presets, selected categories only, favorites only, or favorites in selected categories.
 - **Configurable preset library** - Point the plugin at any directory containing `.milk` presets via right-click > Set Preset Library Folder.
 - **Portable preset library path** - A preset folder inside the foobar2000 profile, or anywhere inside a portable foobar2000 installation, is saved relative to the profile, so the setting survives moving or copying the installation to another folder, drive or computer.
-- **No-presets notice** - When the preset folder holds no presets, the visualization says so in its upper-right corner, names the folder it looked in, and points to Set Preset Library Folder. It shows a plain waveform on black meanwhile.
+- **No-presets notice** - When the preset folder holds no presets, the visualization says so in its upper-right corner, points to Set Preset Library Folder, and names the folder it looked in; when the folder has presets but the shuffle mode excludes them all, it says that instead. It shows a plain waveform on black meanwhile.
 - **Fullscreen hotkeys** - In fullscreen mode, keyboard shortcuts are shown in the right-click menu (Space, Backspace, R, F11, Shift+F11, etc.).
 - **DX11 rendering fix** - Removed DX9-era half-texel offset that caused a thin unrendered border on right/bottom edges.
 

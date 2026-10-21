@@ -1339,11 +1339,7 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         if (len > 0 && len < 511 && szNewDir[len - 1] != L'\\')
                             wcscat_s(szNewDir, L"\\");
 
-                        wcscpy_s(g_plugin.m_szPresetDir, szNewDir);
-
-                        bool bSuccess = true;
-                        if (GetFileAttributes(g_plugin.m_szPresetDir) == INVALID_FILE_ATTRIBUTES)
-                            bSuccess = false;
+                        bool bSuccess = GetFileAttributes(szNewDir) != INVALID_FILE_ATTRIBUTES && g_plugin.SetPresetDir(szNewDir);
                         if (bSuccess)
                         {
                             g_plugin.UpdatePresetList(false, true, false);
@@ -1353,7 +1349,7 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         if (!bSuccess)
                         {
                             // New directory was invalid. Allow another try.
-                            wcscpy_s(g_plugin.m_szPresetDir, szOldDir);
+                            g_plugin.SetPresetDir(szOldDir);
 
                             // Present a warning.
                             /*AddError(WASABI_API_LNGSTRINGW(IDS_INVALID_PATH), 3.5f, ERR_MISC, true);*/
@@ -1361,7 +1357,6 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         else
                         {
                             // Success.
-                            wcscpy_s(g_plugin.m_szPresetDir, szNewDir);
 
                             // Save new path to registry.
                             /*WritePrivateProfileString(L"settings", L"szPresetDir", g_plugin.m_szPresetDir, g_plugin.GetConfigIniFile());*/

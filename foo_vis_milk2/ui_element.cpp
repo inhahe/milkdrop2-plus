@@ -9,7 +9,6 @@
 #include "ui_element.h"
 #include "favorites_manager.h"
 #include "preset_browser.h"
-#include "stored_path.h"
 
 #pragma hdrstop
 
@@ -2058,7 +2057,7 @@ void milk2_ui_element::InitPresetBrowser()
     // If a custom library path is configured, update the engine's preset directory.
     if (!m_presetLibraryPath.empty())
     {
-        wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+        g_plugin.SetPresetDir(m_presetLibraryPath.c_str()); // fits: LoadBrowserConfig() checked it
     }
 
     // Scan in a background thread to avoid freezing the UI.
@@ -2558,7 +2557,7 @@ void milk2_ui_element::LoadBrowserConfig()
         }
         else if (key == L"PresetLibraryPath")
         {
-            m_presetLibraryPath = FromStoredPath(value, profileDir);
+            m_presetLibraryPath = milk2_config::preset_dir_from_stored(value); // empty (unset) if unusable
         }
         else if (key == L"CategoriesConfigured")
         {
@@ -3285,12 +3284,19 @@ void milk2_ui_element::BrowseForPresetLibrary()
             psi->GetDisplayName(SIGDN_FILESYSPATH, &szPath);
             if (szPath)
             {
-            m_presetLibraryPath = szPath;
-            if (!m_presetLibraryPath.empty() && m_presetLibraryPath.back() != L'\\')
-                m_presetLibraryPath += L'\\';
+            std::wstring dir = szPath;
+            if (!dir.empty() && dir.back() != L'\\')
+                dir += L'\\';
 
-            // Update the engine's preset directory to match.
-            wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+            // Update the engine's preset directory to match; it has no room for a longer path.
+            if (!g_plugin.SetPresetDir(dir.c_str()))
+            {
+                wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
+                g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
+                CoTaskMemFree(szPath);
+                return;
+            }
+            m_presetLibraryPath = dir;
 
             // Reset so the deferred load in MilkDropRenderFrame fires again.
             g_plugin.m_bInitialPresetSelected = false;
