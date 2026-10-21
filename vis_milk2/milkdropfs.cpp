@@ -4310,7 +4310,7 @@ void CPlugin::ShowSongTitleAnim(int w, int h, float fProgress)
 
     lpDevice->SetTexture(0, m_lpDDSTitle);
     lpDevice->SetVertexShader(NULL, NULL);
-    //lpDevice->SetShader(0);
+    lpDevice->SetShader(0); // textured; the pixel shader left over from drawing the waves ignores the texture and fills the whole quad
     //lpDevice->SetFVF(SPRITEVERTEX_FORMAT);
 
     lpDevice->SetBlendState(true, D3D11_BLEND_ONE, D3D11_BLEND_ONE);
