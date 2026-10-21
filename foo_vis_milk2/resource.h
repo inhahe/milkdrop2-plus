@@ -632,6 +632,8 @@
 #define IDS_LOOKED_IN                   650
 #define IDS_NO_PRESETS_MATCH_SHUFFLE_MODE 651
 #define IDS_HOW_TO_CHANGE_SHUFFLE_MODE  652
+#define IDS_NO_PRESET_CAN_LOAD          653
+#define IDS_PRESETS_MAY_NEED_NEWER_SHADERS 654
 #define IDD_PREFS                       700
 //#define IDC_CB_FOG                      1000
 //#define IDC_CB_SUPERTEX                 1001

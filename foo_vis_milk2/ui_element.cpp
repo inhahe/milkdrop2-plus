@@ -193,7 +193,7 @@ int milk2_ui_element::OnCreate(LPCREATESTRUCT cs)
         if (!m_presetLibraryPath.empty())
         {
             wcscpy_s(s_config.settings.m_szPresetDir, m_presetLibraryPath.c_str());
-            wcscpy_s(g_plugin.m_szPresetDir, m_presetLibraryPath.c_str());
+            g_plugin.SetPresetDir(m_presetLibraryPath.c_str()); // fits: LoadBrowserConfig() checked it
         }
     }
 
@@ -585,10 +585,17 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     UINT disableIfNotReady = bEngineReady ? MF_STRING : (MF_STRING | MF_GRAYED);
 
     // If no presets found, show prominent guidance at the very top.
-    if (!bEngineReady && g_plugin.m_bPresetListReady)
+    if (!bEngineReady && g_plugin.m_bPresetListReady && g_plugin.m_nPresetFilesFound == 0)
     {
         menu.AppendMenu(MF_STRING, IDM_SET_PRESET_LIBRARY, TEXT(">>> No presets found - Set Preset Library Folder..."));
         menu.AppendMenu(MF_STRING, IDM_OPEN_PRESETS_URL, TEXT(">>> Download presets (opens browser)..."));
+        menu.AppendMenu(MF_SEPARATOR);
+    }
+    else if (!bEngineReady && g_plugin.m_bPresetListReady)
+    {
+        // The folder has presets, but none made the list; same reasons as the on-screen notice.
+        menu.AppendMenu(MF_GRAYED, static_cast<UINT_PTR>(0),
+                        g_plugin.m_nPresetFilesInShuffle == 0 ? TEXT("No presets match the shuffle mode (see Shuffle Mode)") : TEXT("None of these presets could be loaded"));
         menu.AppendMenu(MF_SEPARATOR);
     }
     else if (!bEngineReady)
@@ -2477,12 +2484,43 @@ void milk2_ui_element::BuildFavoritesSubmenu(CMenu& favMenu, int& /*nextId*/)
     }
 }
 
+// Where browser_config.ini is: in the foobar2000 profile folder.
+static std::wstring BrowserConfigPath()
+{
+    std::wstring path = s_config.settings.m_szPluginsDirPath;
+    if (!path.empty() && path.back() != L'\\')
+        path += L'\\';
+    return path + L"browser_config.ini";
+}
+
+// The key=value lines of browser_config.ini, each value without trailing spaces; empty if the
+// file is missing or unreadable. The Default UI and the Columns UI elements both read it.
+static std::map<std::wstring, std::wstring> ReadBrowserConfig()
+{
+    std::map<std::wstring, std::wstring> values;
+    std::wstring text;
+    if (!ReadTextFile(BrowserConfigPath(), text))
+        return values;
+    std::wistringstream ifs(text);
+    std::wstring line;
+    while (std::getline(ifs, line))
+    {
+        if (line.empty() || line[0] == L'[' || line[0] == L';')
+            continue;
+        const size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos)
+            continue;
+        std::wstring value = line.substr(eq + 1);
+        while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n' || value.back() == L' '))
+            value.pop_back();
+        values[line.substr(0, eq)] = value;
+    }
+    return values;
+}
+
 void milk2_ui_element::SaveBrowserConfig() const
 {
-    std::wstring profileDir = s_config.settings.m_szPluginsDirPath;
-    if (!profileDir.empty() && profileDir.back() != L'\\')
-        profileDir += L'\\';
-    std::wstring configPath = profileDir + L"browser_config.ini";
+    const std::wstring configPath = BrowserConfigPath();
 
     // Ensure directory exists.
     std::filesystem::path p(configPath);
@@ -2522,36 +2560,8 @@ void milk2_ui_element::SaveBrowserConfig() const
 
 void milk2_ui_element::LoadBrowserConfig()
 {
-    std::wstring profileDir = s_config.settings.m_szPluginsDirPath;
-    if (!profileDir.empty() && profileDir.back() != L'\\')
-        profileDir += L'\\';
-    std::wstring configPath = profileDir + L"browser_config.ini";
-
-    if (!std::filesystem::exists(configPath))
-        return;
-
-    std::wstring text;
-    if (!ReadTextFile(configPath, text))
-        return;
-    std::wistringstream ifs(text);
-
-    std::wstring line;
-    while (std::getline(ifs, line))
+    for (const auto& [key, value] : ReadBrowserConfig())
     {
-        if (line.empty() || line[0] == L'[' || line[0] == L';')
-            continue;
-
-        size_t eq = line.find(L'=');
-        if (eq == std::wstring::npos)
-            continue;
-
-        std::wstring key = line.substr(0, eq);
-        std::wstring value = line.substr(eq + 1);
-
-        // Trim trailing whitespace/CR.
-        while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n' || value.back() == L' '))
-            value.pop_back();
-
         if (key == L"ShuffleMode")
         {
             int mode = _wtoi(value.c_str());

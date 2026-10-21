@@ -452,9 +452,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="constanttable.cpp" />
-    <ClCompile Include="utf8_file.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
+    <ClCompile Include="utf8_file.cpp" />
     <ClCompile Include="d3d11shim.cpp" />
     <ClCompile Include="deviceresources.cpp" />
     <ClCompile Include="dxcontext.cpp" />

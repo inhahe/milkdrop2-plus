@@ -154,7 +154,7 @@ void FavoritesManager::Load()
     m_favorites.clear();
 
     std::wstring text;
-    if (!std::filesystem::exists(m_filePath) || !ReadTextFile(m_filePath, text))
+    if (!ReadTextFile(m_filePath, text))
         return;
     std::wistringstream ifs(text);
 

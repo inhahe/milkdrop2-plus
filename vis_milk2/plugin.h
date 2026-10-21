@@ -295,6 +295,10 @@ typedef struct
 } PresetInfo;
 typedef std::vector<PresetInfo> PresetList;
 
+// Longest preset folder path, with its trailing backslash, that the engine can use: a scan
+// formats it followed by "*.*" into a MAX_PATH buffer.
+constexpr size_t MAX_PRESET_DIR_LENGTH = MAX_PATH - 4;
+
 class CPlugin : public CPluginShell
 {
   public:
@@ -505,10 +509,12 @@ class CPlugin : public CPluginShell
     wchar_t m_szMilkdrop2Path[MAX_PATH]; // ends in a backslash
     wchar_t m_szMsgIniFile[MAX_PATH];
     wchar_t m_szImgIniFile[MAX_PATH];
-    wchar_t m_szPresetDir[MAX_PATH]; // the folder the next scan reads; after initialization, change it with SetPresetDir()
+    wchar_t m_szPresetDir[MAX_PATH]; // the folder the next scan reads, ending in a backslash; change it with SetPresetDir()
     // What the last finished scan found, for the no-presets notice; the scan thread writes both under `g_cs`.
     std::wstring m_scannedPresetDir; // the folder it read
-    int m_nPresetFilesFound = 0;     // .milk files in it, before the shuffle mode's category and favorites filters
+    int m_nPresetFilesFound = 0;     // .milk files in it
+    int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
+                                     // presets loaded from them exclude those needing a newer pixel shader model
 
     float m_fRandStart[4];
 
@@ -591,6 +597,9 @@ class CPlugin : public CPluginShell
     void FindValidPresetDir();
     wchar_t* GetPresetDir() const { return const_cast<wchar_t*>(m_szPresetDir); };
     bool SetPresetDir(const wchar_t* szDir);
+    // Full path of `m_presets[i]`, whose name is relative to the folder the last scan read
+    // (which differs from `m_szPresetDir` while a scan of a newly set folder runs).
+    std::wstring GetPresetPath(int i) const { return m_scannedPresetDir + m_presets[i].szFilename; }
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);

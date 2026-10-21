@@ -5,16 +5,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-// Self-contained, without the library's precompiled header, so the tests can build it alone.
+#include "pch.h"
 #include "utf8_file.h"
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
 
 #include <filesystem>
 #include <fstream>

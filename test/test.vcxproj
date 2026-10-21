@@ -375,9 +375,6 @@
     <ClCompile Include="fft.cpp" />
     <ClCompile Include="stored_path_test.cpp" />
     <ClCompile Include="utf8_file_test.cpp" />
-    <ClCompile Include="..\vis_milk2\utf8_file.cpp">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="..\foo_vis_milk2\stored_path.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>

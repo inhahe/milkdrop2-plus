@@ -99,31 +99,11 @@ class milk2_cui_panel : public uie::window,
 
             // Load preset library path from saved config.
             {
-                std::wstring profileDir = s_config.settings.m_szPluginsDirPath;
-                if (!profileDir.empty() && profileDir.back() != L'\\')
-                    profileDir += L'\\';
-                std::wstring configPath = profileDir + L"browser_config.ini";
-                if (std::filesystem::exists(configPath))
-                {
-                    std::wstring text;
-                    ReadTextFile(configPath, text);
-                    std::wistringstream ifs(text);
-                    std::wstring line;
-                    while (std::getline(ifs, line))
-                    {
-                        size_t eq = line.find(L'=');
-                        if (eq == std::wstring::npos) continue;
-                        std::wstring key = line.substr(0, eq);
-                        std::wstring value = line.substr(eq + 1);
-                        while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n'))
-                            value.pop_back();
-                        const std::wstring dir = key == L"PresetLibraryPath" ? milk2_config::preset_dir_from_stored(value) : std::wstring();
-                        if (!dir.empty())
-                        {
-                            wcscpy_s(s_config.settings.m_szPresetDir, dir.c_str());
-                        }
-                    }
-                }
+                const auto values = ReadBrowserConfig();
+                const auto it = values.find(L"PresetLibraryPath");
+                const std::wstring dir = it != values.end() ? milk2_config::preset_dir_from_stored(it->second) : std::wstring();
+                if (!dir.empty())
+                    wcscpy_s(s_config.settings.m_szPresetDir, dir.c_str());
             }
 
             // Create visualization stream for audio data.
@@ -221,7 +201,7 @@ class milk2_cui_panel : public uie::window,
                 if (!s_pwd.empty())
                     swprintf_s(g_plugin.m_szComponentDirPath, L"%ls", s_pwd.c_str());
                 if (s_config.settings.m_szPresetDir[0])
-                    wcscpy_s(g_plugin.m_szPresetDir, s_config.settings.m_szPresetDir);
+                    g_plugin.SetPresetDir(s_config.settings.m_szPresetDir);
 
                 g_hWindow = m_hWnd;
 

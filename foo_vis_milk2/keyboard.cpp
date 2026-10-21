@@ -346,7 +346,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
         {
             // First add pathname to filename.
             wchar_t szDelFile[512] = {0};
-            swprintf_s(szDelFile, L"%s%s", g_plugin.GetPresetDir(), g_plugin.m_presets[g_plugin.m_nPresetListCurPos].szFilename.c_str());
+            wcscpy_s(szDelFile, g_plugin.GetPresetPath(g_plugin.m_nPresetListCurPos).c_str());
 
             g_plugin.DeletePresetFile(szDelFile);
             //m_nCurrentPreset = -1;
@@ -1213,9 +1213,8 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         // First add pathnames to filenames.
                         wchar_t szOldFile[512];
                         wchar_t szNewFile[512];
-                        wcscpy_s(szOldFile, g_plugin.GetPresetDir());
-                        wcscpy_s(szNewFile, g_plugin.GetPresetDir());
-                        wcscat_s(szOldFile, g_plugin.m_presets[g_plugin.m_nPresetListCurPos].szFilename.c_str());
+                        wcscpy_s(szOldFile, g_plugin.GetPresetPath(g_plugin.m_nPresetListCurPos).c_str());
+                        wcscpy_s(szNewFile, g_plugin.m_scannedPresetDir.c_str()); // the folder the listed file is in
                         wcscat_s(szNewFile, waitstring.szText);
                         wcscat_s(szNewFile, L".milk");
 
@@ -1348,8 +1347,10 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 
                         if (!bSuccess)
                         {
-                            // New directory was invalid. Allow another try.
+                            // New directory was invalid. Allow another try, with the old
+                            // directory's presets again: the attempt's scan replaced them.
                             g_plugin.SetPresetDir(szOldDir);
+                            g_plugin.UpdatePresetList(false, true, false);
 
                             // Present a warning.
                             /*AddError(WASABI_API_LNGSTRINGW(IDS_INVALID_PATH), 3.5f, ERR_MISC, true);*/

@@ -117,6 +117,7 @@ volatile HANDLE g_hThread;        // only r/w from our MAIN thread
 volatile bool g_bThreadAlive;     // set true by MAIN thread, and set false upon exit from 2nd thread.
 volatile int g_bThreadShouldQuit; // set by MAIN thread to flag 2nd thread that it wants it to exit.
 static CRITICAL_SECTION g_cs;
+static bool g_bCsReady = false; // whether `g_cs` exists: from AllocateMilkDropNonDX11() until CleanUpMilkDropNonDX11(); UI thread only
 
 #define IsAlphabetChar(x) ((x >= 'a' && x <= 'z') || (x >= 'A' && x <= 'Z'))
 #define IsAlphanumericChar(x) ((x >= 'a' && x <= 'z') || (x >= 'A' && x <= 'Z') || (x >= '0' && x <= '9') || x == '.')
@@ -912,7 +913,7 @@ bool CPlugin::PanelSettings(plugin_config* settings)
     m_min_feature_level = settings->m_nMinFeatureLevel;
     m_skip_comp_shaders = settings->m_bSkipCompShader;
 
-    wcscpy_s(m_szPresetDir, settings->m_szPresetDir);
+    SetPresetDir(settings->m_szPresetDir); // keeps the current folder if this one is too long
     //wcscpy_s(m_szConfigIniFile, settings->m_szConfigIniFile);
     wcscpy_s(m_szMsgIniFile, settings->m_szMsgIniFile);
     wcscpy_s(m_szImgIniFile, settings->m_szImgIniFile);
@@ -993,6 +994,7 @@ int CPlugin::AllocateMilkDropNonDX11()
     g_bThreadAlive = false;
     g_bThreadShouldQuit = false;
     InitializeCriticalSection(&g_cs);
+    g_bCsReady = true;
 
     // Read in `m_szShaderIncludeText`.
     // clang-format off
@@ -1057,6 +1059,7 @@ static void CancelThread(int max_wait_time_ms)
 // created or initialized in `AllocateMilkDropNonDX11()`.
 void CPlugin::CleanUpMilkDropNonDX11()
 {
+    g_bCsReady = false;
     DeleteCriticalSection(&g_cs);
 
     CancelThread(0);
@@ -3717,25 +3720,29 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         //    waveform and no hint of what is missing or how to change it. One element per line,
         //    because an upper-right box is one line high; the lines are short, and the one that
         //    says what to do comes before the folder path, which a narrow panel cuts off.
-        EnterCriticalSection(&g_cs); // the preset scan thread writes these
-        const bool bScanned = m_bPresetListReady;
-        const bool bNoFiles = bScanned && m_nPresetFilesFound == 0;
-        const bool bAllFiltered = bScanned && !bNoFiles && m_nPresets - m_nDirs == 0;
-        const std::wstring scannedDir = m_scannedPresetDir;
-        LeaveCriticalSection(&g_cs);
         std::wstring lines[3];
-        if (bNoFiles)
+        EnterCriticalSection(&g_cs); // the preset scan thread writes these
+        if (m_bPresetListReady && m_nPresets - m_nDirs == 0)
         {
-            lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_FOUND);
-            lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_PRESET_LIBRARY);
-            lines[2] = WASABI_API_LNGSTRINGW(IDS_LOOKED_IN);
-            lines[2] += scannedDir;
+            if (m_nPresetFilesFound == 0)
+            {
+                lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_FOUND);
+                lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_PRESET_LIBRARY);
+                lines[2] = WASABI_API_LNGSTRINGW(IDS_LOOKED_IN);
+                lines[2] += m_scannedPresetDir;
+            }
+            else if (m_nPresetFilesInShuffle == 0)
+            {
+                lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_MATCH_SHUFFLE_MODE);
+                lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_CHANGE_SHUFFLE_MODE);
+            }
+            else // all of them need a newer pixel shader model than allowed, or could not be read
+            {
+                lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESET_CAN_LOAD);
+                lines[1] = WASABI_API_LNGSTRINGW(IDS_PRESETS_MAY_NEED_NEWER_SHADERS);
+            }
         }
-        else if (bAllFiltered) // the folder has presets, but the shuffle mode's filters exclude them all
-        {
-            lines[0] = WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_MATCH_SHUFFLE_MODE);
-            lines[1] = WASABI_API_LNGSTRINGW(IDS_HOW_TO_CHANGE_SHUFFLE_MODE);
-        }
+        LeaveCriticalSection(&g_cs);
         SelectFont(SIMPLE_FONT);
         for (size_t i = 0; i < ARRAYSIZE(m_noPresetsNotice); ++i)
         {
@@ -4351,10 +4358,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
                             case 4: ApplyFlags = STATE_COMP; break;
                         }
 
-                        wchar_t szFile[MAX_PATH] = {0};
-                        swprintf_s(szFile, L"%s%s", m_szPresetDir, m_presets[m_nMashPreset[mash]].szFilename.c_str());
-
-                        m_pState->Import(szFile, GetTime(), m_pState, ApplyFlags);
+                        const std::wstring file = GetPresetPath(m_nMashPreset[mash]);
+                        m_pState->Import(file.c_str(), GetTime(), m_pState, ApplyFlags);
 
                         if (ApplyFlags & STATE_WARP)
                             SafeRelease(m_shaders.warp.ptr);
@@ -5112,11 +5117,7 @@ void CPlugin::PrevPreset(float fBlendTime)
         if (m_nCurrentPreset >= m_nPresets) // just in case
             m_nCurrentPreset = m_nDirs;
 
-        wchar_t szFile[MAX_PATH] = {0};
-        wcscpy_s(szFile, m_szPresetDir); // note: m_szPresetDir always ends with '\'
-        wcscat_s(szFile, m_presets[m_nCurrentPreset].szFilename.c_str());
-
-        LoadPreset(szFile, fBlendTime);
+        LoadPreset(GetPresetPath(m_nCurrentPreset).c_str(), fBlendTime);
     }
     else
     {
@@ -5233,16 +5234,13 @@ void CPlugin::LoadRandomPreset(float fBlendTime)
         }
     }
 
-    // `m_pPresetAddr[m_nCurrentPreset]` points to the preset file to load (without the path);
-    // first prepend the path, then load section [preset00] within that file.
-    wchar_t szFile[MAX_PATH] = {0};
-    wcscpy_s(szFile, m_szPresetDir); // note: m_szPresetDir always ends with '\'
-    wcscat_s(szFile, m_presets[m_nCurrentPreset].szFilename.c_str());
+    // `m_presets[m_nCurrentPreset]` names the preset file to load (without the path).
+    const std::wstring file = GetPresetPath(m_nCurrentPreset);
 
     if (!bHistoryEmpty)
         m_presetHistoryPos = (m_presetHistoryPos + 1) % PRESET_HIST_LEN;
 
-    LoadPreset(szFile, fBlendTime);
+    LoadPreset(file.c_str(), fBlendTime);
 }
 
 void CPlugin::RandomizeBlendPattern()
@@ -5591,13 +5589,18 @@ void CPlugin::SeekToPreset(wchar_t cStartChar)
     }
 }
 
-// Sets the folder the next preset scan reads, under the lock the scan thread reads it with; only
-// after initialization, which creates that lock. `szDir`: an absolute folder path ending in a
-// backslash. Returns false, leaving the folder unchanged, if it does not fit `m_szPresetDir`.
+// Sets the folder the next preset scan reads, under the lock the scan thread reads it with.
+// `szDir`: an absolute folder path ending in a backslash. Returns false, leaving the folder
+// unchanged, if it is longer than MAX_PRESET_DIR_LENGTH.
 bool CPlugin::SetPresetDir(const wchar_t* szDir)
 {
-    if (wcsnlen_s(szDir, MAX_PATH) >= MAX_PATH)
+    if (wcsnlen_s(szDir, MAX_PRESET_DIR_LENGTH + 1) > MAX_PRESET_DIR_LENGTH)
         return false;
+    if (!g_bCsReady) // before initialization or after cleanup, when no other thread uses it
+    {
+        wcscpy_s(m_szPresetDir, szDir);
+        return true;
+    }
     EnterCriticalSection(&g_cs);
     wcscpy_s(m_szPresetDir, szDir);
     LeaveCriticalSection(&g_cs);
@@ -5761,51 +5764,49 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     bool cacheValid = false;
     std::map<std::wstring, float> cachedRatings; // relativePath -> rating
     std::wstring cacheText;
-    if (std::filesystem::exists(cacheFile) && ReadTextFile(cacheFile, cacheText))
+    if (ReadTextFile(cacheFile, cacheText))
     {
         std::wistringstream cfs(cacheText);
+        std::wstring line;
+        std::vector<std::wstring> cachedFiles;
+        // First line: cached directory path.
+        if (std::getline(cfs, line))
         {
-            std::wstring line;
-            std::vector<std::wstring> cachedFiles;
-            // First line: cached directory path.
-            if (std::getline(cfs, line))
+            // Trim trailing whitespace/CR.
+            while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n' || line.back() == L' '))
+                line.pop_back();
+            // Check if path matches current preset directory.
+            if (_wcsicmp(line.c_str(), presetDir.c_str()) != 0)
             {
-                // Trim trailing whitespace/CR.
-                while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n' || line.back() == L' '))
-                    line.pop_back();
-                // Check if path matches current preset directory.
-                if (_wcsicmp(line.c_str(), presetDir.c_str()) != 0)
+                // Different directory — cache is invalid.
+            }
+            // Second line: file count.
+            else if (std::getline(cfs, line))
+            {
+                int cachedCount = _wtoi(line.c_str());
+                for (int i = 0; i < cachedCount && std::getline(cfs, line); i++)
                 {
-                    // Different directory — cache is invalid.
-                }
-                // Second line: file count.
-                else if (std::getline(cfs, line))
-                {
-                    int cachedCount = _wtoi(line.c_str());
-                    for (int i = 0; i < cachedCount && std::getline(cfs, line); i++)
+                    // Format: relativePath|rating
+                    size_t sep = line.rfind(L'|');
+                    if (sep != std::wstring::npos)
                     {
-                        // Format: relativePath|rating
-                        size_t sep = line.rfind(L'|');
-                        if (sep != std::wstring::npos)
-                        {
-                            std::wstring relPath = line.substr(0, sep);
-                            float rating = static_cast<float>(_wtof(line.substr(sep + 1).c_str()));
-                            cachedFiles.push_back(relPath);
-                            cachedRatings[relPath] = rating;
-                        }
+                        std::wstring relPath = line.substr(0, sep);
+                        float rating = static_cast<float>(_wtof(line.substr(sep + 1).c_str()));
+                        cachedFiles.push_back(relPath);
+                        cachedRatings[relPath] = rating;
                     }
-                    // Validate: same file count and same filenames?
-                    if (static_cast<int>(cachedFiles.size()) == cachedCount &&
-                        cachedFiles.size() == currentFiles.size())
+                }
+                // Validate: same file count and same filenames?
+                if (static_cast<int>(cachedFiles.size()) == cachedCount &&
+                    cachedFiles.size() == currentFiles.size())
+                {
+                    cacheValid = true;
+                    for (size_t i = 0; i < cachedFiles.size(); i++)
                     {
-                        cacheValid = true;
-                        for (size_t i = 0; i < cachedFiles.size(); i++)
+                        if (_wcsicmp(cachedFiles[i].c_str(), currentFiles[i].c_str()) != 0)
                         {
-                            if (_wcsicmp(cachedFiles[i].c_str(), currentFiles[i].c_str()) != 0)
-                            {
-                                cacheValid = false;
-                                break;
-                            }
+                            cacheValid = false;
+                            break;
                         }
                     }
                 }
@@ -5814,6 +5815,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     }
 
     // Step 3: Build preset list — use cache for ratings if valid, otherwise read headers.
+    int nInShuffle = 0; // files the shuffle mode's filters keep, before unloadable ones are dropped
     for (const auto& relativePath : currentFiles)
     {
         if (g_bThreadShouldQuit) break;
@@ -5830,6 +5832,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
             if (filterFavorites.find(normalRel) == filterFavorites.end())
                 continue;
         }
+        nInShuffle++;
 
         float fRating = 3.0f;
         bool bSkip = false;
@@ -5933,19 +5936,17 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
         // Build full rating map from scanned presets (before filtering).
         // We need to rescan without filters for the cache.
         std::wostringstream cfs;
+        cfs << presetDir << std::endl;
+        cfs << currentFiles.size() << std::endl;
+        // Build a map of scanned ratings.
+        std::map<std::wstring, float> scannedRatings;
+        for (const auto& p : temp_presets)
+            scannedRatings[p.szFilename] = p.fRatingThis;
+        for (const auto& relPath : currentFiles)
         {
-            cfs << presetDir << std::endl;
-            cfs << currentFiles.size() << std::endl;
-            // Build a map of scanned ratings.
-            std::map<std::wstring, float> scannedRatings;
-            for (const auto& p : temp_presets)
-                scannedRatings[p.szFilename] = p.fRatingThis;
-            for (const auto& relPath : currentFiles)
-            {
-                auto it = scannedRatings.find(relPath);
-                float r = (it != scannedRatings.end()) ? it->second : 3.0f;
-                cfs << relPath << L"|" << r << std::endl;
-            }
+            auto it = scannedRatings.find(relPath);
+            float r = (it != scannedRatings.end()) ? it->second : 3.0f;
+            cfs << relPath << L"|" << r << std::endl;
         }
         WriteUtf8TextFile(cacheFile, cfs.str());
     }
@@ -5990,6 +5991,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     g_plugin.m_nPresets = temp_nPresets;
     g_plugin.m_scannedPresetDir = presetDir;
     g_plugin.m_nPresetFilesFound = static_cast<int>(currentFiles.size());
+    g_plugin.m_nPresetFilesInShuffle = nInShuffle;
     g_plugin.m_nDirs = 0;
     g_plugin.m_nCurrentPreset = -1;
     g_plugin.m_nPresetListCurPos = 0;

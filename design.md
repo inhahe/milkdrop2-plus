@@ -28,8 +28,9 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 ## Presets
 
 - The preset folder is scanned recursively on a background thread (`__UpdatePresetList`), which keeps a cache, `preset_cache.dat`, in the preset folder. The first preset is loaded by `MilkDropRenderFrame` once the scan has finished.
-- The scan thread also records, under `g_cs`, the folder it read (`m_scannedPresetDir`) and how many `.milk` files it found there before the shuffle mode's category and favorites filters (`m_nPresetFilesFound`). After initialization, which creates `g_cs`, the folder to scan is changed only through `CPlugin::SetPresetDir`, which takes the lock and refuses a path that does not fit.
-- With no presets, the engine keeps the default state (`CState::Default`): a plain waveform on black. `MilkDropRenderUI` meanwhile shows a notice in the upper-right corner: with no files, "No presets found", the command to choose a folder (Set Preset Library Folder, also at the top of the right-click menu) and the folder it looked in; with files that the shuffle mode excludes, that and how to change it. Its advice is the Default UI element's context menu.
+- With the list, the scan thread records under `g_cs` the folder it read (`m_scannedPresetDir`), how many `.milk` files it found there (`m_nPresetFilesFound`) and how many of them the shuffle mode's category and favorites filters keep (`m_nPresetFilesInShuffle`); the list then drops presets that need a newer pixel shader model than allowed. The names in `m_presets` are relative to `m_scannedPresetDir`, so preset paths are built from it (`CPlugin::GetPresetPath`), not from `m_szPresetDir`, which already names the next folder while its scan runs.
+- The folder to scan is changed only through `CPlugin::SetPresetDir`, which refuses a path longer than `MAX_PRESET_DIR_LENGTH` (a scan formats it with `*.*` into a `MAX_PATH` buffer) and takes `g_cs` while that lock exists (from engine initialization to cleanup; before or after, no other thread uses the folder).
+- With no presets, the engine keeps the default state (`CState::Default`): a plain waveform on black. `MilkDropRenderUI` meanwhile shows a notice in the upper-right corner, and the right-click menu says the same at its top: with no files, "No presets found", the command to choose a folder (Set Preset Library Folder) and the folder it looked in; with files that the shuffle mode excludes, that and how to change it; with files kept but none loadable, that. Its advice is the Default UI element's context menu.
 - Favorites are stored as paths relative to the preset folder, so they survive moving the folder.
 
 ## Settings and files
@@ -37,7 +38,7 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 | What | Where |
 |---|---|
 | Most settings | foobar2000's configuration (`milk2.*` advanced settings and the preferences page), in `config.sqlite`. |
-| Preset folder | `PresetLibraryPath` in `<profile>\browser_config.ini`, written by Set Preset Library Folder; it overrides the `milk2.szPresetDir` advanced setting when the UI element is created. `milk2_config::build` writes the folder in use back to `milk2.szPresetDir` whenever foobar2000 saves the element's configuration. |
+| Preset folder | `PresetLibraryPath` in `<profile>\browser_config.ini` (read for both elements by `ReadBrowserConfig` in `ui_element.cpp`), written by Set Preset Library Folder; it overrides the `milk2.szPresetDir` advanced setting when the UI element is created. `milk2_config::build` writes the folder in use back to `milk2.szPresetDir` whenever foobar2000 saves the element's configuration. |
 | Shuffle mode, categories | `<profile>\browser_config.ini` |
 | Favorites | `<profile>\favorites.ini` |
 | Preset scan cache | `preset_cache.dat` in the preset folder |
@@ -45,7 +46,7 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 
 browser_config.ini, favorites.ini and preset_cache.dat are UTF-8, through `WriteUtf8TextFile`/`ReadTextFile` (`utf8_file.h`); files from earlier versions, written in Latin-1, still read.
 
-Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path that would not fit the engine's `MAX_PATH` buffers counts as unset. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
+Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path gets its trailing backslash there, and one longer than `MAX_PRESET_DIR_LENGTH` counts as unset. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
 
 ## Build
 

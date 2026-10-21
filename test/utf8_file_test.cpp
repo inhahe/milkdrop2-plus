@@ -41,7 +41,7 @@ TEST_CLASS(Utf8FileTest)
 
     TEST_METHOD(CharactersBeyondLatin1RoundTrip)
     {
-        // The default-locale std::wofstream used before stopped writing at the first of these.
+        // Characters outside Latin-1, which paths and preset names can hold, must survive.
         const std::wstring text = L"[BrowserConfig]\nPresetLibraryPath=C:\\Users\\\u0418\u0432\u0430\u043d\\\u30d7\u30ea\u30bb\u30c3\u30c8\\\nCategoriesConfigured=1\n";
         Assert::IsTrue(WriteUtf8TextFile(PathOf(L"a.ini"), text));
         std::wstring back;

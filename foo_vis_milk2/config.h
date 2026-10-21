@@ -448,9 +448,9 @@ class milk2_config
     // The preset folder in the form browser_config.ini and the milk2.szPresetDir setting save it
     // (see stored_path.h). `dir`: an absolute folder path.
     static std::wstring preset_dir_to_stored(const std::wstring& dir);
-    // `stored`: a saved preset folder. Returns it as an absolute path, or an empty string if
-    // `stored` is empty or the path would not fit the engine's MAX_PATH buffers with a trailing
-    // backslash added (a relative value resolved against a longer profile path can grow).
+    // `stored`: a saved preset folder. Returns it as an absolute path ending in a backslash, or an
+    // empty string if `stored` is empty or the path is longer than the engine can use
+    // (MAX_PRESET_DIR_LENGTH; a relative value resolved against a longer profile path can grow).
     static std::wstring preset_dir_from_stored(const std::wstring& stored);
 
     // `milk2.ini`

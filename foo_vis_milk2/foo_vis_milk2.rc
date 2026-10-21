@@ -1558,6 +1558,8 @@ BEGIN
     IDS_LOOKED_IN           "Looked in: "
     IDS_NO_PRESETS_MATCH_SHUFFLE_MODE "No presets match the shuffle mode."
     IDS_HOW_TO_CHANGE_SHUFFLE_MODE "Right-click > Shuffle Mode to change it."
+    IDS_NO_PRESET_CAN_LOAD  "None of these presets could be loaded."
+    IDS_PRESETS_MAY_NEED_NEWER_SHADERS "They need a newer pixel shader model, or are unreadable."
 END
 
 #endif    // English (United States) resources
