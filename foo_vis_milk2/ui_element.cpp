@@ -10,6 +10,9 @@
 #include "favorites_manager.h"
 #include "preset_browser.h"
 
+#include <sstream>
+#include <vis_milk2/utf8_file.h>
+
 #pragma hdrstop
 
 #ifdef __AVX__
@@ -2486,13 +2489,10 @@ void milk2_ui_element::SaveBrowserConfig() const
     if (p.has_parent_path())
         std::filesystem::create_directories(p.parent_path());
 
-    std::wofstream ofs(configPath, std::ios::out | std::ios::trunc);
-    if (!ofs.is_open())
-        return;
-
+    std::wostringstream ofs;
     ofs << L"[BrowserConfig]" << std::endl;
     ofs << L"ShuffleMode=" << static_cast<int>(m_shuffleMode) << std::endl;
-    ofs << L"PresetLibraryPath=" << ToStoredPath(m_presetLibraryPath, profileDir, core_api::is_portable_mode_enabled()) << std::endl;
+    ofs << L"PresetLibraryPath=" << milk2_config::preset_dir_to_stored(m_presetLibraryPath) << std::endl;
     ofs << L"CategoriesConfigured=" << (m_categoriesConfigured ? 1 : 0) << std::endl;
 
     // Save selected categories as a pipe-delimited list.
@@ -2516,6 +2516,8 @@ void milk2_ui_element::SaveBrowserConfig() const
         first = false;
     }
     ofs << std::endl;
+
+    WriteUtf8TextFile(configPath, ofs.str());
 }
 
 void milk2_ui_element::LoadBrowserConfig()
@@ -2528,9 +2530,10 @@ void milk2_ui_element::LoadBrowserConfig()
     if (!std::filesystem::exists(configPath))
         return;
 
-    std::wifstream ifs(configPath);
-    if (!ifs.is_open())
+    std::wstring text;
+    if (!ReadTextFile(configPath, text))
         return;
+    std::wistringstream ifs(text);
 
     std::wstring line;
     while (std::getline(ifs, line))

@@ -105,7 +105,9 @@ class milk2_cui_panel : public uie::window,
                 std::wstring configPath = profileDir + L"browser_config.ini";
                 if (std::filesystem::exists(configPath))
                 {
-                    std::wifstream ifs(configPath);
+                    std::wstring text;
+                    ReadTextFile(configPath, text);
+                    std::wistringstream ifs(text);
                     std::wstring line;
                     while (std::getline(ifs, line))
                     {

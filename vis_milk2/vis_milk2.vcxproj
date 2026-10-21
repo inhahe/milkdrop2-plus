@@ -429,6 +429,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="utf8_file.h" />
     <ClInclude Include="api.h" />
     <ClInclude Include="constanttable.h" />
     <ClInclude Include="d3d11shim.h" />
@@ -463,6 +464,9 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="constanttable.cpp" />
+    <ClCompile Include="utf8_file.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="d3d11shim.cpp" />
     <ClCompile Include="deviceresources.cpp" />
     <ClCompile Include="dxcontext.cpp" />

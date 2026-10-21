@@ -9,7 +9,8 @@
 #include "favorites_manager.h"
 
 #include <algorithm>
-#include <fstream>
+#include <sstream>
+#include <vis_milk2/utf8_file.h>
 
 void FavoritesManager::Initialize(const std::wstring& favoritesFilePath)
 {
@@ -132,10 +133,7 @@ void FavoritesManager::Save() const
     if (p.has_parent_path())
         std::filesystem::create_directories(p.parent_path());
 
-    std::wofstream ofs(m_filePath, std::ios::out | std::ios::trunc);
-    if (!ofs.is_open())
-        return;
-
+    std::wostringstream ofs;
     ofs << L"[Favorites]" << std::endl;
     int idx = 0;
     for (const auto& fav : m_favorites)
@@ -144,6 +142,7 @@ void FavoritesManager::Save() const
         idx++;
     }
     ofs << L"count=" << m_favorites.size() << std::endl;
+    WriteUtf8TextFile(m_filePath, ofs.str());
 }
 
 void FavoritesManager::Load()
@@ -154,12 +153,10 @@ void FavoritesManager::Load()
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_favorites.clear();
 
-    if (!std::filesystem::exists(m_filePath))
+    std::wstring text;
+    if (!std::filesystem::exists(m_filePath) || !ReadTextFile(m_filePath, text))
         return;
-
-    std::wifstream ifs(m_filePath);
-    if (!ifs.is_open())
-        return;
+    std::wistringstream ifs(text);
 
     std::wstring line;
     while (std::getline(ifs, line))

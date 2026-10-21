@@ -7,7 +7,7 @@ How the component is put together, for whoever changes it next. [README](README.
 | Part | What it is |
 |---|---|
 | `foo_vis_milk2/` | The foobar2000 component (`foo_milkdrop2_plus.dll`): the Default UI element (`ui_element.cpp`, which also `#include`s `keyboard.cpp` and the Columns UI element `cui_element.cpp`, compiled out while `HAS_COLUMNS_UI` is off), preferences and advanced settings (`preferences.cpp`, `config.h`), the preset browser and categories (`preset_browser.*`), favorites (`favorites_manager.*`), and how saved paths are stored (`stored_path.*`). |
-| `vis_milk2/` | The MilkDrop 2 engine, a static library: `CPlugin` (`plugin.cpp`: presets, menus, text overlay), its shell (`pluginshell.cpp`: window, timing, drawing order), rendering (`milkdropfs.cpp`), preset state and equations (`state.cpp`), a Direct3D 9-style shim over Direct3D 11 (`d3d11shim.cpp`), and Direct2D/DirectWrite text (`textmgr.cpp`). |
+| `vis_milk2/` | The MilkDrop 2 engine, a static library: `CPlugin` (`plugin.cpp`: presets, menus, text overlay), its shell (`pluginshell.cpp`: window, timing, drawing order), rendering (`milkdropfs.cpp`), preset state and equations (`state.cpp`), a Direct3D 9-style shim over Direct3D 11 (`d3d11shim.cpp`), Direct2D/DirectWrite text (`textmgr.cpp`), and the component's own text files (`utf8_file.*`). |
 | `external/` | Dependencies. `eel2/`, `nu/`, `winamp/data/` (the shader files shipped in the component's `data` folder), `dxtk/` (the DirectXTK sources used) are in the repository; the foobar2000 SDK, PFC, libPPUI, projectM-EEL and WTL are fetched and patched as BUILDING.md describes. |
 | `test/` | CppUnitTest tests, run with `vstest.console.exe` on `Bin\<platform>\<config>\test.dll`. |
 
@@ -40,7 +40,10 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 | Preset folder | `PresetLibraryPath` in `<profile>\browser_config.ini`, written by Set Preset Library Folder; it overrides the `milk2.szPresetDir` advanced setting when the UI element is created. `milk2_config::build` writes the folder in use back to `milk2.szPresetDir` whenever foobar2000 saves the element's configuration. |
 | Shuffle mode, categories | `<profile>\browser_config.ini` |
 | Favorites | `<profile>\favorites.ini` |
+| Preset scan cache | `preset_cache.dat` in the preset folder |
 | Textures, sprites, messages | `<profile>\milkdrop2\textures\`, `milk2_img.ini`, `milk2_msg.ini`. A texture is looked up in `textures\`, then in the preset folder. |
+
+browser_config.ini, favorites.ini and preset_cache.dat are UTF-8, through `WriteUtf8TextFile`/`ReadTextFile` (`utf8_file.h`); files from earlier versions, written in Latin-1, still read.
 
 Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path that would not fit the engine's `MAX_PATH` buffers counts as unset. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
 

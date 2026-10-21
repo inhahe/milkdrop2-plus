@@ -23,6 +23,9 @@
     <ClInclude Include="api.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="utf8_file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="constanttable.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -89,6 +92,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="constanttable.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="utf8_file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="d3d11shim.cpp">

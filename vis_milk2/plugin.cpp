@@ -79,11 +79,13 @@
 #include "shell_defines.h"
 #include "utility.h"
 #include "support.h"
+#include "utf8_file.h"
 #define WASABI_API_ORIG_HINST GetInstance()
 #include "api.h"
 //#include "resource.h"
 #include <nu/AutoChar.h>
 #include <nu/AutoWide.h>
+#include <sstream>
 
 //#pragma comment(lib, "d3dcompiler.lib")
 //#pragma comment(lib, "dxguid.lib")
@@ -5758,10 +5760,10 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     // Step 2: Try to load cache.
     bool cacheValid = false;
     std::map<std::wstring, float> cachedRatings; // relativePath -> rating
-    if (std::filesystem::exists(cacheFile))
+    std::wstring cacheText;
+    if (std::filesystem::exists(cacheFile) && ReadTextFile(cacheFile, cacheText))
     {
-        std::wifstream cfs(cacheFile);
-        if (cfs.is_open())
+        std::wistringstream cfs(cacheText);
         {
             std::wstring line;
             std::vector<std::wstring> cachedFiles;
@@ -5930,8 +5932,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     {
         // Build full rating map from scanned presets (before filtering).
         // We need to rescan without filters for the cache.
-        std::wofstream cfs(cacheFile, std::ios::out | std::ios::trunc);
-        if (cfs.is_open())
+        std::wostringstream cfs;
         {
             cfs << presetDir << std::endl;
             cfs << currentFiles.size() << std::endl;
@@ -5946,6 +5947,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
                 cfs << relPath << L"|" << r << std::endl;
             }
         }
+        WriteUtf8TextFile(cacheFile, cfs.str());
     }
 
     QueryPerformanceCounter(&perfEnd);
