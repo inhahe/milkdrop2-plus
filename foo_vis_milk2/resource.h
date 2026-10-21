@@ -37,7 +37,7 @@
 #define IDS_PRESET_TO_DELETE            27
 #define IDS_FILE_ALREADY_EXISTS_OVERWRITE_IT 28
 #define IDS_FILE_IN_QUESTION_X_MILK     29
-#define IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK 30
+#define IDS_NO_PRESETS_FOUND_IN_X       30
 #define IDS_LOAD_WHICH_PRESET_PLUS_COMMANDS 31
 #define IDS_PAGE_X_OF_X                 32
 #define IDS_LOCKED                      33
@@ -628,6 +628,7 @@
 #define IDS_NOCOMPSHADER_HELP           646
 #define IDS_TITLE_FORMAT_HELP           647
 #define IDS_ARTWORK_FORMAT_HELP         648
+#define IDS_HOW_TO_SET_PRESET_LIBRARY   649
 #define IDD_PREFS                       700
 //#define IDC_CB_FOG                      1000
 //#define IDC_CB_SUPERTEX                 1001

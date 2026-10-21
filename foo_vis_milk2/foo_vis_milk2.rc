@@ -710,8 +710,7 @@ BEGIN
     IDS_FILE_ALREADY_EXISTS_OVERWRITE_IT 
                             "This file already exists.  Overwrite it?  [y/N]"
     IDS_FILE_IN_QUESTION_X_MILK "(file in question: %s.milk)"
-    IDS_ERROR_NO_PRESET_FILE_FOUND_IN_X_MILK 
-                            "ERROR: No preset files found in %s*.milk"
+    IDS_NO_PRESETS_FOUND_IN_X "No presets found in %s"
     IDS_LOAD_WHICH_PRESET_PLUS_COMMANDS 
                             "Load which preset?  (UP/DOWN: scroll; ENTER: select; INS: rename; DEL: delete; ESC/LEFT: close)"
 END
@@ -1555,6 +1554,7 @@ BEGIN
     IDS_NOCOMPSHADER_HELP   "Check this box to skip composite shader blending to minimize the strobing effect on the bottom and right edges of the screen."
     IDS_TITLE_FORMAT_HELP   "Set a song title format string using foobar2000 script."
     IDS_ARTWORK_FORMAT_HELP "If nothing is set, then foobar2000 will use the album metadata. To override, set either a fully-qualified path or a foobar2000 script that returns the file path of the artwork to display."
+    IDS_HOW_TO_SET_PRESET_LIBRARY "Right-click and choose Set Preset Library Folder... to pick a folder of .milk files."
 END
 
 #endif    // English (United States) resources

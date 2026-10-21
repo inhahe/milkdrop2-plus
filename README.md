@@ -52,6 +52,7 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 - **Random preset from category** - Right-click menu to load a random preset from a specific category.
 - **Shuffle modes** - All presets, selected categories only, favorites only, or favorites in selected categories.
 - **Configurable preset library** - Point the plugin at any directory containing `.milk` presets via right-click > Set Preset Library Folder.
+- **No-presets notice** - When the preset folder holds no presets, the visualization says so in its upper-right corner, names the folder it looked in, and points to Set Preset Library Folder. It shows a plain waveform on black meanwhile.
 - **Fullscreen hotkeys** - In fullscreen mode, keyboard shortcuts are shown in the right-click menu (Space, Backspace, R, F11, Shift+F11, etc.).
 - **DX11 rendering fix** - Removed DX9-era half-texel offset that caused a thin unrendered border on right/bottom edges.
 

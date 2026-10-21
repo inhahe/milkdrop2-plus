@@ -3711,6 +3711,33 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
             }
         }
 
+        // e) No presets to show, for as long as that lasts: otherwise the user sees only a bare
+        //    waveform and no hint of what is missing or where to set it. Two elements, because
+        //    an upper-right box is one line high.
+        EnterCriticalSection(&g_cs); // the preset scan thread writes these
+        const bool bNoPresets = m_bPresetListReady && m_nPresets - m_nDirs == 0;
+        if (bNoPresets)
+            swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_NO_PRESETS_FOUND_IN_X), m_szPresetDir);
+        LeaveCriticalSection(&g_cs);
+        if (bNoPresets)
+        {
+            SelectFont(SIMPLE_FONT);
+            MilkDropTextOut_Box(buf, m_noPresetsNotice[0], 0xFFFFFFFF, MTO_UPPER_RIGHT, true, 0xFF000000);
+            wcscpy_s(buf, WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_PRESET_LIBRARY));
+            MilkDropTextOut_Box(buf, m_noPresetsNotice[1], 0xFFFFFFFF, MTO_UPPER_RIGHT, true, 0xFF000000);
+        }
+        else
+        {
+            for (TextElement& line : m_noPresetsNotice)
+            {
+                if (line.IsVisible())
+                {
+                    line.SetVisible(false);
+                    m_text.UnregisterElement(&line);
+                }
+            }
+        }
+
         // NOTE: Custom timed message comes at the end!!
     }
 

@@ -690,6 +690,7 @@ class CPlugin : public CPluginShell
     TextElement m_presetRating;
     TextElement m_fpsDisplay;
     TextElement m_debugInfo;
+    TextElement m_noPresetsNotice[2]; // "no presets found in ..." and how to choose a folder
     TextElement m_toolTip;
     TextElement m_songTitle;
     TextElement m_songStats;
