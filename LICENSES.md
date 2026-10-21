@@ -506,7 +506,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 This license applies to the following files or to files in the following directories:
 
-- `external/directxtk*/` (DirectXTK)
+- `external/dxtk/` (DirectXTK)
 - `vis_milk2/deviceresources.cpp`, `vis_milk2/deviceresources.h` and `foo_vis_milk2/steptimer.h` (Direct3D Game VS project templates)
 - `external/projectm-eval/` (projectM Expression Evaluation Library)
 

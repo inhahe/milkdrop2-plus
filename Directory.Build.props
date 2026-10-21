@@ -3,7 +3,8 @@
   MSBuild imports this file into every project below this directory, including the foobar2000 SDK,
   PFC, libPPUI and projectM-EEL projects whose project files come from outside this repository and
   still name the v143 toolset and the DLL runtime. It and Directory.Build.targets make the whole
-  tree build alike.
+  tree build alike, and are the only place that sets the toolset and the runtime: the repository's
+  own project files leave both out.
 -->
 <Project>
   <PropertyGroup>

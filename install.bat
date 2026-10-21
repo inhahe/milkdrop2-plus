@@ -10,11 +10,16 @@ REM Usage: install.bat [foobar2000_path]
 REM   Default foobar2000 path: C:\foobar2000
 REM ============================================================================
 
-set FB2K_PATH=%~1
-if "%FB2K_PATH%"=="" set FB2K_PATH=C:\foobar2000
+set "FB2K_PATH=%~1"
+if "%FB2K_PATH%"=="" set "FB2K_PATH=C:\foobar2000"
 
-set COMPONENT_DIR=%FB2K_PATH%\profile\user-components-x64\foo_milkdrop2_plus
-set MILKDROP_DIR=%FB2K_PATH%\profile\milkdrop2
+REM foobar2000 loads components from its profile folder: "profile" in a portable
+REM installation, otherwise %APPDATA%\foobar2000-v2.
+set "PROFILE_DIR=%APPDATA%\foobar2000-v2"
+if exist "%FB2K_PATH%\portable_mode_enabled" set "PROFILE_DIR=%FB2K_PATH%\profile"
+
+set COMPONENT_DIR=%PROFILE_DIR%\user-components-x64\foo_milkdrop2_plus
+set MILKDROP_DIR=%PROFILE_DIR%\milkdrop2
 set BUILD_DIR=%~dp0Bin\x64\Release
 set DATA_DIR=%~dp0external\winamp\data
 set PRESETS_DIR=%~dp0presets
@@ -24,6 +29,7 @@ echo MilkDrop 2 Plus Installer for foobar2000
 echo ==========================================
 echo.
 echo foobar2000 path: %FB2K_PATH%
+echo Profile dir:     %PROFILE_DIR%
 echo Component dir:   %COMPONENT_DIR%
 echo MilkDrop dir:    %MILKDROP_DIR%
 echo Build dir:       %BUILD_DIR%
