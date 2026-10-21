@@ -566,14 +566,11 @@ int CPluginShell::PluginPreInitialize(HWND hWinampWnd, HINSTANCE hWinampInstance
     return TRUE;
 }
 
+// Initialization steps and failures, for a debugger or DebugView.
 static void LogInit(const char* msg)
 {
-    FILE* f;
-    if (_wfopen_s(&f, L"C:\\foobar2000\\profile\\dx_init.log", L"a") == 0 && f)
-    {
-        fprintf(f, "%s\n", msg);
-        fclose(f);
-    }
+    OutputDebugStringA(msg);
+    OutputDebugStringA("\n");
 }
 
 int CPluginShell::PluginInitialize(int iWidth, int iHeight)

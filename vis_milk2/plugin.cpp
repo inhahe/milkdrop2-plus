@@ -5959,14 +5959,6 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
                   static_cast<int>(currentFiles.size()), temp_nPresets, elapsedMs);
         OutputDebugStringA(buf);
         OutputDebugStringA("\n");
-        // Log to file for easy checking.
-        FILE* fLog;
-        std::wstring logPath = presetDir + L"scan_timing.log";
-        if (_wfopen_s(&fLog, logPath.c_str(), L"a") == 0 && fLog)
-        {
-            fprintf(fLog, "%s\n", buf);
-            fclose(fLog);
-        }
     }
 
     if (g_bThreadShouldQuit)

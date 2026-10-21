@@ -83,14 +83,11 @@ void DXContext::Internal_CleanUp()
         m_lpDevice.reset();
 }
 
+// Initialization steps, for a debugger or DebugView.
 static void LogDX(const char* msg)
 {
-    FILE* f;
-    if (_wfopen_s(&f, L"C:\\foobar2000\\profile\\dx_init.log", L"a") == 0 && f)
-    {
-        fprintf(f, "%s\n", msg);
-        fclose(f);
-    }
+    OutputDebugStringA(msg);
+    OutputDebugStringA("\n");
 }
 
 BOOL DXContext::Internal_Init(DXCONTEXT_PARAMS* /* pParams */, BOOL /* bFirstInit */)
