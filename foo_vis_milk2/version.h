@@ -24,7 +24,7 @@
 #define LIBRARY_DOCUMENTATION_URL "https://www.geisswerks.com/milkdrop/milkdrop.html"
 
 #define APPLICATION_VERSION_MAJOR 0
-#define APPLICATION_VERSION_MINOR 2
+#define APPLICATION_VERSION_MINOR 3
 #define APPLICATION_VERSION_BUILD 0
 #define APPLICATION_VERSION_REVISION 0 // -3: alpha, -2: beta, -1: release candidate, >= 0 && < 32768: not development version
 
