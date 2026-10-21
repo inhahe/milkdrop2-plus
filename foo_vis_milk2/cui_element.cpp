@@ -117,7 +117,7 @@ class milk2_cui_panel : public uie::window,
                             value.pop_back();
                         if (key == L"PresetLibraryPath" && !value.empty())
                         {
-                            wcscpy_s(s_config.settings.m_szPresetDir, value.c_str());
+                            wcscpy_s(s_config.settings.m_szPresetDir, FromStoredPath(value, profileDir).c_str());
                         }
                     }
                 }

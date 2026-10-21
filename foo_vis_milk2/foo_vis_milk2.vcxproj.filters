@@ -51,6 +51,9 @@
     <ClCompile Include="preset_browser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="stored_path.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="cui_element.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -84,6 +87,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="preset_browser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="stored_path.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -9,6 +9,7 @@
 
 #include "pch.h"
 #include "config.h"
+#include "stored_path.h"
 
 extern HWND g_hWindow;
 
@@ -1320,12 +1321,14 @@ void milk2_config::update_paths()
     if (m_version < 2 || cfg_szPresetDir.get().empty())
     {
         wcscpy_s(settings.m_szPresetDir, default_szPresetDir);
-        cfg_szPresetDir.set(pfc::utf8FromWide(default_szPresetDir));
+        cfg_szPresetDir.set(pfc::utf8FromWide(ToStoredPath(default_szPresetDir, default_szPluginsDirPath, core_api::is_portable_mode_enabled()).c_str()));
     }
     else
     {
-        cfg_szPresetDir.get().end_with_slash();
-        wcscpy_s(settings.m_szPresetDir, pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str());
+        std::wstring dir = FromStoredPath(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str(), default_szPluginsDirPath);
+        if (dir.back() != L'\\')
+            dir += L'\\'; // the engine appends file names to it
+        wcscpy_s(settings.m_szPresetDir, dir.c_str());
     }
     wcscpy_s(settings.m_szPluginsDirPath, default_szPluginsDirPath);
     wcscpy_s(settings.m_szConfigIniFile, default_szConfigIniFile);
@@ -1476,7 +1479,7 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);
         cfg_szArtworkFormat = pfc::utf8FromWide(settings.m_szArtworkFormat);
 
-        cfg_szPresetDir.set(pfc::utf8FromWide(settings.m_szPresetDir));
+        cfg_szPresetDir.set(pfc::utf8FromWide(ToStoredPath(settings.m_szPresetDir, default_szPluginsDirPath, core_api::is_portable_mode_enabled()).c_str()));
     }
 }
 #pragma endregion

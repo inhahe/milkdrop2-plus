@@ -638,6 +638,9 @@
     <ClCompile Include="ui_element.cpp" />
     <ClCompile Include="favorites_manager.cpp" />
     <ClCompile Include="preset_browser.cpp" />
+    <ClCompile Include="stored_path.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="cui_element.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
@@ -653,6 +656,7 @@
     <ClInclude Include="version.h" />
     <ClInclude Include="favorites_manager.h" />
     <ClInclude Include="preset_browser.h" />
+    <ClInclude Include="stored_path.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="extrusionps.hlsl">

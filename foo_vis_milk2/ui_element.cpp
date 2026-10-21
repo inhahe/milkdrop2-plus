@@ -9,6 +9,7 @@
 #include "ui_element.h"
 #include "favorites_manager.h"
 #include "preset_browser.h"
+#include "stored_path.h"
 
 #pragma hdrstop
 
@@ -2492,7 +2493,7 @@ void milk2_ui_element::SaveBrowserConfig() const
 
     ofs << L"[BrowserConfig]" << std::endl;
     ofs << L"ShuffleMode=" << static_cast<int>(m_shuffleMode) << std::endl;
-    ofs << L"PresetLibraryPath=" << m_presetLibraryPath << std::endl;
+    ofs << L"PresetLibraryPath=" << ToStoredPath(m_presetLibraryPath, profileDir, core_api::is_portable_mode_enabled()) << std::endl;
     ofs << L"CategoriesConfigured=" << (m_categoriesConfigured ? 1 : 0) << std::endl;
 
     // Save selected categories as a pipe-delimited list.
@@ -2557,7 +2558,7 @@ void milk2_ui_element::LoadBrowserConfig()
         }
         else if (key == L"PresetLibraryPath")
         {
-            m_presetLibraryPath = value;
+            m_presetLibraryPath = FromStoredPath(value, profileDir);
         }
         else if (key == L"CategoriesConfigured")
         {
