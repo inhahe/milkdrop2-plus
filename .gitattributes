@@ -5,6 +5,7 @@
 *.c eol=crlf
 *.cpp eol=crlf
 *.cmd eol=crlf
+*.bat eol=crlf
 *.h eol=crlf
 *.hlsl eol=crlf
 *.hlsli eol=crlf

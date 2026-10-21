@@ -13,7 +13,7 @@ REM ============================================================================
 set FB2K_PATH=%~1
 if "%FB2K_PATH%"=="" set FB2K_PATH=C:\foobar2000
 
-set COMPONENT_DIR=%FB2K_PATH%\profile\user-components-x64\milkdrop2_plus
+set COMPONENT_DIR=%FB2K_PATH%\profile\user-components-x64\foo_milkdrop2_plus
 set MILKDROP_DIR=%FB2K_PATH%\profile\milkdrop2
 set BUILD_DIR=%~dp0Bin\x64\Release
 set DATA_DIR=%~dp0external\winamp\data
@@ -39,9 +39,9 @@ if not exist "%FB2K_PATH%\foobar2000.exe" (
 )
 
 REM Check that the DLL was built
-if not exist "%BUILD_DIR%\milkdrop2_plus.dll" (
-    echo ERROR: milkdrop2_plus.dll not found in %BUILD_DIR%
-    echo        Build the project first (Release x64).
+if not exist "%BUILD_DIR%\foo_milkdrop2_plus.dll" (
+    echo ERROR: foo_milkdrop2_plus.dll not found in %BUILD_DIR%
+    echo        Build the project first ^(Release x64^).
     pause
     exit /b 1
 )
@@ -64,8 +64,8 @@ if not exist "%MILKDROP_DIR%" mkdir "%MILKDROP_DIR%"
 if not exist "%MILKDROP_DIR%\presets" mkdir "%MILKDROP_DIR%\presets"
 
 REM Copy plugin DLL
-echo Copying milkdrop2_plus.dll...
-copy /y "%BUILD_DIR%\milkdrop2_plus.dll" "%COMPONENT_DIR%\" >nul
+echo Copying foo_milkdrop2_plus.dll...
+copy /y "%BUILD_DIR%\foo_milkdrop2_plus.dll" "%COMPONENT_DIR%\" >nul
 
 REM Copy shader data files
 echo Copying shader files...
@@ -96,7 +96,7 @@ REM Check if the submodule presets directory has files
 if exist "%PRESETS_DIR%\Fractal" (
     echo.
     echo Found presets submodule. Copying presets to foobar2000...
-    echo This may take a moment (thousands of files)...
+    echo This may take a moment ^(thousands of files^)...
     xcopy /y /s /q "%PRESETS_DIR%\*.*" "%MILKDROP_DIR%\presets\" >nul
     echo Presets copied successfully.
     goto :done
@@ -121,7 +121,7 @@ if %errorlevel% neq 0 (
 set /p DOWNLOAD="Download presets now using git? (Y/N): "
 if /i "%DOWNLOAD%"=="Y" (
     echo.
-    echo Downloading presets (this may take a few minutes)...
+    echo Downloading presets ^(this may take a few minutes^)...
     git clone --depth 1 https://github.com/projectM-visualizer/presets-cream-of-the-crop.git "%TEMP%\milkdrop-presets-temp" 2>nul
     if exist "%TEMP%\milkdrop-presets-temp" (
         echo Copying presets...

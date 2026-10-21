@@ -12,9 +12,14 @@ See [BUILDING](BUILDING.md) for a sample `foo_vis_milk2/foo_vis_milk2.vcxproj.us
 
 ### Using VSTest in CLI
 
+The test project builds in the Debug configurations only. `test.dll` loads foobar2000's `shared.dll`, as the component does inside foobar2000, so put a foobar2000 installation of the same platform on `PATH` first:
+
 ```powershell
-VSTest.Console.exe /Platform:x64 "$(Get-Location)\test\test.dll"
+$Env:PATH = "$Env:LOCALAPPDATA\Programs\foobar2000_x64;$Env:PATH"
+VSTest.Console.exe /Platform:x64 "$(Get-Location)\Bin\x64\Debug\test.dll"
 ```
+
+Without `shared.dll`, every test fails with "Failed to load the test assembly or its dependencies".
 
 ## Using VSTest in GUI
 

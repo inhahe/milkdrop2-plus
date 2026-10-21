@@ -71,10 +71,11 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 
 ### Manual Install
 
-1. Copy `milkdrop2_plus.dll` (from `Bin\x64\Release\`) to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\`
-2. Copy shader files (`*.fx`) from `external\winamp\data\` to: `<foobar2000>\profile\user-components-x64\milkdrop2_plus\data\`
-3. Download presets (see below) and extract into: `<foobar2000>\profile\milkdrop2\presets\`
-4. Start foobar2000, enable Layout Editing (View > Layout > Enable Layout Editing), right-click a panel, and add MilkDrop from the Visualization category.
+1. Copy `foo_milkdrop2_plus.dll` (from `Bin\x64\Release\`) to: `<foobar2000>\profile\user-components-x64\foo_milkdrop2_plus\`
+2. Copy shader files (`*.fx`) from `external\winamp\data\` to: `<foobar2000>\profile\user-components-x64\foo_milkdrop2_plus\data\`
+3. Download presets (see below) and extract into: `<foobar2000>\profile\milkdrop2\presets\`, or anywhere else and choose that folder with right-click > Set Preset Library Folder.
+4. Optionally, install the texture pack (see [Textures](#textures)).
+5. Start foobar2000, enable Layout Editing (View > Layout > Enable Layout Editing), right-click a panel, and add MilkDrop from the Visualization category.
 
 ### Directory Structure
 
@@ -82,8 +83,8 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 <foobar2000 install>\
     profile\
         user-components-x64\
-            milkdrop2_plus\
-                milkdrop2_plus.dll      <- the plugin
+            foo_milkdrop2_plus\
+                foo_milkdrop2_plus.dll  <- the plugin
                 data\
                     comp_vs.fx         <- shader files (required!)
                     comp_ps.fx
@@ -94,17 +95,18 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
                     blur2_ps.fx
                     include.fx
         milkdrop2\
-            presets\                    <- .milk preset files go here
+            presets\                    <- .milk preset files go here (the default preset folder)
                 Fractal\               <- category subdirectories are supported
                     Blobby\            <- nested subdirectories work too
                         preset.milk
                 Geometric\
                     ...
-            browser_config.ini         <- auto-generated settings
-            favorites.ini              <- auto-generated favorites list
+            textures\                   <- textures that presets use (see Textures below)
+        browser_config.ini             <- auto-generated settings, including the preset folder
+        favorites.ini                  <- auto-generated favorites list
 ```
 
-- Textures can also be added to `<foobar2000 profile folder>\milkdrop2\textures` and referenced in their accompanying configuration file `<foobar2000 profile folder>\milkdrop2\milk2_img.ini`.
+- Sprite images can also be added to `<foobar2000 profile folder>\milkdrop2\textures` and referenced in their accompanying configuration file `<foobar2000 profile folder>\milkdrop2\milk2_img.ini`.
 - Custom messages can be entered into `<foobar2000 profile folder>\milkdrop2\milk2_msg.ini`.
 
 ### Presets
@@ -116,6 +118,15 @@ The foobar2000 component is not packaged with any presets. Some presets enjoyed 
 - [Cream of the Crop Pack](https://github.com/projectM-visualizer/presets-cream-of-the-crop): A collection of about 10,000 presets compiled by Jason Fletcher.
 - [Base Milkdrop Texture Pack](https://github.com/projectM-visualizer/presets-milkdrop-texture-pack): Recommended for use with _any_ preset pack!
 - [Milkdrop 2 Presets](https://github.com/projectM-visualizer/presets-milkdrop-original): The original preset collection shipped with Milkdrop and Winamp.
+
+### Textures
+
+Many presets draw with texture images that are not part of the preset files. Without them, those presets get black where the texture should be. To install the [Base Milkdrop Texture Pack](https://github.com/projectM-visualizer/presets-milkdrop-texture-pack):
+
+1. Download it (Code > Download ZIP on its GitHub page, or `git clone https://github.com/projectM-visualizer/presets-milkdrop-texture-pack.git`).
+2. Copy the image files from its `textures` folder into `<foobar2000 profile folder>\milkdrop2\textures\` (in a portable installation, `<foobar2000>\profile\milkdrop2\textures\`; otherwise usually `%APPDATA%\foobar2000-v2\milkdrop2\textures\`). Create the folder if it does not exist.
+
+The plugin also looks for a texture in the folder of the preset that uses it.
 
 ## Repository Notes
 
