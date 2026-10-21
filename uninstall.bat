@@ -24,7 +24,7 @@ echo MilkDrop 2 Plus Uninstaller
 echo ===========================
 echo.
 echo This will remove the plugin, config, and optionally presets from:
-echo   %PROFILE_DIR%
+echo   "%PROFILE_DIR%"
 echo.
 
 REM Check that foobar2000 is not running

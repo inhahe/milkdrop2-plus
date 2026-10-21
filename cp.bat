@@ -9,4 +9,5 @@ for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\
 if not exist "%DEST%\data" mkdir "%DEST%\data"
 copy /y "%~dp0Bin\x64\Debug\foo_milkdrop2_plus.dll" "%DEST%\" || exit /b 1
 copy /y "%~dp0external\winamp\data\*.fx" "%DEST%\data\" >nul
+copy /y "%~dp0vis_milk2\help.bin" "%DEST%\data\" >nul
 start "" "%FB2K%\foobar2000.exe"

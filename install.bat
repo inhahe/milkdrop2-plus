@@ -9,6 +9,8 @@ REM
 REM Usage: install.bat [foobar2000_path]
 REM   Default foobar2000 path: C:\foobar2000
 REM ============================================================================
+REM Path variables are quoted wherever they appear inside a parenthesized block:
+REM an unquoted ")" in a path such as "C:\Program Files (x86)" would end it.
 
 set "FB2K_PATH=%~1"
 if "%FB2K_PATH%"=="" set "FB2K_PATH=C:\foobar2000"
@@ -18,26 +20,26 @@ REM installation, otherwise %APPDATA%\foobar2000-v2.
 set "PROFILE_DIR=%APPDATA%\foobar2000-v2"
 if exist "%FB2K_PATH%\portable_mode_enabled" set "PROFILE_DIR=%FB2K_PATH%\profile"
 
-set COMPONENT_DIR=%PROFILE_DIR%\user-components-x64\foo_milkdrop2_plus
-set MILKDROP_DIR=%PROFILE_DIR%\milkdrop2
-set BUILD_DIR=%~dp0Bin\x64\Release
-set DATA_DIR=%~dp0external\winamp\data
-set PRESETS_DIR=%~dp0presets
+set "COMPONENT_DIR=%PROFILE_DIR%\user-components-x64\foo_milkdrop2_plus"
+set "MILKDROP_DIR=%PROFILE_DIR%\milkdrop2"
+set "BUILD_DIR=%~dp0Bin\x64\Release"
+set "DATA_DIR=%~dp0external\winamp\data"
+set "PRESETS_DIR=%~dp0presets"
 
 echo.
 echo MilkDrop 2 Plus Installer for foobar2000
 echo ==========================================
 echo.
-echo foobar2000 path: %FB2K_PATH%
-echo Profile dir:     %PROFILE_DIR%
-echo Component dir:   %COMPONENT_DIR%
-echo MilkDrop dir:    %MILKDROP_DIR%
-echo Build dir:       %BUILD_DIR%
+echo foobar2000 path: "%FB2K_PATH%"
+echo Profile dir:     "%PROFILE_DIR%"
+echo Component dir:   "%COMPONENT_DIR%"
+echo MilkDrop dir:    "%MILKDROP_DIR%"
+echo Build dir:       "%BUILD_DIR%"
 echo.
 
 REM Check that foobar2000 exists
 if not exist "%FB2K_PATH%\foobar2000.exe" (
-    echo ERROR: foobar2000 not found at %FB2K_PATH%
+    echo ERROR: foobar2000 not found at "%FB2K_PATH%"
     echo        Pass the foobar2000 install path as the first argument.
     echo        Example: install.bat "C:\Program Files\foobar2000"
     pause
@@ -46,7 +48,7 @@ if not exist "%FB2K_PATH%\foobar2000.exe" (
 
 REM Check that the DLL was built
 if not exist "%BUILD_DIR%\foo_milkdrop2_plus.dll" (
-    echo ERROR: foo_milkdrop2_plus.dll not found in %BUILD_DIR%
+    echo ERROR: foo_milkdrop2_plus.dll not found in "%BUILD_DIR%"
     echo        Build the project first ^(Release x64^).
     pause
     exit /b 1
@@ -120,7 +122,7 @@ REM Check if git is available
 where git >nul 2>nul
 if %errorlevel% neq 0 (
     echo Git is not installed. Please download the presets manually and extract
-    echo the category folders into: %MILKDROP_DIR%\presets\
+    echo the category folders into: "%MILKDROP_DIR%\presets\"
     goto :done
 )
 
@@ -141,13 +143,13 @@ if /i "%DOWNLOAD%"=="Y" (
     ) else (
         echo Failed to download presets. Please download them manually from:
         echo   https://github.com/projectM-visualizer/presets-cream-of-the-crop
-        echo and extract into: %MILKDROP_DIR%\presets\
+        echo and extract into: "%MILKDROP_DIR%\presets\"
     )
 ) else (
     echo.
     echo Skipping preset download. You can download them later from:
     echo   https://github.com/projectM-visualizer/presets-cream-of-the-crop
-    echo and extract the category folders into: %MILKDROP_DIR%\presets\
+    echo and extract the category folders into: "%MILKDROP_DIR%\presets\"
 )
 
 :done
