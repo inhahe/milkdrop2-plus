@@ -1214,7 +1214,7 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         wchar_t szOldFile[512];
                         wchar_t szNewFile[512];
                         wcscpy_s(szOldFile, g_plugin.GetPresetPath(g_plugin.m_nPresetListCurPos).c_str());
-                        wcscpy_s(szNewFile, g_plugin.m_scannedPresetDir.c_str()); // the folder the listed file is in
+                        wcscpy_s(szNewFile, g_plugin.GetScannedPresetDir().c_str()); // the folder the listed file is in
                         wcscat_s(szNewFile, waitstring.szText);
                         wcscat_s(szNewFile, L".milk");
 
@@ -1338,19 +1338,18 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         if (len > 0 && len < 511 && szNewDir[len - 1] != L'\\')
                             wcscat_s(szNewDir, L"\\");
 
-                        bool bSuccess = GetFileAttributes(szNewDir) != INVALID_FILE_ATTRIBUTES && g_plugin.SetPresetDir(szNewDir);
-                        if (bSuccess)
-                        {
+                        const bool bScanned = GetFileAttributes(szNewDir) != INVALID_FILE_ATTRIBUTES && g_plugin.SetPresetDir(szNewDir);
+                        if (bScanned)
                             g_plugin.UpdatePresetList(false, true, false);
-                            bSuccess = (g_plugin.m_nPresets > 0);
-                        }
+                        const bool bSuccess = bScanned && g_plugin.m_nPresets > 0;
 
                         if (!bSuccess)
                         {
                             // New directory was invalid. Allow another try, with the old
-                            // directory's presets again: the attempt's scan replaced them.
+                            // directory's presets again if the attempt's scan replaced them.
                             g_plugin.SetPresetDir(szOldDir);
-                            g_plugin.UpdatePresetList(false, true, false);
+                            if (bScanned)
+                                g_plugin.UpdatePresetList(false, true, false);
 
                             // Present a warning.
                             /*AddError(WASABI_API_LNGSTRINGW(IDS_INVALID_PATH), 3.5f, ERR_MISC, true);*/

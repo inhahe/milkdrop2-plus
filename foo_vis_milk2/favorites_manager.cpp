@@ -153,31 +153,9 @@ void FavoritesManager::Load()
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_favorites.clear();
 
-    std::wstring text;
-    if (!ReadTextFile(m_filePath, text))
-        return;
-    std::wistringstream ifs(text);
-
-    std::wstring line;
-    while (std::getline(ifs, line))
+    // "presetN=relative\path.milk" lines, plus "count=N", which is not needed.
+    for (const auto& [key, value] : ReadKeyValueFile(m_filePath))
     {
-        // Skip section headers and empty lines.
-        if (line.empty() || line[0] == L'[' || line[0] == L';')
-            continue;
-
-        // Parse "presetN=relative/path.milk" lines.
-        size_t eq = line.find(L'=');
-        if (eq == std::wstring::npos)
-            continue;
-
-        std::wstring key = line.substr(0, eq);
-        std::wstring value = line.substr(eq + 1);
-
-        // Skip the "count=" line.
-        if (key == L"count")
-            continue;
-
-        // Accept any "preset*=" line.
         if (key.substr(0, 6) == L"preset" && !value.empty())
         {
             FavoriteEntry entry;

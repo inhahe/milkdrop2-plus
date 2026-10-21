@@ -362,6 +362,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     std::set<std::wstring> m_selectedCategories;      // multi-select categories
     std::set<std::wstring> m_selectedFavCategories;    // multi-select fav categories
     std::wstring m_presetLibraryPath;                  // configurable external preset dir
+    std::wstring m_presetLibraryStored;                // PresetLibraryPath as saved, while it cannot be used here (resolves too long); saved back unchanged
     bool m_browserInitialized = false;
     bool m_categoriesConfigured = false; // true after first config save (distinguishes "never set" from "user chose none")
 };

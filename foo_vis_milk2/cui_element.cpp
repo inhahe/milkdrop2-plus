@@ -99,7 +99,7 @@ class milk2_cui_panel : public uie::window,
 
             // Load preset library path from saved config.
             {
-                const auto values = ReadBrowserConfig();
+                const auto values = ReadKeyValueFile(BrowserConfigPath());
                 const auto it = values.find(L"PresetLibraryPath");
                 const std::wstring dir = it != values.end() ? milk2_config::preset_dir_from_stored(it->second) : std::wstring();
                 if (!dir.empty())

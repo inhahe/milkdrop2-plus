@@ -597,9 +597,8 @@ class CPlugin : public CPluginShell
     void FindValidPresetDir();
     wchar_t* GetPresetDir() const { return const_cast<wchar_t*>(m_szPresetDir); };
     bool SetPresetDir(const wchar_t* szDir);
-    // Full path of `m_presets[i]`, whose name is relative to the folder the last scan read
-    // (which differs from `m_szPresetDir` while a scan of a newly set folder runs).
-    std::wstring GetPresetPath(int i) const { return m_scannedPresetDir + m_presets[i].szFilename; }
+    std::wstring GetPresetPath(int i) const;
+    std::wstring GetScannedPresetDir() const;
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);

@@ -7,6 +7,7 @@
 
 #include "pch.h"
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -20,7 +21,7 @@ namespace MilkDrop2
 TEST_CLASS(Utf8FileTest)
 {
   private:
-    std::filesystem::path dir = std::filesystem::temp_directory_path() / L"milkdrop2_utf8_file_test";
+    std::filesystem::path dir; // this test method's own folder, so concurrent runs do not collide
 
     std::wstring PathOf(const wchar_t* name) const { return (dir / name).wstring(); }
 
@@ -36,7 +37,13 @@ TEST_CLASS(Utf8FileTest)
     }
 
   public:
-    TEST_METHOD_INITIALIZE(Setup) { std::filesystem::create_directories(dir); }
+    TEST_METHOD_INITIALIZE(Setup)
+    {
+        static std::atomic<unsigned> counter;
+        dir = std::filesystem::temp_directory_path() /
+              (L"milkdrop2_utf8_file_test_" + std::to_wstring(GetCurrentProcessId()) + L"_" + std::to_wstring(++counter));
+        std::filesystem::create_directories(dir);
+    }
     TEST_METHOD_CLEANUP(Cleanup) { std::filesystem::remove_all(dir); }
 
     TEST_METHOD(CharactersBeyondLatin1RoundTrip)
@@ -75,6 +82,35 @@ TEST_CLASS(Utf8FileTest)
     {
         std::wstring text = L"unchanged";
         Assert::IsFalse(ReadTextFile(PathOf(L"missing.ini"), text));
+        Assert::AreEqual(std::wstring(L"unchanged"), text);
+        Assert::IsTrue(ReadKeyValueFile(PathOf(L"missing.ini")).empty());
+    }
+
+    TEST_METHOD(OneBadLineDoesNotGarbleTheOthers)
+    {
+        // A UTF-8 line, a Latin-1 line, and a multibyte sequence cut off at the end of the file.
+        WriteBytes(L"e.ini", "a=\xD0\x96\r\nb=\xE9\r\nc=\xD0");
+        std::wstring text;
+        Assert::IsTrue(ReadTextFile(PathOf(L"e.ini"), text));
+        Assert::AreEqual(std::wstring(L"a=\u0416\nb=\u00e9\nc=\u00d0"), text);
+    }
+
+    TEST_METHOD(WritingReplacesTheFileAndLeavesNoTemporary)
+    {
+        Assert::IsTrue(WriteUtf8TextFile(PathOf(L"f.ini"), L"old\n"));
+        Assert::IsTrue(WriteUtf8TextFile(PathOf(L"f.ini"), L"new\n"));
+        Assert::AreEqual(std::string("new\r\n"), ReadBytes(L"f.ini"));
+        Assert::IsFalse(std::filesystem::exists(dir / L"f.ini.tmp"));
+    }
+
+    TEST_METHOD(KeyValueLines)
+    {
+        WriteBytes(L"g.ini", "[Section]\r\n; comment\r\nno equals sign\r\nkey=value  \t\r\npath=C:\\a=b\\\r\nempty=\r\n");
+        const auto values = ReadKeyValueFile(PathOf(L"g.ini"));
+        Assert::AreEqual(size_t(3), values.size());
+        Assert::AreEqual(std::wstring(L"value"), values.at(L"key"));
+        Assert::AreEqual(std::wstring(L"C:\\a=b\\"), values.at(L"path"));
+        Assert::AreEqual(std::wstring(), values.at(L"empty"));
     }
 };
 } // namespace MilkDrop2

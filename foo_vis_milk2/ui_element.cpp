@@ -2493,31 +2493,6 @@ static std::wstring BrowserConfigPath()
     return path + L"browser_config.ini";
 }
 
-// The key=value lines of browser_config.ini, each value without trailing spaces; empty if the
-// file is missing or unreadable. The Default UI and the Columns UI elements both read it.
-static std::map<std::wstring, std::wstring> ReadBrowserConfig()
-{
-    std::map<std::wstring, std::wstring> values;
-    std::wstring text;
-    if (!ReadTextFile(BrowserConfigPath(), text))
-        return values;
-    std::wistringstream ifs(text);
-    std::wstring line;
-    while (std::getline(ifs, line))
-    {
-        if (line.empty() || line[0] == L'[' || line[0] == L';')
-            continue;
-        const size_t eq = line.find(L'=');
-        if (eq == std::wstring::npos)
-            continue;
-        std::wstring value = line.substr(eq + 1);
-        while (!value.empty() && (value.back() == L'\r' || value.back() == L'\n' || value.back() == L' '))
-            value.pop_back();
-        values[line.substr(0, eq)] = value;
-    }
-    return values;
-}
-
 void milk2_ui_element::SaveBrowserConfig() const
 {
     const std::wstring configPath = BrowserConfigPath();
@@ -2530,7 +2505,7 @@ void milk2_ui_element::SaveBrowserConfig() const
     std::wostringstream ofs;
     ofs << L"[BrowserConfig]" << std::endl;
     ofs << L"ShuffleMode=" << static_cast<int>(m_shuffleMode) << std::endl;
-    ofs << L"PresetLibraryPath=" << milk2_config::preset_dir_to_stored(m_presetLibraryPath) << std::endl;
+    ofs << L"PresetLibraryPath=" << (m_presetLibraryPath.empty() ? m_presetLibraryStored : milk2_config::preset_dir_to_stored(m_presetLibraryPath)) << std::endl;
     ofs << L"CategoriesConfigured=" << (m_categoriesConfigured ? 1 : 0) << std::endl;
 
     // Save selected categories as a pipe-delimited list.
@@ -2560,7 +2535,7 @@ void milk2_ui_element::SaveBrowserConfig() const
 
 void milk2_ui_element::LoadBrowserConfig()
 {
-    for (const auto& [key, value] : ReadBrowserConfig())
+    for (const auto& [key, value] : ReadKeyValueFile(BrowserConfigPath()))
     {
         if (key == L"ShuffleMode")
         {
@@ -2570,7 +2545,10 @@ void milk2_ui_element::LoadBrowserConfig()
         }
         else if (key == L"PresetLibraryPath")
         {
-            m_presetLibraryPath = milk2_config::preset_dir_from_stored(value); // empty (unset) if unusable
+            m_presetLibraryPath = milk2_config::preset_dir_from_stored(value);
+            m_presetLibraryStored = m_presetLibraryPath.empty() ? value : std::wstring();
+            if (!m_presetLibraryStored.empty())
+                FB2K_console_print(core_api::get_my_file_name(), ": the saved preset folder is too long to use here, so it is ignored: ", pfc::utf8FromWide(value.c_str()).c_str());
         }
         else if (key == L"CategoriesConfigured")
         {
@@ -3310,6 +3288,7 @@ void milk2_ui_element::BrowseForPresetLibrary()
                 return;
             }
             m_presetLibraryPath = dir;
+            m_presetLibraryStored.clear();
 
             // Reset so the deferred load in MilkDropRenderFrame fires again.
             g_plugin.m_bInitialPresetSelected = false;

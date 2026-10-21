@@ -12,6 +12,30 @@
 #include <fstream>
 #include <iterator>
 
+namespace
+{
+// One line's bytes as UTF-8, or as Latin-1 if they are not valid UTF-8.
+std::wstring DecodeLine(const char* p, size_t len)
+{
+    std::wstring line;
+    if (len == 0)
+        return line;
+    const int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, p, static_cast<int>(len), nullptr, 0);
+    if (n > 0)
+    {
+        line.resize(static_cast<size_t>(n));
+        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, p, static_cast<int>(len), line.data(), n);
+    }
+    else
+    {
+        line.reserve(len);
+        for (size_t i = 0; i < len; ++i)
+            line += static_cast<wchar_t>(static_cast<unsigned char>(p[i]));
+    }
+    return line;
+}
+} // namespace
+
 bool WriteUtf8TextFile(const std::wstring& path, const std::wstring& text)
 {
     std::wstring crlf;
@@ -35,12 +59,27 @@ bool WriteUtf8TextFile(const std::wstring& path, const std::wstring& text)
         WideCharToMultiByte(CP_UTF8, 0, crlf.data(), len, bytes.data(), n, nullptr, nullptr);
     }
 
-    std::ofstream ofs(std::filesystem::path(path), std::ios::binary | std::ios::trunc);
-    if (!ofs)
+    // Write a temporary file and put it in place of the old one, so that a crash or a full disk
+    // part-way through leaves the old file intact rather than a truncated one.
+    const std::wstring temp = path + L".tmp";
+    {
+        std::ofstream ofs(std::filesystem::path(temp), std::ios::binary | std::ios::trunc);
+        if (!ofs)
+            return false;
+        ofs.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        ofs.close();
+        if (ofs.fail())
+        {
+            DeleteFileW(temp.c_str());
+            return false;
+        }
+    }
+    if (!MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    {
+        DeleteFileW(temp.c_str());
         return false;
-    ofs.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    ofs.close();
-    return !ofs.fail();
+    }
+    return true;
 }
 
 bool ReadTextFile(const std::wstring& path, std::wstring& text)
@@ -52,33 +91,50 @@ bool ReadTextFile(const std::wstring& path, std::wstring& text)
     if (ifs.bad())
         return false;
 
-    const size_t start = bytes.compare(0, 3, "\xEF\xBB\xBF") == 0 ? 3 : 0;
-    const char* p = bytes.data() + start;
-    const int len = static_cast<int>(bytes.size() - start);
-    std::wstring wide;
-    if (len > 0)
-    {
-        const int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, p, len, nullptr, 0);
-        if (n > 0)
-        {
-            wide.resize(static_cast<size_t>(n));
-            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, p, len, wide.data(), n);
-        }
-        else // not UTF-8: Latin-1 from an earlier version
-        {
-            wide.reserve(static_cast<size_t>(len));
-            for (int i = 0; i < len; ++i)
-                wide += static_cast<wchar_t>(static_cast<unsigned char>(p[i]));
-        }
-    }
-
     text.clear();
-    text.reserve(wide.size());
-    for (size_t i = 0; i < wide.size(); ++i)
+    text.reserve(bytes.size());
+    size_t pos = bytes.compare(0, 3, "\xEF\xBB\xBF") == 0 ? 3 : 0;
+    while (pos <= bytes.size())
     {
-        if (wide[i] == L'\r' && i + 1 < wide.size() && wide[i + 1] == L'\n')
-            continue;
-        text += wide[i];
+        size_t end = bytes.find('\n', pos);
+        const bool bLast = end == std::string::npos;
+        if (bLast)
+            end = bytes.size();
+        size_t len = end - pos;
+        if (len > 0 && bytes[pos + len - 1] == '\r')
+            --len;
+        text += DecodeLine(bytes.data() + pos, len);
+        if (bLast)
+            break;
+        text += L'\n';
+        pos = end + 1;
     }
     return true;
+}
+
+std::map<std::wstring, std::wstring> ReadKeyValueFile(const std::wstring& path)
+{
+    std::map<std::wstring, std::wstring> values;
+    std::wstring text;
+    if (!ReadTextFile(path, text))
+        return values;
+    size_t pos = 0;
+    while (pos < text.size())
+    {
+        size_t end = text.find(L'\n', pos);
+        if (end == std::wstring::npos)
+            end = text.size();
+        const std::wstring line = text.substr(pos, end - pos);
+        pos = end + 1;
+        if (line.empty() || line[0] == L'[' || line[0] == L';')
+            continue;
+        const size_t eq = line.find(L'=');
+        if (eq == std::wstring::npos)
+            continue;
+        std::wstring value = line.substr(eq + 1);
+        while (!value.empty() && (value.back() == L' ' || value.back() == L'\t'))
+            value.pop_back();
+        values[line.substr(0, eq)] = value;
+    }
+    return values;
 }

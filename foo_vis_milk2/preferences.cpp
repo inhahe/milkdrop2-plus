@@ -1335,13 +1335,13 @@ std::wstring milk2_config::preset_dir_from_stored(const std::wstring& stored)
 
 void milk2_config::update_paths()
 {
-    std::wstring dir;
-    if (m_version >= 2)
-        dir = preset_dir_from_stored(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str());
+    const std::wstring stored = m_version >= 2 ? std::wstring(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str()) : std::wstring();
+    const std::wstring dir = preset_dir_from_stored(stored);
     if (dir.empty())
     {
         wcscpy_s(settings.m_szPresetDir, default_szPresetDir);
-        cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(default_szPresetDir).c_str()));
+        if (stored.empty()) // a saved folder that cannot be used here is left as it is
+            cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(default_szPresetDir).c_str()));
     }
     else
     {

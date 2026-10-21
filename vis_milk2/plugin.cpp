@@ -117,7 +117,9 @@ volatile HANDLE g_hThread;        // only r/w from our MAIN thread
 volatile bool g_bThreadAlive;     // set true by MAIN thread, and set false upon exit from 2nd thread.
 volatile int g_bThreadShouldQuit; // set by MAIN thread to flag 2nd thread that it wants it to exit.
 static CRITICAL_SECTION g_cs;
-static bool g_bCsReady = false; // whether `g_cs` exists: from AllocateMilkDropNonDX11() until CleanUpMilkDropNonDX11(); UI thread only
+// Whether `g_cs` exists: from AllocateMilkDropNonDX11() until CleanUpMilkDropNonDX11(). Both run on
+// the UI thread while no other engine thread does, so others can read it unlocked.
+static bool g_bCsReady = false;
 
 #define IsAlphabetChar(x) ((x >= 'a' && x <= 'z') || (x >= 'A' && x <= 'Z'))
 #define IsAlphanumericChar(x) ((x >= 'a' && x <= 'z') || (x >= 'A' && x <= 'Z') || (x >= '0' && x <= '9') || x == '.')
@@ -1059,10 +1061,11 @@ static void CancelThread(int max_wait_time_ms)
 // created or initialized in `AllocateMilkDropNonDX11()`.
 void CPlugin::CleanUpMilkDropNonDX11()
 {
+    // Stop the preset scan before deleting the lock it takes. It checks for the request at every
+    // file, so it normally ends at once; it is killed only if it hangs (on a dead network share).
+    CancelThread(3000);
     g_bCsReady = false;
     DeleteCriticalSection(&g_cs);
-
-    CancelThread(0);
 
     m_menuPreset.Finish();
     m_menuWave.Finish();
@@ -5607,6 +5610,32 @@ bool CPlugin::SetPresetDir(const wchar_t* szDir)
     return true;
 }
 
+// Full path of `m_presets[i]`, whose name is relative to the folder the last scan read (which
+// differs from `m_szPresetDir` while a scan of a newly set folder runs). Takes the lock the scan
+// thread replaces both under; empty if `i` is not in the list (it may have just been replaced).
+std::wstring CPlugin::GetPresetPath(int i) const
+{
+    if (g_bCsReady)
+        EnterCriticalSection(&g_cs);
+    std::wstring path;
+    if (i >= 0 && i < static_cast<int>(m_presets.size()))
+        path = m_scannedPresetDir + m_presets[i].szFilename;
+    if (g_bCsReady)
+        LeaveCriticalSection(&g_cs);
+    return path;
+}
+
+// The folder the last finished scan read, ending in a backslash; empty before the first one.
+std::wstring CPlugin::GetScannedPresetDir() const
+{
+    if (g_bCsReady)
+        EnterCriticalSection(&g_cs);
+    std::wstring dir = m_scannedPresetDir;
+    if (g_bCsReady)
+        LeaveCriticalSection(&g_cs);
+    return dir;
+}
+
 void CPlugin::FindValidPresetDir()
 {
     swprintf_s(m_szPresetDir, L"%spresets\\", m_szMilkdrop2Path);
@@ -5772,8 +5801,8 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
         // First line: cached directory path.
         if (std::getline(cfs, line))
         {
-            // Trim trailing whitespace/CR.
-            while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n' || line.back() == L' '))
+            // Trim trailing spaces (ReadTextFile has already removed the line ends).
+            while (!line.empty() && line.back() == L' ')
                 line.pop_back();
             // Check if path matches current preset directory.
             if (_wcsicmp(line.c_str(), presetDir.c_str()) != 0)
