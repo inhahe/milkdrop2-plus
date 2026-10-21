@@ -25,3 +25,7 @@
 *.pdb binary
 *.obj binary
 *.cso binary
+
+# Kept byte for byte, CRLF line endings and all: GitHub's "Download raw file" serves what the
+# repository holds, and users download this file on its own to run it.
+install-milkdrop2-plus.cmd -text

@@ -10,6 +10,7 @@ How the component is put together, for whoever changes it next. [README](README.
 | `vis_milk2/` | The MilkDrop 2 engine, a static library: `CPlugin` (`plugin.cpp`: presets, menus, text overlay), its shell (`pluginshell.cpp`: window, timing, drawing order), rendering (`milkdropfs.cpp`), preset state and equations (`state.cpp`), a Direct3D 9-style shim over Direct3D 11 (`d3d11shim.cpp`), Direct2D/DirectWrite text (`textmgr.cpp`), and the component's own text files (`utf8_file.*`). |
 | `external/` | Dependencies. `eel2/`, `nu/`, `winamp/data/` (the shader files shipped in the component's `data` folder), `dxtk/` (the DirectXTK sources used) are in the repository; the foobar2000 SDK, PFC, libPPUI, projectM-EEL and WTL are fetched and patched as BUILDING.md describes. |
 | `test/` | CppUnitTest tests, run with `vstest.console.exe` on `Bin\<platform>\<config>\test.dll`. |
+| `install-milkdrop2-plus.cmd` | The one-file installer for users, which installs a release: see [One-file installer](#one-file-installer). |
 
 ## Rendering
 
@@ -47,6 +48,20 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 browser_config.ini, favorites.ini and preset_cache.dat are UTF-8, through `WriteUtf8TextFile`/`ReadTextFile`/`ReadKeyValueFile` (`utf8_file.h`). Writing goes through a temporary file, so a failure leaves the old file whole; reading falls back to Latin-1 line by line, so files from earlier versions still read and one bad line spoils only itself.
 
 Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path gets its trailing backslash there, and one longer than `MAX_PRESET_DIR_LENGTH` is not used; the Default UI element saves such a `PresetLibraryPath` back as it was, so that moving the installation back restores it. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
+
+## One-file installer
+
+`install-milkdrop2-plus.cmd` installs the latest release, the original MilkDrop presets and the texture pack, and offers a layout, for someone who has only that file and builds nothing. It is a batch file whose first lines PowerShell reads as a block comment (`<# : ... #>`): cmd runs them, copies the file to a temporary `.ps1` (the only kind of file PowerShell runs) and runs that in Windows PowerShell with `-ExecutionPolicy Bypass`. The repository keeps it byte for byte (`-text` in `.gitattributes`), so that GitHub's raw download has CRLF line endings, and its batch part has no labels or blocks, which cmd misreads in a file with LF endings.
+
+It relies on these contracts of the component, so a change to any of them must change it too:
+
+- The profile: `<foobar2000>\profile` when `portable_mode_enabled` exists beside foobar2000.exe, `%APPDATA%\foobar2000-v2` otherwise; components in `user-components-x64\<DLL name>\`.
+- Every name the component's DLL has had (`$ComponentNames`: `foo_vis_milk2` until v0.2.1, `foo_milkdrop2_plus` since). All register the Default UI element `guid_milk2`, so it moves the others aside; it also looks for that GUID in a layout.
+- `PresetLibraryPath` in `browser_config.ini`, which it sets to `milkdrop2\presets\`, relative to the profile (`FromStoredPath`, v0.3.0 and later), keeping the file's other lines and their encodings as [Settings and files](#settings-and-files) describes.
+- Textures in `<profile>\milkdrop2\textures\`.
+- The release asset: one `*.fb2k-component`, a zip with one DLL at its top.
+
+The layout it offers is a Default UI `theme.fth`, embedded in base64 at the end of the file and taken from a working installation. The MilkDrop element's configuration in a layout is only the `MILK` sentinel and the version (`milk2_config::build`), with no paths, so the layout works in any profile. To offer another, embed its `theme.fth` and change `$EmbeddedLayoutDescription`.
 
 ## Build
 

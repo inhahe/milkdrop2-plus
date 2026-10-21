@@ -59,7 +59,18 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 
 ## Run Requirements and Installation
 
-### Quick Install
+### One-File Install
+
+[`install-milkdrop2-plus.cmd`](install-milkdrop2-plus.cmd) installs everything in one step, with nothing to build: the latest release of the plugin, the [original MilkDrop presets](https://github.com/projectM-visualizer/presets-milkdrop-original), the [Base Milkdrop Texture Pack](https://github.com/projectM-visualizer/presets-milkdrop-texture-pack), and, if you want it, a Default UI layout with MilkDrop on the right and a spectrum, an oscilloscope, a spectrogram and the playlists on the left.
+
+1. Install [foobar2000](https://www.foobar2000.org/download) v2.x (64-bit), and close it.
+2. Download `install-milkdrop2-plus.cmd`: open it on GitHub and click "Download raw file".
+3. Double-click it. It finds foobar2000 and asks before installing there (or lets you pick `foobar2000.exe`), then asks whether to install the layout. If Windows says "Windows protected your PC", click More info, then Run anyway.
+4. Start foobar2000.
+
+From a command prompt: `install-milkdrop2-plus.cmd "C:\foobar2000"`, with `-Layout` or `-NoLayout` to answer the layout question in advance. Everything goes into foobar2000's profile folder, and whatever it replaces (the layout, the preset folder setting, an earlier build of the plugin) is first saved in `<profile>\milkdrop2-plus-install-backup\`. Run it again to update the plugin, presets and textures. Its other options (`-LayoutFrom`, `-Force`, `-ReleaseTag`) are described at the top of the file.
+
+### Install from Source
 
 1. Download [foobar2000](https://www.foobar2000.org/download) v2.x (64-bit) and install.
 2. Clone this repo with presets included:
@@ -67,7 +78,8 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
    git clone --recursive https://github.com/inhahe/milkdrop2-plus.git
    ```
    The `--recursive` flag downloads the [Cream of the Crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) preset collection (~10,000 presets) as a submodule. If you clone without `--recursive`, you can fetch the presets later with `git submodule update --init`, or `install.bat` will offer to download them for you.
-3. Run `install.bat` to install the plugin and presets into foobar2000.
+3. Build it (Release x64; see [BUILDING.md](BUILDING.md)).
+4. Run `install.bat` to install the plugin and presets into foobar2000.
 
 ### Manual Install
 
