@@ -423,7 +423,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
             g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
 
             g_plugin.LoadShaders(&g_plugin.m_shaders, g_plugin.m_pState, false);
-            g_plugin.ReportMissingTextures();
+            g_plugin.ReportMissingTextures(false);
             g_plugin.SetMenusForPresetVersion(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
         }
         if (chChar != '\r')

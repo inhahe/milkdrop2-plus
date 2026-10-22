@@ -37,10 +37,30 @@
 #include <algorithm>
 #include <climits>
 
-int PickTextureToEvict(const std::vector<TexInfo>& textures, int nPresetsLoadedTotal)
+int TextureSizeInBytes(unsigned w, unsigned h, unsigned d, int bitsPerPixel)
 {
-    const auto mayGo = [nPresetsLoadedTotal](const TexInfo& t) {
-        return t.bEvictable && t.nSizeInBytes > 0 && t.nAge < nPresetsLoadedTotal - 1;
+    const long long bytes = static_cast<long long>(w) * h * std::max(1u, d) * std::max(0, bitsPerPixel) / 8 + 16384; // plus some overhead
+    return static_cast<int>(std::min<long long>(bytes, INT_MAX));
+}
+
+bool TextureCacheIsFull(const std::vector<TexInfo>& textures, int maxImages, int maxBytes)
+{
+    int nImages = 0;
+    long long nBytes = 0;
+    for (const TexInfo& t : textures)
+        if (t.bEvictable && t.texptr)
+        {
+            ++nImages;
+            nBytes += t.nSizeInBytes;
+        }
+    return (maxImages >= 0 && nImages >= maxImages) || (maxBytes >= 0 && nBytes >= maxBytes);
+}
+
+int PickTextureToEvict(const std::vector<TexInfo>& textures, int nPresetsLoadedTotal, const std::vector<const ID3D11Resource*>& inUse)
+{
+    const auto mayGo = [nPresetsLoadedTotal, &inUse](const TexInfo& t) {
+        return t.bEvictable && t.nSizeInBytes > 0 && t.nAge < nPresetsLoadedTotal - 1 &&
+               std::find(inUse.begin(), inUse.end(), t.texptr) == inUse.end();
     };
 
     int minAge = INT_MAX; // least recently used

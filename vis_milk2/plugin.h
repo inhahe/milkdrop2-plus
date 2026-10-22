@@ -32,6 +32,7 @@
 #define __NULLSOFT_DX_PLUGIN_H__
 
 #include "texture_cache.h"
+#include <atomic>
 #include <list>
 #include <mutex>
 #include <set>
@@ -231,6 +232,13 @@ class CShaderParams
     SamplerInfo m_texture_bindings[16]; // an entry for each sampler slot.  These are ALIASES - DO NOT DELETE.
     tex_code m_texcode[16];             // if ==TEX_VS, forget the pointer - texture bound @ that stage is the double-buffered VS.
 
+    // The textures CacheParams could not find ("clouds", "any texture"), each once; at most one
+    // per sampler. Fixed arrays rather than containers: the engine copies and clears these
+    // objects with memcpy and ZeroMemory.
+    wchar_t m_missingTextures[16][64];
+    int m_nMissingTextures;
+    void NoteMissingTexture(const wchar_t* name);
+
     void Clear();
     void CacheParams(CConstantTable* pCT, bool bHardErrors);
     void OnTextureEvict(ID3D11Resource* texptr);
@@ -370,9 +378,9 @@ class CPlugin : public CPluginShell
     bool RecompileVShader(const char* szShadersText, VShaderInfo* si, int shaderType, bool bHardErrors);
     bool RecompilePShader(const char* szShadersText, PShaderInfo* si, int shaderType, bool bHardErrors, int PSVersion);
     bool EvictSomeTexture();
+    void DropTexture(size_t i);
     typedef std::vector<TexInfo> TexInfoList;
     TexInfoList m_textures;
-    bool m_bNeedRescanTexturesDir;
 
     // Input layouts.
     //ID3D11InputLayout* m_pMilkDropVertDecl;
@@ -522,10 +530,14 @@ class CPlugin : public CPluginShell
     int m_nPresetFilesFound = 0;     // .milk files in it
     int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
                                      // presets loaded from them exclude those needing a newer pixel shader model
-    std::wstring m_textureDir; // the user's textures folder, ending in a backslash, or empty; change it with SetTextureDir()
-    bool m_bTextureDirChanged = false; // SetTextureDir() changed it, and the render thread has yet to reload the textures
-    std::vector<std::wstring> m_missingTextures; // textures the shaders loaded since the last ReportMissingTextures() could not find
-    std::wstring m_missingTexturesReportedFor;   // the preset file the last report was about
+    // The user's textures folder, ending in a backslash, or empty; change it with SetTextureDir().
+    // Its own lock, held only to copy it, rather than g_cs, which the render thread holds for a
+    // whole frame while it sends the UI thread messages: the UI thread must not wait on that.
+    std::wstring m_textureDir;
+    mutable std::mutex m_textureDirLock;
+    std::atomic<bool> m_bTextureDirChanged{false}; // the render thread has yet to reload the textures for it
+    std::wstring m_missingTexturesShown;    // the last missing-texture message, empty for none
+    std::wstring m_missingTexturesShownFor; // the preset file it was about
 
     float m_fRandStart[4];
 
@@ -604,7 +616,6 @@ class CPlugin : public CPluginShell
     void LoadRandomPreset(float fBlendTime);
     void LoadPreset(const wchar_t* szPresetFilename, float fBlendTime);
     void LoadPresetTick();
-    void OnStartCompilingPreset();
     void SetPresetListPosition(std::wstring search);
     void FindValidPresetDir();
     wchar_t* GetPresetDir() const { return const_cast<wchar_t*>(m_szPresetDir); };
@@ -612,12 +623,12 @@ class CPlugin : public CPluginShell
     std::wstring GetPresetPath(int i) const;
     std::wstring GetScannedPresetDir() const;
     static std::wstring ResolveTextureDir(const std::wstring& dir);
-    std::wstring SetTextureDir(const wchar_t* szDir);
+    std::wstring SetTextureDir(const wchar_t* szDir, bool bReloadAlways);
     void ReloadDiskTextures();
     std::vector<std::wstring> GetTextureDirs(bool bWithPresetFolder) const;
     std::wstring GetDefaultTextureDir() const;
     static size_t CountTextureFiles(const std::wstring& dir);
-    void ReportMissingTextures();
+    void ReportMissingTextures(bool bAlways);
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);

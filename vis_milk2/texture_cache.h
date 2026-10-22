@@ -49,9 +49,19 @@ struct TexInfo
     int nSizeInBytes; // only valid if bEvictable is true
 };
 
+// The size a texture of `w` x `h` x `d` texels of `bitsPerPixel` takes, for the cache limits,
+// clamped to what an int holds.
+int TextureSizeInBytes(unsigned w, unsigned h, unsigned d, int bitsPerPixel);
+
+// Whether the textures loaded from disk reach the cache limits, so that one must go before
+// another loads. `maxImages`, `maxBytes`: the MaxImages and MaxBytes settings; a negative one
+// (the preferences' "Auto") sets no limit of its own, leaving only running out of memory.
+bool TextureCacheIsFull(const std::vector<TexInfo>& textures, int maxImages, int maxBytes);
+
 // The index in `textures` of the one to drop to make room, or -1 if none may go.
 // `nPresetsLoadedTotal`: the engine's count of presets loaded so far, the age a texture gets when
 // the preset being loaded uses it; the running preset's textures (the next one blends from it)
-// are one younger. Neither may go. Of the others, the largest goes first, its size weighted to
-// count up to twice as much the longer ago it was used.
-int PickTextureToEvict(const std::vector<TexInfo>& textures, int nPresetsLoadedTotal);
+// are one younger. Neither may go, nor any in `inUse` (bound to a shader still drawn or being
+// loaded). Of the others, the largest goes first, its size weighted to count up to twice as much
+// the longer ago it was used.
+int PickTextureToEvict(const std::vector<TexInfo>& textures, int nPresetsLoadedTotal, const std::vector<const ID3D11Resource*>& inUse);

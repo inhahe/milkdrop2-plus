@@ -3355,7 +3355,7 @@ void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
 {
     wcscpy_s(s_config.settings.m_szTextureDir, dir.c_str());
     milk2_config::save_texture_dir(dir);
-    const std::wstring searched = g_plugin.SetTextureDir(dir.c_str());
+    const std::wstring searched = g_plugin.SetTextureDir(dir.c_str(), true);
 
     const std::wstring shown = searched.empty() ? g_plugin.GetDefaultTextureDir() : searched;
     const std::wstring msg = L"Texture folder: " + shown + L" (" + std::to_wstring(CPlugin::CountTextureFiles(shown)) + L" textures)";
