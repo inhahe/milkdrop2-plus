@@ -31,6 +31,7 @@
 #ifndef __NULLSOFT_DX_PLUGIN_H__
 #define __NULLSOFT_DX_PLUGIN_H__
 
+#include "texture_cache.h"
 #include <list>
 #include <mutex>
 #include <set>
@@ -164,17 +165,6 @@ typedef struct
     int nColorG;
     int nColorB;
 } td_supertext;
-
-typedef struct
-{
-    wchar_t texname[256]; // ~filename, but without path or extension!
-    ID3D11Resource* texptr;
-    int w, h, d;
-    //D3DXHANDLE texsize_param;
-    bool bEvictable;
-    int nAge;         // only valid if bEvictable is true
-    int nSizeInBytes; // only valid if bEvictable is true
-} TexInfo;
 
 typedef struct
 {

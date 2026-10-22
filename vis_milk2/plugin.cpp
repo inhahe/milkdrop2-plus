@@ -2210,72 +2210,21 @@ void CShaderParams::Clear()
     }
 }
 
+// Drops one texture loaded from disk (PickTextureToEvict says which), unbinding it from every
+// shader. False if none may go.
 bool CPlugin::EvictSomeTexture()
 {
-#if _DEBUG
-    // Note: this won't evict a texture whose age is zero,
-    //       or whose reported size is zero!
-    {
-        int nEvictableFiles = 0;
-        int nEvictableBytes = 0;
-        size_t N = m_textures.size();
-        for (size_t i = 0; i < N; i++)
-            if (m_textures[i].bEvictable && m_textures[i].texptr)
-            {
-                nEvictableFiles++;
-                nEvictableBytes += m_textures[i].nSizeInBytes;
-            }
-        wchar_t buf[1024];
-        swprintf_s(buf, L"Evicting at %d textures, %.1f MB\n", nEvictableFiles, nEvictableBytes * 0.000001f);
-        //OutputDebugString(buf);
-    }
-#endif
-
-    size_t N = m_textures.size();
-
-    // find age gap
-    int newest = 99999999;
-    int oldest = 0;
-    bool bAtLeastOneFound = false;
-    for (size_t i = 0; i < N; i++)
-        if (m_textures[i].bEvictable && m_textures[i].nSizeInBytes > 0 && m_textures[i].nAge < m_nPresetsLoadedTotal - 1) // note: -1 here keeps images around for the blend-from preset, too...
-        {
-            newest = std::min(newest, m_textures[i].nAge);
-            oldest = std::max(oldest, m_textures[i].nAge);
-            bAtLeastOneFound = true;
-        }
-    if (!bAtLeastOneFound)
+    const int i = PickTextureToEvict(m_textures, m_nPresetsLoadedTotal);
+    if (i < 0)
         return false;
-
-    // find the "biggest" texture, but dilate things so that the newest textures
-    // are HALF as big as the oldest textures, and thus, less likely to get booted.
-    int biggest_bytes = 0;
-    int biggest_index = -1;
-    for (size_t i = 0; i < N; i++)
-        if (m_textures[i].bEvictable && m_textures[i].nSizeInBytes > 0 && m_textures[i].nAge < m_nPresetsLoadedTotal - 1) // note: -1 here keeps images around for the blend-from preset, too...
-        {
-            float size_mult = 1.0f + (m_textures[i].nAge - newest) / (float)(oldest - newest);
-            int bytes = static_cast<int>(m_textures[i].nSizeInBytes * size_mult);
-            if (bytes > biggest_bytes)
-            {
-                biggest_bytes = bytes;
-                biggest_index = static_cast<int>(i);
-            }
-        }
-    if (biggest_index == -1)
-        return false;
-
-    // Evict that sucker.
-    assert(m_textures[biggest_index].texptr);
+    assert(m_textures[i].texptr);
 
     // Notify all CShaderParams classes that we're releasing a bindable texture!!
-    for (auto const& i : global_CShaderParams_master_list)
-        i->OnTextureEvict(m_textures[biggest_index].texptr);
+    for (auto const& p : global_CShaderParams_master_list)
+        p->OnTextureEvict(m_textures[i].texptr);
 
-    // 2. Erase the texture itself.
-    SafeRelease(m_textures[biggest_index].texptr);
-    m_textures.erase(m_textures.begin() + biggest_index);
-
+    SafeRelease(m_textures[i].texptr);
+    m_textures.erase(m_textures.begin() + i);
     return true;
 }
 
