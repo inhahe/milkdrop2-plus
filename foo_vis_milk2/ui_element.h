@@ -299,7 +299,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
 
     // clang-format off
     // Playback callback methods
-    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") if (AlbumArtShown()) ShowAlbumArt(p_track); }
+    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") if (s_config.settings.m_bShowAlbum) ShowAlbumArt(p_track); }
 
     // Playlist callback methods
     void on_items_added(size_t /*p_playlist*/, size_t /*p_start*/, metadb_handle_list_cref /*p_data*/, const bit_array& /*p_selection*/) { MILK2_CONSOLE_LOG("* PlaylistItemsAdded") UpdatePlaylist(); }
@@ -320,8 +320,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
   private:
 
     // Album art
-    static bool AlbumArtSpriteFileExists();
-    static bool AlbumArtShown();
     static void ShowAlbumArt(const metadb_handle_ptr& track);
     // clang-format on
 

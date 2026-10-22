@@ -3346,6 +3346,7 @@ void CPlugin::DrawUserSprites()
             *(m_texmgr.m_tex[iSlot].var_bass_att) = (double)mdsound.avg_rel[0];
             *(m_texmgr.m_tex[iSlot].var_mid_att) = (double)mdsound.avg_rel[1];
             *(m_texmgr.m_tex[iSlot].var_treb_att) = (double)mdsound.avg_rel[2];
+            *(m_texmgr.m_tex[iSlot].var_aspect) = GetWidth() / static_cast<double>(GetHeight()); // as the placement below uses it
 
 #ifndef _NO_EXPR_
             // Evaluate expressions.

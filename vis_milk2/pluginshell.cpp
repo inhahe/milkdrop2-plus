@@ -277,41 +277,6 @@ void CPluginShell::StuffParams(DXCONTEXT_PARAMS* pParams)
     pParams->parent_window = m_hWndWinamp;
 }
 
-void CPluginShell::ToggleFullScreen()
-{
-    CleanUpDX11(0);
-
-    switch (m_screenmode)
-    {
-        case WINDOWED: m_screenmode = FULLSCREEN; break;
-        case FULLSCREEN: m_screenmode = WINDOWED; break;
-    }
-
-    DXCONTEXT_PARAMS params{};
-    StuffParams(&params);
-
-    if (!m_lpDX->StartOrRestartDevice(&params))
-    {
-        // Note: A basic warning message box will have already been given.
-        if (m_lpDX->m_lastErr == DX_ERR_CREATEDEV_PROBABLY_OUTOFVIDEOMEMORY)
-        {
-            // Make specific suggestions on how to regain more video memory.
-            //SuggestHowToFreeSomeMem();
-        }
-        return;
-    }
-
-    if (!AllocateDX11())
-    {
-        m_lpDX->m_ready = false; // flag to exit
-        return;
-    }
-
-    //SetForegroundWindow(m_lpDX->GetHwnd());
-    //SetActiveWindow(m_lpDX->GetHwnd());
-    //SetFocus(m_lpDX->GetHwnd());
-}
-
 void CPluginShell::ToggleHelp()
 {
     m_show_help = !m_show_help;

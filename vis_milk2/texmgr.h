@@ -79,6 +79,7 @@ typedef struct
     // Expression inputs
     double *var_time, *var_frame, *var_fps, *var_progress;
     double *var_bass, *var_bass_att, *var_mid, *var_mid_att, *var_treb, *var_treb_att;
+    double* var_aspect; // the canvas's width / height, set each frame (sprite code may place by it)
 
     // Expression outputs
     double *var_x, *var_y;
@@ -96,7 +97,11 @@ class texmgr
     texmgr();
     ~texmgr();
 
-    void Init(D3D11Shim* lpDD); // DirectDraw object
+    // Readies the empty sprite slots for textures made on `lpDD`, and returns true; or, while they
+    // belong to it already (until Finish, which the device's end calls for), keeps the sprites as
+    // they are and returns false, so that they outlive a reallocation of the engine's other
+    // resources (a resize, a change of settings, a window swap).
+    bool Init(D3D11Shim* lpDD);
     int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
     int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
     void KillTex(int iSlot);

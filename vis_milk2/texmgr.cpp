@@ -47,6 +47,8 @@ texmgr::~texmgr()
 
 void texmgr::Finish()
 {
+    if (!m_lpDD)
+        return; // not readied since the last Finish
     for (int i = 0; i < NUM_TEX; i++)
     {
         KillTex(i);
@@ -66,10 +68,16 @@ void texmgr::Finish()
     }
 
     // DO NOT RELEASE OR DELETE m_lpDD; CLIENT SHOULD DO THIS!
+    m_lpDD = nullptr; // Init readies the slots again
 }
 
-void texmgr::Init(D3D11Shim* lpDD)
+bool texmgr::Init(D3D11Shim* lpDD)
 {
+    if (m_lpDD)
+    {
+        assert(m_lpDD == lpDD); // the sprites' textures belong to the device they were made on
+        return false;
+    }
     m_lpDD = lpDD;
 
     for (int i = 0; i < NUM_TEX; i++)
@@ -81,6 +89,7 @@ void texmgr::Init(D3D11Shim* lpDD)
         if (!m_tex[i].tex_eel_ctx)
             m_tex[i].tex_eel_ctx = NSEEL_VM_alloc();
     }
+    return true;
 }
 
 /*
@@ -789,6 +798,7 @@ void texmgr::RegisterBuiltInVariables(int iSlot)
     m_tex[iSlot].var_mid_att = NSEEL_VM_regvar(eel_ctx, "mid_att");
     m_tex[iSlot].var_treb = NSEEL_VM_regvar(eel_ctx, "treb");
     m_tex[iSlot].var_treb_att = NSEEL_VM_regvar(eel_ctx, "treb_att");
+    m_tex[iSlot].var_aspect = NSEEL_VM_regvar(eel_ctx, "aspect");
 
     // Output variables.
     m_tex[iSlot].var_x = NSEEL_VM_regvar(eel_ctx, "x");

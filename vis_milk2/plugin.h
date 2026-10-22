@@ -507,6 +507,8 @@ class CPlugin : public CPluginShell
     std::wstring m_albumArtFile; // what SetAlbumArt shows
     std::vector<uint8_t> m_albumArtImage;
     void LaunchAlbumArt();
+    std::vector<int> m_spritesToRelaunch; // image-list numbers of the sprites a lost device had
+    void RelaunchSprites();
 
     // Stuff for the menu system.
     CMilkMenu* m_pCurMenu; // should always be valid!
@@ -557,12 +559,12 @@ class CPlugin : public CPluginShell
     // recompiles them ('y' at the upgrade prompt). Render thread.
     void UpgradePixelShaders();
     // The sprite number album art is launched as: past the numbers sprites from the image list
-    // take (0-99). Its section there ([img100]) says how it is drawn.
+    // take (0-99). A section [img100] there says how it is drawn; without one, it is a thumbnail
+    // in the lower right corner (LaunchSprite).
     static constexpr int kAlbumArtSprite = 100;
     // Shows the image file `file`, or else the encoded image `image`, as the album art sprite in
-    // place of the last, or removes it when both are empty. Other sprites stay. Kept and shown
-    // again whenever the device resources are remade (a resize, a change of settings, a window
-    // swap, a device reset), which empties every sprite slot. Render thread.
+    // place of the last, or removes it when both are empty. Other sprites stay. Kept, and shown
+    // again on a new device after a device reset (RelaunchSprites). Render thread.
     void SetAlbumArt(std::wstring file, std::vector<uint8_t> image);
 
   private:

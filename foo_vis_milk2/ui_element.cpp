@@ -664,13 +664,12 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     menu.AppendMenu(MF_SEPARATOR);
 
     // Original menu items.
-    const UINT albumArtMenuFlags = AlbumArtShown() ? MF_CHECKED : (AlbumArtSpriteFileExists() ? 0 : MF_DISABLED);
     menu.AppendMenu(MF_STRING | (s_config.settings.m_bEnableDownmix ? MF_CHECKED : 0), IDM_ENABLE_DOWNMIX, TEXT("Downmix Channels"));
     menu.AppendMenu(MF_SEPARATOR);
     if (s_fullscreen)
     {
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_playlist ? MF_CHECKED : 0), IDM_SHOW_PLAYLIST, TEXT("Show Playlist\tP"));
-        menu.AppendMenu(MF_STRING | albumArtMenuFlags, IDM_SHOW_ALBUM, TEXT("Show Album Art"));
+        menu.AppendMenu(MF_STRING | (s_config.settings.m_bShowAlbum ? MF_CHECKED : 0), IDM_SHOW_ALBUM, TEXT("Show Album Art"));
         menu.AppendMenu(MF_STRING, IDM_SHOW_TITLE, TEXT("Launch Title\tT"));
         menu.AppendMenu(MF_SEPARATOR);
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_help ? MF_CHECKED : 0), IDM_SHOW_HELP, TEXT("Show Help\tF1"));
@@ -681,7 +680,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     else
     {
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_playlist ? MF_CHECKED : 0), IDM_SHOW_PLAYLIST, TEXT("Show Playlist"));
-        menu.AppendMenu(MF_STRING | albumArtMenuFlags, IDM_SHOW_ALBUM, TEXT("Show Album Art"));
+        menu.AppendMenu(MF_STRING | (s_config.settings.m_bShowAlbum ? MF_CHECKED : 0), IDM_SHOW_ALBUM, TEXT("Show Album Art"));
         menu.AppendMenu(MF_STRING, IDM_SHOW_TITLE, TEXT("Launch Title"));
         menu.AppendMenu(MF_SEPARATOR);
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_help ? MF_CHECKED : 0), IDM_SHOW_HELP, TEXT("Show Help"));
@@ -1031,7 +1030,7 @@ bool milk2_ui_element::Initialize(HWND window, int width, int height)
         s_milk2 = true;
 
         // A track already playing gets no new-track callback.
-        if (metadb_handle_ptr track; AlbumArtShown() && m_playback_control->get_now_playing(track))
+        if (metadb_handle_ptr track; s_config.settings.m_bShowAlbum && m_playback_control->get_now_playing(track))
             ShowAlbumArt(track);
     }
     else
@@ -1416,21 +1415,6 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-// Whether the sprites' settings file (milk2_img.ini) exists; the album art option is offered only
-// then.
-bool milk2_ui_element::AlbumArtSpriteFileExists()
-{
-    std::error_code ec;
-    return std::filesystem::exists(s_config.settings.m_szImgIniFile, ec);
-}
-
-// Whether album art is shown: the option is on, and offered (a saved "on" without the file could
-// not be turned off).
-bool milk2_ui_element::AlbumArtShown()
-{
-    return s_config.settings.m_bShowAlbum && AlbumArtSpriteFileExists();
-}
-
 // The image file the artwork format names for `track`, if the format is set and the file exists;
 // or else empty.
 static std::wstring AlbumArtFile(const metadb_handle_ptr& track)
@@ -1473,14 +1457,14 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
     return {};
 }
 
-// Shows `track`'s album art in place of the last, if it is shown (AlbumArtShown): the file the
+// Shows `track`'s album art in place of the last, if that option is on: the file the
 // artwork format names, if that exists, or else the track's front cover. Otherwise, or with no
 // track, removes it. Other sprites stay.
 void milk2_ui_element::ShowAlbumArt(const metadb_handle_ptr& track)
 {
     std::wstring file;
     std::vector<uint8_t> raster;
-    if (AlbumArtShown() && track.is_valid())
+    if (s_config.settings.m_bShowAlbum && track.is_valid())
     {
         file = AlbumArtFile(track);
         if (file.empty())

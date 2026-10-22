@@ -1111,6 +1111,7 @@ void CPlugin::CleanUpMilkDropNonDX11()
     }
     m_albumArtFile.clear(); // the next session shows its own
     m_albumArtImage.clear();
+    m_spritesToRelaunch.clear();
 
     m_menuPreset.Finish();
     m_menuWave.Finish();
@@ -1718,7 +1719,7 @@ int CPlugin::AllocateMilkDropDX11()
     m_superTitle = std::make_unique<SuperText>(m_lpDX.get());
 #endif
 
-    m_texmgr.Init(GetDevice());
+    const bool bSpritesNew = m_texmgr.Init(GetDevice()); // or kept, if the device is the same
 
     //DumpDebugMessage("Init: mesh allocation");
     m_verts = new MDVERTEX[(m_nGridX + 1) * (m_nGridY + 1)];
@@ -1849,9 +1850,19 @@ int CPlugin::AllocateMilkDropDX11()
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
     }
 
-    LaunchAlbumArt(); // the sprites were just made anew, empty
+    if (bSpritesNew)
+        RelaunchSprites();
 
     return true;
+}
+
+// Launches on a new device the sprites the last one had (CleanUpMilkDropDX11), from the start.
+void CPlugin::RelaunchSprites()
+{
+    for (const int n : m_spritesToRelaunch)
+        LaunchSprite(n, -1);
+    m_spritesToRelaunch.clear();
+    LaunchAlbumArt();
 }
 
 void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
@@ -3329,7 +3340,7 @@ bool CPlugin::LoadShaderFromMemory(const char* szOrigShaderText, const char* szF
 // then if blending 2 presets, jump fully to the new preset. Otherwise,
 // the old preset wouldn't get all reloaded, and it app would crash
 // when trying to use its stuff.
-void CPlugin::CleanUpMilkDropDX11(int /* final_cleanup */)
+void CPlugin::CleanUpMilkDropDX11(int final_cleanup)
 {
     if (m_nLoadingPreset != 0)
     {
@@ -3411,7 +3422,16 @@ void CPlugin::CleanUpMilkDropDX11(int /* final_cleanup */)
     m_superTitle.reset();
 #endif
 
-    m_texmgr.Finish();
+    // The sprites go only with the device, their textures' maker. Those from the image list are
+    // launched again on the next device (RelaunchSprites), and the album art too.
+    if (final_cleanup)
+    {
+        m_spritesToRelaunch.clear();
+        for (int x = 0; x < NUM_TEX; x++)
+            if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData >= 0 && m_texmgr.m_tex[x].nUserData < kAlbumArtSprite)
+                m_spritesToRelaunch.push_back(m_texmgr.m_tex[x].nUserData);
+        m_texmgr.Finish();
+    }
 
     if (m_verts != NULL)
     {
@@ -7195,6 +7215,23 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
             line++;
         }
         pStr[char_pos++] = '\0'; // null-terminate
+    }
+
+    // Album art without a section of its own: a thumbnail in the lower right corner, a fifth of
+    // the canvas's shorter side with a margin of a fortieth, fading in, drawn over the preset
+    // only (burn 0: a burned sprite is also drawn into the preset's own image every frame, which
+    // the preset then smears). Sprite coordinates count from the canvas's middle in units of its
+    // width (x and y from 0 to 1, sx and sy the half sizes), so a corner's place depends on
+    // `aspect`, the canvas's width / height.
+    if (nSpriteNum == kAlbumArtSprite && initcode[0] == '\0' && code[0] == '\0')
+    {
+        strcpy_s(initcode, "burn = 0;");
+        strcpy_s(code,
+                 "wide = above(aspect, 1);"
+                 "sx = if(wide, 0.2 / aspect, 0.2 * aspect); sy = sx;"
+                 "x = 0.5 + 0.5 * if(wide, 1 - (2 * 0.025 + 0.2) / aspect, aspect * (1 - 2 * 0.025 - 0.2));"
+                 "y = 0.5 + 0.5 * if(wide, (1 - 2 * 0.025 - 0.2) / aspect, 1 - aspect * (2 * 0.025 + 0.2));"
+                 "a = min(time * 2, 1);");
     }
 
     if (nSlot == -1)

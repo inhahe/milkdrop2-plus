@@ -87,7 +87,6 @@ class CPluginShell : public DX::IDeviceNotify
     void OnWindowMoved();
     void OnDisplayChange();
 
-    void ToggleFullScreen();
     void ToggleHelp();
     void TogglePlaylist();
 
@@ -323,6 +322,8 @@ class CPluginShell : public DX::IDeviceNotify
     int InitDirectX();
     void CleanUpDirectX();
     int AllocateDX11();
+    // Releases the device resources. `final_cleanup`: nonzero when the device goes too (quitting, a
+    // device reset); the sprites go then only, their textures being the device's.
     void CleanUpDX11(int final_cleanup);
     int InitNonDX11();
     void CleanUpNonDX11();
