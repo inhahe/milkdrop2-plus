@@ -185,7 +185,6 @@ todo.txt
 *.bak
 # Local working copies / backups that are not part of the project
 backup/
-presets-cream-of-the-crop/
 # Embedded SDK checkout; upstream does not publish it as a submodule
 external/columns_ui-sdk/
 
