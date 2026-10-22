@@ -18,14 +18,6 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **Fix:** give `CPlugin` accessors that take `g_cs` and return copies (or run the UI's preset operations under the lock), and use them from the component.
 
-## Menu and key commands change the engine on the UI thread while the render thread draws
-
-**Where:** `foo_vis_milk2/ui_element.cpp` (Next, Previous and Random Preset, a category, a favorite, the preset browser) and `keyboard.cpp` (the same keys) call `g_plugin.LoadPreset`, `NextPreset`, `PrevPreset` and `LoadRandomPreset` on the UI thread, holding neither `s_cs` nor `g_cs`; the render thread draws on a thread-pool timer (`TIMER_TP`) under both.
-
-**What happens:** a preset loaded from the menu or a key swaps `m_pState`, releases and replaces `m_shaders`, and, with no blend time, compiles shaders and binds textures (`m_textures`, each shader's missing-texture list, the random-texture list) while the render thread may be drawing with them, running `LoadPresetTick`, or reading those lists for the missing-texture message: a crash, a garbled frame or a wrong name in that message is possible, though rare in practice. (A blended load, the usual kind, only reads the preset there and compiles on the render thread.) Already safe from any thread: upper-right messages (`AddError` queues them), a change of texture folder (`SetTextureDir` only marks it), and the shader editor and the pixel shader upgrade (`m_shaderRequests`, which the render thread carries out).
-
-**Fix:** run these commands on the render thread too: queue them, as `m_shaderRequests` does, and carry them out at the start of `MilkDropRenderFrame`, under `g_cs`. (Taking `g_cs` on the UI thread instead would freeze it for a shader compile.)
-
 ## The Columns UI element has no context menu
 
 **Where:** `foo_vis_milk2/cui_element.cpp`, compiled in whenever the `external/columns_ui-sdk` submodule is checked out, as in the release build and any recursive clone.

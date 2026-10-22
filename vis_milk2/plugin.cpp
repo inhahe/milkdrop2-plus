@@ -338,99 +338,119 @@ static bool ReadFileToString(const wchar_t* szBaseFilename, char* szDestText, in
     return true;
 }
 
-// These callback functions are called by "menu.cpp" whenever the user finishes editing an `eval_` expression.
+// These callback functions are called by "menu.cpp" whenever the user finishes editing an `eval_`
+// expression, on the UI thread, which has stored the new text. The code is recompiled on the
+// render thread, which runs it every frame.
+static void RecompileOnRenderThread(int flags, int bReInit)
+{
+    g_plugin.RunOnRenderThread([flags, bReInit] { g_plugin.m_pState->RecompileExpressions(flags, bReInit); });
+}
+
 static void OnUserEditedPerFrame(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_PRESET_CODE, 0);
+    RecompileOnRenderThread(RECOMPILE_PRESET_CODE, 0);
 }
 
 static void OnUserEditedPerPixel(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_PRESET_CODE, 0);
+    RecompileOnRenderThread(RECOMPILE_PRESET_CODE, 0);
 }
 
 static void OnUserEditedPresetInit(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_PRESET_CODE, 1);
+    RecompileOnRenderThread(RECOMPILE_PRESET_CODE, 1);
 }
 
 static void OnUserEditedWavecode(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_WAVE_CODE, 0);
+    RecompileOnRenderThread(RECOMPILE_WAVE_CODE, 0);
 }
 
 static void OnUserEditedWavecodeInit(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_WAVE_CODE, 1);
+    RecompileOnRenderThread(RECOMPILE_WAVE_CODE, 1);
 }
 
 static void OnUserEditedShapecode(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_SHAPE_CODE, 0);
+    RecompileOnRenderThread(RECOMPILE_SHAPE_CODE, 0);
 }
 
 static void OnUserEditedShapecodeInit(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_pState->RecompileExpressions(RECOMPILE_SHAPE_CODE, 1);
+    RecompileOnRenderThread(RECOMPILE_SHAPE_CODE, 1);
 }
 
-// The shader editor (UI thread) calls these on accepting an edit; the render thread recompiles
-// (CPlugin::DoShaderRequests).
+// The shader editor (UI thread) calls these on accepting an edit; the render thread recompiles.
 static void OnUserEditedWarpShaders(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_WARP;
+    g_plugin.RunOnRenderThread([] { g_plugin.RecompilePresetShaders(true, false); });
 }
 
 static void OnUserEditedCompShaders(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_COMP;
+    g_plugin.RunOnRenderThread([] { g_plugin.RecompilePresetShaders(false, true); });
 }
 
-// Carries out the shader work `requests` (RECOMPILE_WARP and the like) asks for. Render thread,
-// under g_cs: compiling binds textures, and a frame drawn meanwhile would race it.
-void CPlugin::DoShaderRequests(unsigned requests)
+void CPlugin::RecompilePresetShaders(bool bWarp, bool bComp)
 {
-    if (requests & (RECOMPILE_WARP | RECOMPILE_COMP))
+    ++m_nTextureDirGeneration; // offer random textures added since
+    ClearErrors(ERR_PRESET);
+    if (m_nMaxPSVersion > 0)
     {
-        ++m_nTextureDirGeneration; // offer random textures added since
-        ClearErrors(ERR_PRESET);
-        if (m_nMaxPSVersion > 0)
+        if (bWarp && !RecompilePShader(m_pState->m_szWarpShadersText, &m_shaders.warp, SHADER_WARP, false, m_pState->m_nWarpPSVersion))
         {
-            if ((requests & RECOMPILE_WARP) && !RecompilePShader(m_pState->m_szWarpShadersText, &m_shaders.warp, SHADER_WARP, false, m_pState->m_nWarpPSVersion))
-            {
-                // Switch to fallback.
-                m_fallbackShaders_ps.warp.ptr->AddRef();
-                m_fallbackShaders_ps.warp.CT->AddRef();
-                m_shaders.warp = m_fallbackShaders_ps.warp;
-            }
-            if ((requests & RECOMPILE_COMP) && !RecompilePShader(m_pState->m_szCompShadersText, &m_shaders.comp, SHADER_COMP, false, m_pState->m_nCompPSVersion))
-            {
-                // Switch to fallback.
-                m_fallbackShaders_ps.comp.ptr->AddRef();
-                m_fallbackShaders_ps.comp.CT->AddRef();
-                m_shaders.comp = m_fallbackShaders_ps.comp;
-            }
+            // Switch to fallback.
+            m_fallbackShaders_ps.warp.ptr->AddRef();
+            m_fallbackShaders_ps.warp.CT->AddRef();
+            m_shaders.warp = m_fallbackShaders_ps.warp;
         }
-        SetMenusForPresetVersion(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion); // the upgrade changes them
+        if (bComp && !RecompilePShader(m_pState->m_szCompShadersText, &m_shaders.comp, SHADER_COMP, false, m_pState->m_nCompPSVersion))
+        {
+            // Switch to fallback.
+            m_fallbackShaders_ps.comp.ptr->AddRef();
+            m_fallbackShaders_ps.comp.CT->AddRef();
+            m_shaders.comp = m_fallbackShaders_ps.comp;
+        }
     }
+    SetMenusForPresetVersion(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion); // the upgrade changes them
+}
+
+void CPlugin::RunOnRenderThread(std::function<void()> task)
+{
+    std::lock_guard<std::mutex> lock(m_renderTasksLock);
+    m_renderTasks.push_back(std::move(task));
+}
+
+// Runs the tasks RunOnRenderThread() queued, in order; one queued meanwhile waits for the next
+// frame. Render thread, under g_cs.
+void CPlugin::RunRenderTasks()
+{
+    std::vector<std::function<void()>> tasks;
+    {
+        std::lock_guard<std::mutex> lock(m_renderTasksLock);
+        tasks.swap(m_renderTasks);
+    }
+    for (auto& task : tasks)
+        task();
 }
 
 // Modify the help screen text here.
@@ -1078,11 +1098,16 @@ void CPlugin::CleanUpMilkDropNonDX11()
     g_bCsReady = false;
     DeleteCriticalSection(&g_cs);
 
-    // Messages queued after the last frame (a report from the load the cleanup cut short) belong
-    // to this session; the next would show them, with fresh timestamps, about a preset not loaded.
+    // Messages and tasks queued after the last frame (a report from the load the cleanup cut
+    // short, a key pressed while closing) belong to this session; the next would show them, with
+    // fresh timestamps, about a preset not loaded, or load a preset unasked.
     {
         std::lock_guard<std::mutex> lock(m_errorRequestsLock);
         m_errorRequests.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_renderTasksLock);
+        m_renderTasks.clear();
     }
 
     m_menuPreset.Finish();
@@ -3387,8 +3412,7 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 {
     EnterCriticalSection(&g_cs);
 
-    if (const unsigned requests = m_shaderRequests.exchange(0))
-        DoShaderRequests(requests);
+    RunRenderTasks();
     if (m_nLoadingPreset == 0 && m_bTextureDirChanged.exchange(false))
         ReloadDiskTextures();
 

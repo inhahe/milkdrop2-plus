@@ -229,7 +229,9 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     // Preset information and navigation
     void PrevPreset(float fBlendTime = s_config.settings.m_fBlendTimeUser);
     void NextPreset(float fBlendTime = s_config.settings.m_fBlendTimeUser);
-    bool LoadPreset(int select);
+  public:
+    static void LoadPresetFile(const std::wstring& path, float fBlendTime = s_config.settings.m_fBlendTimeUser);
+  private:
     void RandomPreset(float fBlendTime = s_config.settings.m_fBlendTimeUser);
     void LockPreset(bool lockUnlock);
     bool IsPresetLock();

@@ -146,6 +146,80 @@
 #define RemoveText g_plugin.ClearText
 #endif
 
+// Raises the preset on screen to the next pixel shader model ('y' at the upgrade prompt; the
+// prompts, in MilkDropRenderUI, name the steps) and recompiles its shaders. Render thread.
+static void UpgradePixelShaders()
+{
+    if (g_plugin.m_pState->m_nWarpPSVersion >= g_plugin.m_nMaxPSVersion && g_plugin.m_pState->m_nCompPSVersion >= g_plugin.m_nMaxPSVersion)
+        return; // already at the highest model allowed, as the prompt says
+    if (g_plugin.m_pState->m_nMinPSVersion == g_plugin.m_pState->m_nMaxPSVersion)
+    {
+        switch (g_plugin.m_pState->m_nMinPSVersion)
+        {
+            case MD2_PS_NONE:
+                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
+                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
+                g_plugin.m_pState->GenDefaultWarpShader();
+                g_plugin.m_pState->GenDefaultCompShader();
+                break;
+            case MD2_PS_2_0:
+                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_X;
+                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_X;
+                break;
+            case MD2_PS_2_X: // 2.x and 3.0 compile alike, so on to 4.0
+            case MD2_PS_3_0:
+                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_4_0;
+                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_4_0;
+                break;
+            case MD2_PS_4_0:
+                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_5_0;
+                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_5_0;
+                break;
+            default:
+                assert(0);
+                break;
+        }
+    }
+    else
+    {
+        switch (g_plugin.m_pState->m_nMinPSVersion)
+        {
+            case MD2_PS_NONE:
+                if (g_plugin.m_pState->m_nWarpPSVersion < MD2_PS_2_0)
+                {
+                    g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
+                    g_plugin.m_pState->GenDefaultWarpShader();
+                }
+                if (g_plugin.m_pState->m_nCompPSVersion < MD2_PS_2_0)
+                {
+                    g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
+                    g_plugin.m_pState->GenDefaultCompShader();
+                }
+                break;
+            case MD2_PS_2_0:
+                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_2_X);
+                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_2_X);
+                break;
+            case MD2_PS_2_X:
+            case MD2_PS_3_0:
+                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_4_0);
+                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_4_0);
+                break;
+            case MD2_PS_4_0:
+                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_5_0);
+                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_5_0);
+                break;
+            default:
+                assert(false);
+                break;
+        }
+    }
+    g_plugin.m_pState->m_nMinPSVersion = std::min(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
+    g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
+
+    g_plugin.RecompilePresetShaders(true, true);
+}
+
 void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
 {
     UNREFERENCED_PARAMETER(nFlags);
@@ -358,75 +432,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
     else if (UI_mode == UI_UPGRADE_PIXEL_SHADER)
     {
         if (chChar == 'y' || chChar == 'Y')
-        {
-            if (g_plugin.m_pState->m_nMinPSVersion == g_plugin.m_pState->m_nMaxPSVersion)
-            {
-                switch (g_plugin.m_pState->m_nMinPSVersion)
-                {
-                    case MD2_PS_NONE:
-                        g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
-                        g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
-                        g_plugin.m_pState->GenDefaultWarpShader();
-                        g_plugin.m_pState->GenDefaultCompShader();
-                        break;
-                    case MD2_PS_2_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_X;
-                        g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_X;
-                        break;
-                    case MD2_PS_2_X: // 2.x and 3.0 compile alike, so on to 4.0
-                    case MD2_PS_3_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_4_0;
-                        g_plugin.m_pState->m_nCompPSVersion = MD2_PS_4_0;
-                        break;
-                    case MD2_PS_4_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_5_0;
-                        g_plugin.m_pState->m_nCompPSVersion = MD2_PS_5_0;
-                        break;
-                    default:
-                        assert(0);
-                        break;
-                }
-            }
-            else
-            {
-                switch (g_plugin.m_pState->m_nMinPSVersion)
-                {
-                    case MD2_PS_NONE:
-                        if (g_plugin.m_pState->m_nWarpPSVersion < MD2_PS_2_0)
-                        {
-                            g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
-                            g_plugin.m_pState->GenDefaultWarpShader();
-                        }
-                        if (g_plugin.m_pState->m_nCompPSVersion < MD2_PS_2_0)
-                        {
-                            g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
-                            g_plugin.m_pState->GenDefaultCompShader();
-                        }
-                        break;
-                    case MD2_PS_2_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_2_X);
-                        g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_2_X);
-                        break;
-                    case MD2_PS_2_X:
-                    case MD2_PS_3_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_4_0);
-                        g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_4_0);
-                        break;
-                    case MD2_PS_4_0:
-                        g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_5_0);
-                        g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_5_0);
-                        break;
-                    default:
-                        assert(false);
-                        break;
-                }
-            }
-            g_plugin.m_pState->m_nMinPSVersion = std::min(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
-            g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
-
-            // The render thread recompiles both, at their new versions.
-            g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_WARP | CPlugin::RECOMPILE_COMP;
-        }
+            g_plugin.RunOnRenderThread(UpgradePixelShaders); // it changes what the frames are drawn with
         if (chChar != '\r')
         {
             UI_mode = UI_MENU;
@@ -489,15 +495,19 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
 
                     if (g_plugin.m_nNumericInputDigits >= 2)
                     {
+                        // Sprites are loaded and killed on the render thread, which draws them.
+                        const int num = g_plugin.m_nNumericInputNum;
                         if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_CUST_MSG)
-                            g_plugin.LaunchCustomMessage(g_plugin.m_nNumericInputNum);
+                            g_plugin.LaunchCustomMessage(num);
                         else if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_SPRITE)
-                            g_plugin.LaunchSprite(g_plugin.m_nNumericInputNum, -1);
+                            g_plugin.RunOnRenderThread([num] { g_plugin.LaunchSprite(num, -1); });
                         else if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_SPRITE_KILL)
                         {
-                            for (int x = 0; x < NUM_TEX; x++)
-                                if (g_plugin.m_texmgr.m_tex[x].nUserData == g_plugin.m_nNumericInputNum)
-                                    g_plugin.m_texmgr.KillTex(x);
+                            g_plugin.RunOnRenderThread([num] {
+                                for (int x = 0; x < NUM_TEX; x++)
+                                    if (g_plugin.m_texmgr.m_tex[x].nUserData == num)
+                                        g_plugin.m_texmgr.KillTex(x);
+                            });
                         }
 
                         g_plugin.m_nNumericInputDigits = 0;
@@ -550,11 +560,13 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
                     swprintf_s(buf, 64, &buf[64], &buf[128]);
                     g_plugin.AddError(buf, 3.0f, ERR_NOTIFY, false);
                 }
-                // Erase all history, too.
-                g_plugin.m_presetHistory[0] = g_plugin.m_szCurrentPresetFile;
-                g_plugin.m_presetHistoryPos = 0;
-                g_plugin.m_presetHistoryFwdFence = 1;
-                g_plugin.m_presetHistoryBackFence = 0;
+                // Erase all history, too: on the render thread, whose preset loads use it.
+                g_plugin.RunOnRenderThread([] {
+                    g_plugin.m_presetHistory[0] = g_plugin.m_szCurrentPresetFile;
+                    g_plugin.m_presetHistoryPos = 0;
+                    g_plugin.m_presetHistoryFwdFence = 1;
+                    g_plugin.m_presetHistoryBackFence = 0;
+                });
                 return;
             case 'u': //g_plugin.m_pState->m_fWarpScale /= 1.1f; return;
             case 'U': //g_plugin.m_pState->m_fWarpScale *= 1.1f; return;
@@ -574,37 +586,37 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
             case 'O':
                 g_plugin.m_pState->m_fWarpAmount *= 1.1f;
                 return;
+            // These load presets, so they run on the render thread (RunOnRenderThread); so does
+            // the lock juggling between the loads, which those loads read.
             case '!':
                 // Randomize warp shader.
-                {
+                g_plugin.RunOnRenderThread([] {
                     bool bWarpLock = g_plugin.m_bWarpShaderLock;
-                    wchar_t szOldPreset[MAX_PATH];
-                    wcscpy_s(szOldPreset, g_plugin.m_szCurrentPresetFile);
+                    const std::wstring oldPreset = g_plugin.m_szCurrentPresetFile;
                     g_plugin.m_bWarpShaderLock = false;
                     g_plugin.LoadRandomPreset(0.0f);
                     g_plugin.m_bWarpShaderLock = true;
-                    g_plugin.LoadPreset(szOldPreset, 0.0f);
+                    g_plugin.LoadPreset(oldPreset.c_str(), 0.0f);
                     g_plugin.m_bWarpShaderLock = bWarpLock;
-                }
+                });
                 return;
             case '@':
                 // Randomize comp shader.
-                {
+                g_plugin.RunOnRenderThread([] {
                     bool bCompLock = g_plugin.m_bCompShaderLock;
-                    wchar_t szOldPreset[MAX_PATH];
-                    wcscpy_s(szOldPreset, g_plugin.m_szCurrentPresetFile);
+                    const std::wstring oldPreset = g_plugin.m_szCurrentPresetFile;
                     g_plugin.m_bCompShaderLock = false;
                     g_plugin.LoadRandomPreset(0.0f);
                     g_plugin.m_bCompShaderLock = true;
-                    g_plugin.LoadPreset(szOldPreset, 0.0f);
+                    g_plugin.LoadPreset(oldPreset.c_str(), 0.0f);
                     g_plugin.m_bCompShaderLock = bCompLock;
-                }
+                });
                 return;
             case 'a':
             case 'A':
                 // Load a random preset, a random warp shader and a random comp shader.
                 // Not quite as extreme as a mash-up.
-                {
+                g_plugin.RunOnRenderThread([] {
                     bool bCompLock = g_plugin.m_bCompShaderLock;
                     bool bWarpLock = g_plugin.m_bWarpShaderLock;
                     g_plugin.m_bCompShaderLock = false;
@@ -618,7 +630,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
                     g_plugin.LoadRandomPreset(0.0f);
                     g_plugin.m_bCompShaderLock = bCompLock;
                     g_plugin.m_bWarpShaderLock = bWarpLock;
-                }
+                });
                 return;
             case 'd':
             case 'D':
@@ -1604,31 +1616,31 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         g_plugin.m_nNumericInputDigits = 0;
                         g_plugin.m_nNumericInputNum = 0;
 
-                        if (bShiftHeldDown && bCtrlHeldDown)
-                        {
-                            for (int x = 0; x < NUM_TEX; x++)
-                                g_plugin.m_texmgr.KillTex(x);
-                        }
-                        else
-                        {
+                        // On the render thread, which draws the sprites.
+                        g_plugin.RunOnRenderThread([bAll = bShiftHeldDown && bCtrlHeldDown, bOldest = bShiftHeldDown] {
+                            if (bAll)
+                            {
+                                for (int x = 0; x < NUM_TEX; x++)
+                                    g_plugin.m_texmgr.KillTex(x);
+                                return;
+                            }
                             int newest = -1;
                             int frame = 0;
                             for (int x = 0; x < NUM_TEX; x++)
                             {
                                 if (g_plugin.m_texmgr.m_tex[x].pSurface)
                                 {
-                                    if ((newest == -1) || (!bShiftHeldDown && g_plugin.m_texmgr.m_tex[x].nStartFrame > frame) ||
-                                        (bShiftHeldDown && g_plugin.m_texmgr.m_tex[x].nStartFrame < frame))
+                                    if ((newest == -1) || (!bOldest && g_plugin.m_texmgr.m_tex[x].nStartFrame > frame) ||
+                                        (bOldest && g_plugin.m_texmgr.m_tex[x].nStartFrame < frame))
                                     {
                                         newest = x;
                                         frame = g_plugin.m_texmgr.m_tex[x].nStartFrame;
                                     }
                                 }
                             }
-
                             if (newest != -1)
                                 g_plugin.m_texmgr.KillTex(newest);
-                        }
+                        });
                     }
                 }
                 return;
@@ -1704,18 +1716,18 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                         // Set current preset index to -1 because current preset is no longer in the list.
                         g_plugin.m_nCurrentPreset = -1;
                     }
-                    else // Load new preset.
+                    else // Load new preset (and blend to it with the spacebar), on the render thread.
                     {
-                        g_plugin.m_nCurrentPreset = g_plugin.m_nPresetListCurPos;
-
-                        // First take the filename and prepend the path (already has extension).
-                        wchar_t s[MAX_PATH];
-                        wcscpy_s(s, g_plugin.GetPresetDir()); // note: m_szPresetDir always ends with '\'
-                        wcscat_s(s, g_plugin.m_presets[g_plugin.m_nCurrentPreset].szFilename.c_str());
-
-                        // Now load (and blend to) the new preset.
-                        g_plugin.m_presetHistoryPos = (g_plugin.m_presetHistoryPos + 1) % PRESET_HIST_LEN;
-                        g_plugin.LoadPreset(s, (nChar == VK_SPACE) ? g_plugin.m_fBlendTimeUser : 0.0f);
+                        const int pos = static_cast<int>(g_plugin.m_nPresetListCurPos);
+                        const float blendTime = (nChar == VK_SPACE) ? g_plugin.m_fBlendTimeUser : 0.0f;
+                        g_plugin.RunOnRenderThread([pos, blendTime] {
+                            const std::wstring file = g_plugin.GetPresetPath(pos); // empty if a rescan replaced the list meanwhile
+                            if (file.empty())
+                                return;
+                            g_plugin.m_nCurrentPreset = pos;
+                            g_plugin.m_presetHistoryPos = (g_plugin.m_presetHistoryPos + 1) % PRESET_HIST_LEN;
+                            g_plugin.LoadPreset(file.c_str(), blendTime);
+                        });
                     }
                 }
                 return;
@@ -1734,10 +1746,12 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
             case 'K':
                 if (bCtrlHeldDown)
                 {
-                    // Kill all sprites.
-                    for (int x = 0; x < NUM_TEX; x++)
-                        if (g_plugin.m_texmgr.m_tex[x].pSurface)
-                            g_plugin.m_texmgr.KillTex(x);
+                    // Kill all sprites, on the render thread, which draws them.
+                    g_plugin.RunOnRenderThread([] {
+                        for (int x = 0; x < NUM_TEX; x++)
+                            if (g_plugin.m_texmgr.m_tex[x].pSurface)
+                                g_plugin.m_texmgr.KillTex(x);
+                    });
                 }
                 return;
             case VK_F1:

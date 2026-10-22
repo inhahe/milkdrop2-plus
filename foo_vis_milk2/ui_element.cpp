@@ -842,7 +842,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
                     auto preset = m_presetBrowser.GetRandomPresetInCategory(categories[catIdx]);
                     if (!preset.fullPath.empty())
                     {
-                        g_plugin.LoadPreset(preset.fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+                        LoadPresetFile(preset.fullPath);
                     }
                     else
                     {
@@ -892,7 +892,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
                     if (presetIdx >= 0 && presetIdx < static_cast<int>(favs.size()))
                     {
                         std::wstring fullPath = m_presetBrowser.GetRootDir() + favs[presetIdx].relativePath;
-                        g_plugin.LoadPreset(fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+                        LoadPresetFile(fullPath);
                     }
                 }
             }
@@ -1398,30 +1398,21 @@ const char* milk2_ui_element::ToggleShuffle(bool forward = true)
     return api->playback_order_get_name(nNewMode);
 }
 
+// Preset loads asked for here run on the render thread (RunOnRenderThread): a load compiles the
+// preset's shaders and binds its textures, which the frames drawn meanwhile use.
 void milk2_ui_element::NextPreset(float fBlendTime)
 {
-    g_plugin.NextPreset(fBlendTime);
+    g_plugin.RunOnRenderThread([fBlendTime] { g_plugin.NextPreset(fBlendTime); });
 }
 
 void milk2_ui_element::PrevPreset(float fBlendTime)
 {
-    g_plugin.PrevPreset(fBlendTime);
+    g_plugin.RunOnRenderThread([fBlendTime] { g_plugin.PrevPreset(fBlendTime); });
 }
 
-bool milk2_ui_element::LoadPreset(int select)
+void milk2_ui_element::LoadPresetFile(const std::wstring& path, float fBlendTime)
 {
-#if 0
-    g_plugin.m_nCurrentPreset = select + g_plugin.m_nDirs;
-
-    wchar_t szFile[MAX_PATH] = {0};
-    wcscpy_s(szFile, g_plugin.m_szPresetDir); // Note: m_szPresetDir always ends with '\'
-    wcscat_s(szFile, g_plugin.m_presets[g_plugin.m_nCurrentPreset].szFilename.c_str());
-
-    g_plugin.LoadPreset(szFile, 1.0f);
-#else
-    UNREFERENCED_PARAMETER(select);
-#endif
-    return true;
+    g_plugin.RunOnRenderThread([path, fBlendTime] { g_plugin.LoadPreset(path.c_str(), fBlendTime); });
 }
 
 std::wstring milk2_ui_element::GetCurrentPreset()
@@ -1454,7 +1445,7 @@ bool milk2_ui_element::IsPresetLock()
 
 void milk2_ui_element::RandomPreset(float fBlendTime)
 {
-    g_plugin.LoadRandomPreset(fBlendTime);
+    g_plugin.RunOnRenderThread([fBlendTime] { g_plugin.LoadRandomPreset(fBlendTime); });
 }
 
 void milk2_ui_element::SetPresetRating(float inc_dec)
@@ -1545,34 +1536,32 @@ void milk2_ui_element::UpdateAlbumArt(metadb_handle_ptr p_track)
     }
 }
 
+// Replaces the sprites with the track's album art, if that option is on: the file the artwork
+// format names, if it exists, or else the art embedded in the track.
 void milk2_ui_element::ShowAlbumArt()
 {
-    // Kill all existing sprites.
-    for (int x = 0; x < NUM_TEX; x++)
-        g_plugin.KillSprite(x);
-
+    std::wstring file;
+    std::vector<uint8_t> raster;
     if (s_config.settings.m_bShowAlbum)
     {
-        if (!m_art_file.empty()) // file
+        if (!m_art_file.empty())
         {
-            // Check if file exists.
-            pfc::string8 artFile = pfc::utf8FromWide(m_art_file.c_str());
-            if (filesystem::g_exists(artFile, fb2k::noAbort))
-            {
-                return;
-            }
-
-            g_plugin.LaunchSprite(100, -1, m_art_file);
+            if (filesystem::g_exists(pfc::utf8FromWide(m_art_file.c_str()), fb2k::noAbort))
+                file = m_art_file;
         }
-        else if (m_raster.size() > 0) // memory
-        {
-            g_plugin.LaunchSprite(100, -1, L"", m_raster);
-        }
-        else // nothing
-        {
-            return;
-        }
+        else
+            raster = m_raster;
     }
+
+    // On the render thread, which draws the sprites.
+    g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)] {
+        for (int x = 0; x < NUM_TEX; x++)
+            g_plugin.KillSprite(x);
+        if (!file.empty())
+            g_plugin.LaunchSprite(100, -1, file);
+        else if (!raster.empty())
+            g_plugin.LaunchSprite(100, -1, L"", raster);
+    });
 }
 
 void milk2_ui_element::UpdatePlaylist()
@@ -2298,7 +2287,7 @@ void milk2_ui_element::LoadRandomPresetFromBrowser()
             }
             int idx = rand() % static_cast<int>(favs.size());
             std::wstring fullPath = m_presetBrowser.GetRootDir() + favs[idx].relativePath;
-            g_plugin.LoadPreset(fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+            LoadPresetFile(fullPath);
             return;
         }
 
@@ -2312,14 +2301,14 @@ void milk2_ui_element::LoadRandomPresetFromBrowser()
             }
             int idx = rand() % static_cast<int>(favs.size());
             std::wstring fullPath = m_presetBrowser.GetRootDir() + favs[idx].relativePath;
-            g_plugin.LoadPreset(fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+            LoadPresetFile(fullPath);
             return;
         }
     }
 
     if (!preset.fullPath.empty())
     {
-        g_plugin.LoadPreset(preset.fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+        LoadPresetFile(preset.fullPath);
     }
 }
 
@@ -3168,7 +3157,7 @@ static INT_PTR CALLBACK FavMgrDlgProc(HWND hdlg, UINT msg, WPARAM wParam, LPARAM
                     if (sel >= 0 && sel < static_cast<int>(state->favs.size()))
                     {
                         std::wstring fullPath = state->self->m_presetBrowser.GetRootDir() + state->favs[sel].relativePath;
-                        g_plugin.LoadPreset(fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+                        milk2_ui_element::LoadPresetFile(fullPath);
                     }
                     return TRUE;
                 }
@@ -3197,7 +3186,7 @@ static INT_PTR CALLBACK FavMgrDlgProc(HWND hdlg, UINT msg, WPARAM wParam, LPARAM
                 if (sel >= 0 && sel < static_cast<int>(state->favs.size()))
                 {
                     std::wstring fullPath = state->self->m_presetBrowser.GetRootDir() + state->favs[sel].relativePath;
-                    g_plugin.LoadPreset(fullPath.c_str(), s_config.settings.m_fBlendTimeUser);
+                    milk2_ui_element::LoadPresetFile(fullPath);
                 }
                 return TRUE;
             }

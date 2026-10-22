@@ -530,8 +530,7 @@ class CPlugin : public CPluginShell
     // SetPresetDir(), and by each scan to the folder it read, which FindValidPresetDir() may have
     // changed).
     // Their own lock, held only to copy them, rather than g_cs, which the render thread holds for
-    // a whole frame while it sends the UI thread messages: a thread that compiles shaders outside
-    // the frame (a shader edit, on the UI thread) must not wait on that.
+    // a whole frame, shader compiles included: SetTextureDir(), on the UI thread, need not wait.
     std::wstring m_textureDir;
     std::wstring m_texturePresetDir;
     mutable std::mutex m_textureDirLock;
@@ -541,15 +540,21 @@ class CPlugin : public CPluginShell
     std::vector<std::wstring> m_missingTexturesShown;      // what ReportMissingTextures() last listed; render thread only
     std::atomic<bool> m_bMissingTexturesReportDue{false}; // show the message at the next frame even if it is unchanged
 
-    // Shader work the UI thread asks the render thread for, done at the start of the next frame
-    // (DoShaderRequests()): compiling binds textures, which the frames drawn meanwhile use.
-    enum ShaderRequest : unsigned
-    {
-        RECOMPILE_WARP = 1, // the shader editor changed the warp shader's text, or the upgrade its version
-        RECOMPILE_COMP = 2, // ... the composite shader's
-    };
-    std::atomic<unsigned> m_shaderRequests{0};
-    void DoShaderRequests(unsigned requests);
+    // Runs `task` on the render thread at the start of the next frame, under g_cs, in the order
+    // asked: for what the UI thread wants done to what the frames are drawn with (loading a
+    // preset compiles its shaders and binds its textures; so does a shader edit). Tasks still
+    // waiting when the engine shuts down are dropped. Any thread.
+    void RunOnRenderThread(std::function<void()> task);
+    // Recompiles the warp and/or composite shader of the preset on screen from its text and
+    // version (after the shader editor or the pixel shader upgrade changed them). Render thread.
+    void RecompilePresetShaders(bool bWarp, bool bComp);
+
+  private:
+    std::mutex m_renderTasksLock;
+    std::vector<std::function<void()>> m_renderTasks;
+    void RunRenderTasks();
+
+  public:
 
     float m_fRandStart[4];
 
