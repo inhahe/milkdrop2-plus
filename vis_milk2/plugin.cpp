@@ -7241,7 +7241,6 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
         if (szDefaultCode)
             strcpy_s(code, szDefaultCode);
     }
-    m_texmgr.SetCanvasSize(GetWidth(), GetHeight()); // for its init code
 
     if (nSlot == -1)
     {
@@ -7272,11 +7271,11 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
     int ret = -1;
     if ((nSpriteNum >= 0 && nSpriteNum < 100) || !filename.empty())
     {
-        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck);
+        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck, CanvasAspect());
     }
     else if (!data.empty())
     {
-        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck);
+        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck, CanvasAspect());
     }
     else
         return false;

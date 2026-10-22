@@ -152,8 +152,6 @@ class milk2_cui_panel : public uie::window,
         // change of layout, starts the engine again.
         m_initPosted = false;
         m_last_time = 0.0;
-        if (g_hWindow == m_hWnd)
-            g_hWindow = NULL;
     }
 
     // Phase 2: Deferred DX init — posted from WM_SIZE so it runs after UI is fully initialized.
@@ -213,8 +211,6 @@ class milk2_cui_panel : public uie::window,
                 if (s_config.settings.m_szPresetDir[0])
                     g_plugin.SetPresetDir(s_config.settings.m_szPresetDir);
 
-                g_hWindow = m_hWnd;
-
                 // Pre-initialize an engine not running yet, as the Default UI element's Initialize
                 // does; a running one only moves to this window (OnWindowSwap, below).
                 if (!s_milk2)
@@ -237,8 +233,6 @@ class milk2_cui_panel : public uie::window,
                     }
                     else
                     {
-                        // Init failed — restore window handle so we don't break other windows.
-                        g_hWindow = NULL;
                         FB2K_console_print(core_api::get_my_file_name(), ": CUI PluginInitialize failed");
                         m_initPosted = false; // allow retry
                         return 0;
@@ -273,13 +267,11 @@ class milk2_cui_panel : public uie::window,
             }
             catch (std::exception& e)
             {
-                g_hWindow = NULL;
                 m_initPosted = false; // allow retry on next WM_SIZE
                 FB2K_console_print(core_api::get_my_file_name(), ": CUI deferred init: ", e.what());
             }
             catch (...)
             {
-                g_hWindow = NULL;
                 m_initPosted = false;
                 FB2K_console_print(core_api::get_my_file_name(), ": CUI deferred init failed");
             }

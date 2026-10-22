@@ -101,7 +101,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         MESSAGE_HANDLER_EX(WM_IME_NOTIFY, OnImeNotify)
         MESSAGE_HANDLER_EX(WM_QUIT, OnQuit)
         MESSAGE_HANDLER_EX(WM_MILK2, OnMilk2Message)
-        MESSAGE_HANDLER_EX(WM_CONFIG_CHANGE, OnConfigurationChange)
     END_MSG_MAP()
     // clang-format on
 
@@ -154,7 +153,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     LRESULT OnImeNotify(UINT uMsg, WPARAM wParam, LPARAM lParam);
     LRESULT OnQuit(UINT uMsg, WPARAM wParam, LPARAM lParam);
     LRESULT OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam);
-    LRESULT OnConfigurationChange(UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     PWCHAR GetWnd() { swprintf_s(m_szWnd, TEXT("0x%p %dfs %dt"), get_wnd(), s_fullscreen, s_in_toggle); return m_szWnd; }
 
@@ -165,7 +163,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     bool m_in_suspend;
     bool m_minimized;
 
-    DWORD m_refresh_interval;
     double m_last_time;
 
 #ifdef TIMER_32

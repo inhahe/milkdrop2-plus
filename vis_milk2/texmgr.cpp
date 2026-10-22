@@ -73,12 +73,17 @@ void texmgr::Finish()
 
 bool texmgr::Init(D3D11Shim* lpDD)
 {
+    if (m_lpDD == lpDD)
+        return false; // the sprites stay
     if (m_lpDD)
     {
-        // The device that goes calls Finish first (CleanUpDX11 with final_cleanup), and so does a
-        // start that fails (PluginInitialize).
-        assert(m_lpDD == lpDD);
-        return false;
+        // Another device's sprites, without Finish. It should not happen: a device that goes
+        // calls Finish first (CleanUpDX11 with final_cleanup), and so does a start that fails
+        // (PluginQuit). Its shim, with the views it kept, may be gone, so KillTex does not ask it.
+        assert(false);
+        m_lpDD = nullptr;
+        for (int i = 0; i < NUM_TEX; i++)
+            KillTex(i);
     }
     m_lpDD = lpDD;
 
@@ -189,7 +194,7 @@ bool texmgr::TryCreateDDrawSurface(int iSlot, int w, int h)
 }
 */
 
-int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */)
+int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, double canvasAspect)
 {
     if (iSlot < 0) return TEXMGR_ERR_BAD_INDEX;
     if (iSlot >= NUM_TEX) return TEXMGR_ERR_BAD_INDEX;
@@ -201,7 +206,7 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     bool bTextureInstanced = false;
     {
         for (int x = 0; x < NUM_TEX; x++)
-            if (x != iSlot && m_tex[x].pSurface && _wcsicmp(m_tex[x].szFileName, szFilename) == 0)
+            if (m_tex[x].pSurface && _wcsicmp(m_tex[x].szFileName, szFilename) == 0) // not iSlot: emptied above
             {
                 // The texture is shared (KillTex counts its users); the code and its variables
                 // are the slot's own, in its own VM (RunInitCode registers them there below).
@@ -555,7 +560,7 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     int ret = TEXMGR_ERR_SUCCESS;
 
     // Compile and run initialization code.
-    if (!RunInitCode(iSlot, szInitCode))
+    if (!RunInitCode(iSlot, szInitCode, canvasAspect))
         ret |= TEXMGR_WARN_ERROR_IN_INIT_CODE;
 
     // Compile and save per-frame code.
@@ -569,7 +574,7 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     return ret;
 }
 
-int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */)
+int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, double canvasAspect)
 {
     if (iSlot < 0)
         return TEXMGR_ERR_BAD_INDEX;
@@ -613,7 +618,7 @@ int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, c
     int ret = TEXMGR_ERR_SUCCESS;
 
     // Compile and run initialization code.
-    if (!RunInitCode(iSlot, szInitCode))
+    if (!RunInitCode(iSlot, szInitCode, canvasAspect))
         ret |= TEXMGR_WARN_ERROR_IN_INIT_CODE;
 
     // Compile and save per-frame code.
@@ -643,7 +648,8 @@ void texmgr::KillTex(int iSlot)
 
         if (refcount == 1)
         {
-            m_lpDD->ForgetTexture(m_tex[iSlot].pSurface); // the views the device keeps of it
+            if (m_lpDD)
+                m_lpDD->ForgetTexture(m_tex[iSlot].pSurface); // the views the device keeps of it
             m_tex[iSlot].pSurface->Release();
         }
         m_tex[iSlot].pSurface = NULL;
@@ -679,7 +685,7 @@ void texmgr::StripLinefeedCharsAndComments(char* src, char* dest)
     dest[i2] = 0;
 }
 
-bool texmgr::RunInitCode(int iSlot, char* szInitCode)
+bool texmgr::RunInitCode(int iSlot, char* szInitCode, double canvasAspect)
 {
     // Warning: Destroys contents of `m_tex[iSlot].m_szExpr`,
     //          so be sure to call `RunInitCode()` before writing or
@@ -710,7 +716,7 @@ bool texmgr::RunInitCode(int iSlot, char* szInitCode)
     *(m_tex[iSlot].var_blendmode) = 0.0;
     *(m_tex[iSlot].var_done) = 0.0;
     *(m_tex[iSlot].var_burn) = 1.0;
-    SetPlacementInputs(iSlot); // so that init code may place the sprite once
+    SetPlacementInputs(iSlot, canvasAspect); // so that init code may place the sprite once
 
 #ifndef _NO_EXPR_
     if (m_tex[iSlot].m_codehandle)
@@ -768,9 +774,9 @@ bool texmgr::RecompileExpressions(int iSlot)
     return true;
 }
 
-void texmgr::SetPlacementInputs(int iSlot)
+void texmgr::SetPlacementInputs(int iSlot, double canvasAspect)
 {
-    *(m_tex[iSlot].var_aspect) = m_canvasAspect;
+    *(m_tex[iSlot].var_aspect) = canvasAspect;
     *(m_tex[iSlot].var_imgaspect) = m_tex[iSlot].img_h ? m_tex[iSlot].img_w / static_cast<double>(m_tex[iSlot].img_h) : 1.0;
 }
 

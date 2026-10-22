@@ -11,7 +11,7 @@
 #include "config.h"
 #include "stored_path.h"
 
-extern HWND g_hWindow;
+void ApplyMilkDropPreferences(); // ui_element.cpp
 
 namespace
 {
@@ -636,7 +636,7 @@ void milk2_preferences_page::apply()
     OnChanged(); // The dialog content has not changed but the flags have;
                  // the currently shown values now match the settings so the
                  // apply button can be disabled.
-    ::SendMessage(g_hWindow, WM_CONFIG_CHANGE, (WPARAM)0, (LPARAM)0);
+    ApplyMilkDropPreferences();
 }
 
 // Returns whether the dialog content is different from the current configuration;

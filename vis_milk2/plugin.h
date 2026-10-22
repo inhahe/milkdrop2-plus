@@ -509,6 +509,8 @@ class CPlugin : public CPluginShell
     void LaunchAlbumArt();
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
+    // The canvas's width / height, as the sprites are placed by (their `aspect`).
+    double CanvasAspect() const { return GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0; }
 
     // Stuff for the menu system.
     CMilkMenu* m_pCurMenu; // should always be valid!

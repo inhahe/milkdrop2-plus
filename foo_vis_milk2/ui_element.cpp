@@ -25,7 +25,6 @@
 //#endif
 
 CPlugin g_plugin;
-HWND g_hWindow;
 
 // Indicates to hybrid graphics systems to prefer the discrete part by default.
 //extern "C" {
@@ -52,7 +51,6 @@ milk2_ui_element::milk2_ui_element(ui_element_config::ptr config, ui_element_ins
 #elif defined(TIMER_32)
     m_last_time = 0.0;
 #endif
-    m_refresh_interval = 33;
 
     m_pwd = L".\\";
     set_configuration(config);
@@ -223,8 +221,6 @@ void milk2_ui_element::OnDestroy()
     if (m_vis_stream.is_valid())
         m_vis_stream.release();
     //DestroyMenu();
-    if (g_hWindow == get_wnd())
-        g_hWindow = NULL; // the preferences tell it of changes: not a window gone, or another with its handle
 
     if (m_milk2)
         m_milk2 = false;
@@ -294,7 +290,7 @@ void milk2_ui_element::OnPaint(CDCHandle dc)
     {
         BuildWaves();
 #ifdef TIMER_32
-        ULONGLONG next_refresh = m_last_refresh + m_refresh_interval;
+        ULONGLONG next_refresh = m_last_refresh + static_cast<DWORD>(lround(1000.0f / s_config.settings.m_max_fps_fs));
         // (next_refresh < now) would break when GetTickCount() overflows
         if (static_cast<LONGLONG>(next_refresh - now) < 0)
         {
@@ -954,46 +950,6 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
     return 1;
 }
 
-LRESULT milk2_ui_element::OnConfigurationChange(UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    UNREFERENCED_PARAMETER(lParam);
-
-    MILK2_CONSOLE_LOG("OnConfigurationChange ", GetWnd())
-    if (uMsg != WM_CONFIG_CHANGE)
-        return 1;
-    switch (wParam)
-    {
-        case 0: // Preferences Dialog
-            {
-                s_config.reset();
-                PublishPlayback(); // the title format may have changed
-                m_refresh_interval = static_cast<DWORD>(lround(1000.0f / s_config.settings.m_max_fps_fs));
-                g_plugin.PanelSettings(&s_config.settings);
-                break;
-            }
-        case 1: // Advanced Preferences
-            {
-                break;
-            }
-    }
-
-    if (s_milk2 && m_milk2)
-    {
-#ifdef TIMER_TP
-        EnterCriticalSection(&s_cs);
-#endif
-        RECT rect{};
-        GetClientRect(&rect);
-        g_plugin.OnWindowSizeChanged(rect.right - rect.left, rect.bottom - rect.top, true); // remade with the new settings
-#ifdef TIMER_TP
-        LeaveCriticalSection(&s_cs);
-#endif
-    }
-    SetMsgHandled(TRUE);
-
-    return 0;
-}
-
 // Initialize the Direct3D resources required to run.
 bool milk2_ui_element::Initialize(HWND window, int width, int height)
 {
@@ -1008,8 +964,6 @@ bool milk2_ui_element::Initialize(HWND window, int width, int height)
         //swprintf_s(g_plugin.m_szConfigIniFile, L"%ls", s_config.settings.m_szConfigIniFile);
         swprintf_s(g_plugin.m_szComponentDirPath, L"%ls", const_cast<wchar_t*>(m_pwd.c_str()));
 
-        if (!s_fullscreen)
-            g_hWindow = get_wnd();
     }
 
     g_plugin.SetWinampWindow(window);
@@ -1200,10 +1154,7 @@ void milk2_ui_element::ToggleFullScreen()
     if (m_milk2)
     {
         if (!s_fullscreen)
-        {
-            g_hWindow = get_wnd();
             m_milk2 = false;
-        }
 #if 0
         if (s_fullscreen)
         {
@@ -3232,3 +3183,25 @@ void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
 #pragma endregion
 
 } // namespace
+
+// Applies the settings the preferences page has just saved (it calls this, on the main thread):
+// reads them back, and remakes the running engine's resources with them, in whichever window it
+// draws in, the Default UI element's or the Columns UI panel's.
+void ApplyMilkDropPreferences()
+{
+    s_config.reset();
+    PublishPlayback(); // the title format may have changed
+#ifdef TIMER_TP
+    EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
+#endif
+    g_plugin.PanelSettings(&s_config.settings);
+    if (s_milk2)
+    {
+        RECT rect{};
+        ::GetClientRect(g_plugin.GetWinampWindow(), &rect);
+        g_plugin.OnWindowSizeChanged(rect.right - rect.left, rect.bottom - rect.top, true); // remade with the new settings
+    }
+#ifdef TIMER_TP
+    LeaveCriticalSection(&s_cs);
+#endif
+}

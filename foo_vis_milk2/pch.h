@@ -116,7 +116,6 @@
 #define MAX_DISPLAY_MODES 1024
 
 #define WM_MILK2 (WM_USER + 0)
-#define WM_CONFIG_CHANGE (WM_USER + 1)
 
 #ifdef _DEBUG
 #define MILK2_CONSOLE_LOG(...) FB2K_console_print(core_api::get_my_file_name(), ": ", __VA_ARGS__);

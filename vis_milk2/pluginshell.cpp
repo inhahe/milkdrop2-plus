@@ -313,7 +313,7 @@ int CPluginShell::InitDirectX()
     m_lpDX->GetDeviceResources()->RegisterDeviceNotify(this);
 
     // Initialize graphics.
-    if (!m_lpDX->StartOrRestartDevice(&params))
+    if (!m_lpDX->StartDevice(&params))
     {
         // Note: A basic warning message box will have already been given.
         /* if (m_lpDX->m_lastErr == DXC_ERR_CREATEDEV_PROBABLY_OUTOFVIDEOMEMORY)
@@ -560,40 +560,39 @@ int CPluginShell::PluginInitialize(int iWidth, int iHeight)
               iWidth, iHeight, (void*)m_hWndWinamp, (unsigned)GetWindowLong(m_hWndWinamp, GWL_STYLE));
     LogInit(buf);
 
-    // A start that fails undoes what it did (PluginQuit), so that the engine is either running or
-    // not started at all, and a later start begins afresh.
-    try
-    {
-        LogInit("PluginInit: calling InitDirectX...");
-        if (!InitDirectX()) { LogInit("PluginInit: InitDirectX returned FALSE"); return FALSE; }
-        LogInit("PluginInit: InitDirectX OK");
-    }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitDirectX exception: %s", e.what()); LogInit(buf); m_lpDX.reset(); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitDirectX std exception: %s", e.what()); LogInit(buf); m_lpDX.reset(); return FALSE; }
-    m_initStage = INIT_DIRECTX;
-
+    // Each stage is recorded before it is tried, so that a failure, part way through it or after,
+    // undoes all that was done (PluginQuit): the engine is then either running or not started at
+    // all, and a later start begins afresh.
+    const auto stage = [&](InitStage reached, const char* name, auto&& run) -> bool {
+        m_initStage = reached;
+        try
+        {
+            LogInit(name);
+            if (run())
+                return true;
+            sprintf_s(buf, "PluginInit: %s returned FALSE", name);
+        }
+        catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: %s exception: %s", name, e.what()); }
+        catch (std::exception& e) { sprintf_s(buf, "PluginInit: %s std exception: %s", name, e.what()); }
+        LogInit(buf);
+        try
+        {
+            PluginQuit();
+        }
+        catch (...) // nothing escapes into the window's message handling
+        {
+            LogInit("PluginInit: the cleanup after the failure failed");
+        }
+        return false;
+    };
+    if (!stage(INIT_DIRECTX, "InitDirectX", [&] { return InitDirectX() != FALSE; }))
+        return FALSE;
     m_lpDX->m_client_width = iWidth;
     m_lpDX->m_client_height = iHeight;
-
-    try
-    {
-        LogInit("PluginInit: calling InitNonDX11...");
-        m_initStage = INIT_NON_DX11; // what it did before it failed is undone too
-        if (!InitNonDX11()) { LogInit("PluginInit: InitNonDX11 returned FALSE"); PluginQuit(); return FALSE; }
-        LogInit("PluginInit: InitNonDX11 OK");
-    }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 std exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
-
-    try
-    {
-        LogInit("PluginInit: calling AllocateDX11...");
-        m_initStage = INIT_DX11;
-        if (!AllocateDX11()) { LogInit("PluginInit: AllocateDX11 returned FALSE"); PluginQuit(); return FALSE; }
-        LogInit("PluginInit: AllocateDX11 OK");
-    }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 std exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
+    if (!stage(INIT_NON_DX11, "InitNonDX11", [&] { return InitNonDX11() != FALSE; }))
+        return FALSE;
+    if (!stage(INIT_DX11, "AllocateDX11", [&] { return AllocateDX11() != FALSE; }))
+        return FALSE;
 
     LogInit("PluginInit: SUCCESS");
     return TRUE;
@@ -602,13 +601,14 @@ int CPluginShell::PluginInitialize(int iWidth, int iHeight)
 // Undoes as much of PluginInitialize as was done, if any.
 void CPluginShell::PluginQuit()
 {
-    if (m_initStage >= INIT_DX11)
+    const InitStage reached = m_initStage;
+    m_initStage = INIT_NONE; // also if a cleanup below throws: no second one over what is half undone
+    if (reached >= INIT_DX11)
         CleanUpDX11(1);
-    if (m_initStage >= INIT_NON_DX11)
+    if (reached >= INIT_NON_DX11)
         CleanUpNonDX11();
-    if (m_initStage >= INIT_DIRECTX)
+    if (reached >= INIT_DIRECTX)
         CleanUpDirectX();
-    m_initStage = INIT_NONE;
 }
 
 wchar_t* BuildSettingName(const wchar_t* name, const int number)

@@ -103,12 +103,12 @@ class texmgr
     // they are and returns false, so that they outlive a reallocation of the engine's other
     // resources (a resize, a change of settings, a window swap).
     bool Init(D3D11Shim* lpDD);
-    // The canvas's size in pixels, for the sprites' `aspect` (the engine keeps it current).
-    void SetCanvasSize(int width, int height) { m_canvasAspect = height > 0 ? width / static_cast<double>(height) : 1.0; }
-    // Sets slot `iSlot`'s `aspect` and `imgaspect` inputs, from the canvas's and its image's size.
-    void SetPlacementInputs(int iSlot);
-    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
-    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
+    // Sets slot `iSlot`'s `aspect` and `imgaspect` inputs: `canvasAspect` (the canvas's width /
+    // height) and its image's.
+    void SetPlacementInputs(int iSlot, double canvasAspect);
+    // `canvasAspect`: the canvas's width / height, for the init code's `aspect`.
+    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, double canvasAspect);
+    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, double canvasAspect);
     void KillTex(int iSlot);
     void Finish();
 
@@ -119,12 +119,11 @@ class texmgr
     void FreeVars(int iSlot);
     void FreeCode(int iSlot);
     void RegisterBuiltInVariables(int iSlot);
-    bool RunInitCode(int iSlot, char* szInitCode);
+    bool RunInitCode(int iSlot, char* szInitCode, double canvasAspect);
     bool RecompileExpressions(int iSlot);
     void StripLinefeedCharsAndComments(char* src, char* dest);
 
     D3D11Shim* m_lpDD;
-    double m_canvasAspect = 1.0;
 };
 
 #endif

@@ -157,30 +157,13 @@ void DXContext::RestoreTarget()
     m_lpDevice->SetRenderTarget(rt);
 }
 
-// Call this to [re]initialize the DirectX environment with new parameters.
-// Examples: startup; toggle windowed/fullscreen mode; change fullscreen resolution;
-//           and so on.
-// Clean up all the DirectX collateral first (textures, vertex buffers,
-// D3DX allocations, etc...) and reallocate it afterwards!
-// Note: for windowed mode, `pParams->disp_mode` (w/h/r/f) is ignored.
-BOOL DXContext::StartOrRestartDevice(DXCONTEXT_PARAMS* pParams)
+// Creates the device and the swap chain, once: a new device comes with a new DXContext (or a device
+// reset, which DeviceResources handles), never by restarting this one, which would replace the
+// device behind the engine's textures.
+BOOL DXContext::StartDevice(DXCONTEXT_PARAMS* pParams)
 {
-    if (!m_ready)
-    {
-        // First time init: create a fresh new device.
-        return Internal_Init(pParams, TRUE);
-    }
-    else
-    {
-        // Re-init: preserve the DX11 object (m_lpD3D),
-        // but destroy and re-create the DX11 device (m_lpDevice).
-        m_ready = FALSE;
-
-        m_lpDevice.reset();
-
-        // But leave the D3D object!
-        return Internal_Init(pParams, FALSE);
-    }
+    assert(!m_ready);
+    return Internal_Init(pParams, TRUE);
 }
 
 void DXContext::OnWindowMoved()

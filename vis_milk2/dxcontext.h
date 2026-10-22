@@ -71,7 +71,7 @@ class DXContext final
     DXContext(HWND hWndWinamp, DXCONTEXT_PARAMS* pParams) noexcept(false);
     ~DXContext();
 
-    BOOL StartOrRestartDevice(DXCONTEXT_PARAMS* pParams); // also serves as Init() function
+    BOOL StartDevice(DXCONTEXT_PARAMS* pParams); // once, for a new context
     BOOL OnWindowSizeChanged(int width, int height);
     BOOL OnWindowSwap(HWND window, int width, int height);
     void OnWindowMoved();
