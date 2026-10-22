@@ -39,7 +39,12 @@ class milk2_cui_panel : public uie::window,
         out = "MilkDrop 2 Plus Visualization using DirectX 11.";
         return true;
     }
-    bool is_available(const uie::window_host_ptr&) const override { return true; }
+    // One panel (window_factory_single: the engine is one), which a host may take from another but
+    // not hold twice.
+    bool is_available(const uie::window_host_ptr& p_host) const override
+    {
+        return !m_host.is_valid() || m_host->get_host_guid() != p_host->get_host_guid();
+    }
 
     HWND create_or_transfer_window(HWND wnd_parent, const uie::window_host_ptr& p_host,
                                    const ui_helpers::window_position_t& p_position) override
@@ -144,7 +149,15 @@ class milk2_cui_panel : public uie::window,
             g_plugin.PluginQuit();
             s_milk2 = false;
             m_dxInitialized = false;
+#ifdef TIMER_TP
+            DeleteCriticalSection(&s_cs); // OnCreate makes it anew, as the Default UI element does
+#endif
         }
+
+        // This object outlives its window (one for the component): a window made later, after a
+        // change of layout, starts the engine again.
+        m_initPosted = false;
+        m_last_time = 0.0;
     }
 
     // Phase 2: Deferred DX init — posted from WM_SIZE so it runs after UI is fully initialized.
@@ -206,11 +219,15 @@ class milk2_cui_panel : public uie::window,
 
                 g_hWindow = m_hWnd;
 
-                // Pre-initialize the engine (same as DUI element's Initialize).
-                g_plugin.PluginPreInitialize(m_hWnd, core_api::get_my_instance());
-                g_plugin.PanelSettings(&s_config.settings);
-                if (!s_pwd.empty())
-                    swprintf_s(g_plugin.m_szComponentDirPath, L"%ls", s_pwd.c_str());
+                // Pre-initialize an engine not running yet, as the Default UI element's Initialize
+                // does; a running one only moves to this window (OnWindowSwap, below).
+                if (!s_milk2)
+                {
+                    g_plugin.PluginPreInitialize(m_hWnd, core_api::get_my_instance());
+                    g_plugin.PanelSettings(&s_config.settings);
+                    if (!s_pwd.empty())
+                        swprintf_s(g_plugin.m_szComponentDirPath, L"%ls", s_pwd.c_str());
+                }
                 g_plugin.SetWinampWindow(m_hWnd);
 
                 FB2K_console_print(core_api::get_my_file_name(), ": CUI init w=", w, " h=", h);
