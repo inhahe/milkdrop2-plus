@@ -1081,7 +1081,7 @@ LRESULT milk2_ui_element::OnConfigurationChange(UINT uMsg, WPARAM wParam, LPARAM
 #endif
         RECT rect{};
         GetClientRect(&rect);
-        g_plugin.OnWindowSizeChanged(rect.right - rect.left, rect.bottom - rect.top);
+        g_plugin.OnWindowSizeChanged(rect.right - rect.left, rect.bottom - rect.top, true); // remade with the new settings
 #ifdef TIMER_TP
         LeaveCriticalSection(&s_cs);
 #endif

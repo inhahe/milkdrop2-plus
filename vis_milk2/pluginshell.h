@@ -81,7 +81,7 @@ class CPluginShell : public DX::IDeviceNotify
     int PluginRender(float* pWaveL, float* pWaveR);
 #endif
     void PluginQuit();
-    void OnWindowSizeChanged(int width, int height);
+    void OnWindowSizeChanged(int width, int height, bool bForce = false);
     void OnWindowSwap(HWND window, int width, int height);
     void OnWindowMoved();
     void OnDisplayChange();

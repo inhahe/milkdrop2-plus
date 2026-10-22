@@ -207,18 +207,23 @@ void CPluginShell::CleanUpDX11(int final_cleanup)
     CleanUpMilkDropDX11(final_cleanup);
 }
 
-void CPluginShell::OnWindowSizeChanged(int width, int height)
+// Resizes the swap chain to `width` x `height` and recreates the engine's device resources for it,
+// releasing the old ones first (AllocateMilkDropDX11 expects that). With `bForce`, recreates them
+// even at an unchanged size: after a change of the settings they are made from (canvas size,
+// mesh size, fonts). Otherwise an unchanged size, as after moving the window, does nothing.
+void CPluginShell::OnWindowSizeChanged(int width, int height, bool bForce)
 {
-    // Update window properties
-    if (!m_lpDX->OnWindowSizeChanged(width, height))
-    {
+    if (!m_lpDX->m_ready)
         return;
-    }
+    const bool bResize = width != m_lpDX->m_client_width || height != m_lpDX->m_client_height;
+    if (!bResize && !bForce)
+        return;
+
+    CleanUpDX11(0);
+    if (bResize && !m_lpDX->OnWindowSizeChanged(width, height))
+        return; // not ready any more: the plugin stops
     if (!AllocateDX11())
-    {
         m_lpDX->m_ready = false; // flag to exit
-        return;
-    }
 }
 
 void CPluginShell::OnWindowSwap(HWND window, int width, int height)
