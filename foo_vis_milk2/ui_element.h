@@ -31,6 +31,10 @@ static std::wstring s_pwd;
 CRITICAL_SECTION s_cs;
 #endif
 
+// Hands the engine what is playing and the active playlist now (see milk2_playback_feed in
+// ui_element.cpp). Main thread.
+void PublishPlayback();
+
 #pragma region UI Element
 class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private play_callback_impl_base, private playlist_callback_impl_base, public now_playing_album_art_notify
 #ifdef TIMER_DX
@@ -71,7 +75,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         MSG_WM_ENTERSIZEMOVE(OnEnterSizeMove)
         MSG_WM_EXITSIZEMOVE(OnExitSizeMove)
         MSG_WM_NCCALCSIZE(OnNcCalcSize)
-        MSG_WM_COPYDATA(OnCopyData)
         MSG_WM_DISPLAYCHANGE(OnDisplayChange)
         MSG_WM_DPICHANGED(OnDpiChanged)
         MSG_WM_GETMINMAXINFO(OnGetMinMaxInfo);
@@ -125,7 +128,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     void OnEnterSizeMove();
     void OnExitSizeMove();
     LRESULT OnNcCalcSize(BOOL bCalcValidRects, LPARAM lParam);
-    BOOL OnCopyData(CWindow wnd, PCOPYDATASTRUCT pCopyDataStruct);
     void OnDisplayChange(UINT uBitsPerPixel, CSize sizeScreen);
     void OnDpiChanged(UINT nDpiX, UINT nDpiY, PRECT pRect);
     void OnGetMinMaxInfo(LPMINMAXINFO lpMMI);
@@ -291,10 +293,7 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
 
     // Playback control
     static_api_ptr_t<playback_control> m_playback_control;
-    titleformat_object::ptr m_script;
-    titleformat_object::ptr m_title;
     titleformat_object::ptr m_search;
-    pfc::string_formatter m_state;
 
     // Artwork and metadata
     std::unique_ptr<artFetchData> m_art_data;
@@ -303,12 +302,9 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
 
     // clang-format off
     // Playback callback methods
-    void on_playback_starting(play_control::t_track_command /*p_command*/, bool /*p_paused*/) { MILK2_CONSOLE_LOG("+ PlaybackStart") UpdateTrack(); }
-    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") UpdateTrack(p_track); }
-    void on_playback_stop(play_control::t_stop_reason /*p_reason*/) { MILK2_CONSOLE_LOG("+ PlaybackStop") UpdateTrack(); }
+    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") UpdateAlbumArt(p_track); }
 
-    void UpdateTrack();
-    void UpdateTrack(metadb_handle_ptr p_track);
+    void UpdateAlbumArt(metadb_handle_ptr p_track);
 
     // Playlist callback methods
     void on_items_added(size_t /*p_playlist*/, size_t /*p_start*/, metadb_handle_list_cref /*p_data*/, const bit_array& /*p_selection*/) { MILK2_CONSOLE_LOG("* PlaylistItemsAdded") UpdatePlaylist(); }
@@ -323,8 +319,10 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     void on_playback_order_changed(t_size /*p_new_index*/) { MILK2_CONSOLE_LOG("* PlaybackShuffle") UpdatePlaylist(); }
 
     void UpdatePlaylist();
-    void SetSelectionSingle(size_t idx);
-    void SetSelectionSingle(size_t idx, bool toggle, bool focus, bool single_only);
+  public:
+    static void SetSelectionSingle(size_t idx);
+    static void SetSelectionSingle(size_t idx, bool toggle, bool focus, bool single_only);
+  private:
 
     // Artwork callback methods
     void on_album_art(album_art_data::ptr aad) { (void)aad; /*MILK2_CONSOLE_LOG("% AlbumArt"); if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) == 0 && aad.is_valid()) { ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size()); }*/ }

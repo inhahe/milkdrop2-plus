@@ -206,11 +206,6 @@ typedef struct
 } ErrorMsg;
 typedef std::list<ErrorMsg> ErrorMsgList;
 
-typedef struct
-{
-    wchar_t error[1024];
-} ErrorCopy;
-
 class CShaderParams
 {
   public:

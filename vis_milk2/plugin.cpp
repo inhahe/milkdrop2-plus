@@ -3479,7 +3479,7 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 
     if (!redraw)
     {
-        GetWinampSongTitle(GetWinampWindow(), m_szSongTitle, ARRAYSIZE(m_szSongTitle));
+        wcsncpy_s(m_szSongTitle, GetNowPlaying().title.c_str(), _TRUNCATE);
         if (wcscmp(m_szSongTitle, m_szSongTitlePrev) != 0)
         {
             wcscpy_s(m_szSongTitlePrev, m_szSongTitle);
@@ -3903,7 +3903,7 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             wchar_t buf4[512] = {0};
             SelectFont(DECORATIVE_FONT);
-            GetWinampSongTitle(GetWinampWindow(), buf4, ARRAYSIZE(buf4)); // defined in "support.h/cpp"
+            wcsncpy_s(buf4, GetNowPlaying().title.c_str(), _TRUNCATE);
             if (buf4[0])
                 MilkDropTextOut_Shadow(buf4, m_songTitle, 0xFFFFFFFF, MTO_LOWER_LEFT);
         }
@@ -3916,39 +3916,34 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
             }
         }
 
-        // Render song time and length above that.
+        // Render song time and length above that, while a track plays: "1:23.45 / 4:56", or the
+        // one asked for. A stream has no length, so it shows the time alone.
+        wchar_t szStats[64] = {0}; // with an extra space at the end, so italicized fonts do not get clipped
         if (m_bShowSongTime || m_bShowSongLen)
         {
-            wchar_t buf2[64] = {0};
-            wchar_t buf3[64] = {0}; // add extra space to end, so italicized fonts do not get clipped
-            GetWinampSongPosAsText(GetWinampWindow(), buf); // defined in "support.h/cpp"
-            GetWinampSongLenAsText(GetWinampWindow(), buf2); // defined in "support.h/cpp"
-            if (buf2[0])
+            const NowPlaying np = GetNowPlaying();
+            if (np.playing)
             {
-                if (m_bShowSongTime && m_bShowSongLen)
-                {
-                    // Only show playing position and track length if it is playing (buffer is valid).
-                    if (buf[0])
-                        swprintf_s(buf3, L"%s / %s ", buf, buf2);
-                    else
-                        wcsncpy_s(buf3, buf2, ARRAYSIZE(buf2));
-                }
-                else if (m_bShowSongTime)
-                    wcsncpy_s(buf3, buf, ARRAYSIZE(buf2));
-                else
-                    wcsncpy_s(buf3, buf2, ARRAYSIZE(buf2));
-
-                SelectFont(DECORATIVE_FONT);
-                MilkDropTextOut_Shadow(buf3, m_songStats, 0xFFFFFFFF, MTO_LOWER_LEFT);
+                wchar_t szPos[32] = {0}, szLen[32] = {0};
+                if (m_bShowSongTime)
+                    FormatSongPosition(SongPositionNow(np), szPos, ARRAYSIZE(szPos));
+                if (m_bShowSongLen && np.length > 0.0)
+                    FormatSongLength(np.length, szLen, ARRAYSIZE(szLen));
+                if (szPos[0] && szLen[0])
+                    swprintf_s(szStats, L"%s / %s ", szPos, szLen);
+                else if (szPos[0] || szLen[0])
+                    swprintf_s(szStats, L"%s ", szPos[0] ? szPos : szLen);
             }
         }
-        else
+        if (szStats[0])
         {
-            if (m_songStats.IsVisible())
-            {
-                m_songStats.SetVisible(false);
-                m_text.UnregisterElement(&m_songStats);
-            }
+            SelectFont(DECORATIVE_FONT);
+            MilkDropTextOut_Shadow(szStats, m_songStats, 0xFFFFFFFF, MTO_LOWER_LEFT);
+        }
+        else if (m_songStats.IsVisible())
+        {
+            m_songStats.SetVisible(false);
+            m_text.UnregisterElement(&m_songStats);
         }
     }
 
@@ -4860,14 +4855,6 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         {
             SelectFont(SIMPLE_FONT);
             float t = GetTime();
-#ifdef _FOOBAR
-            // https://learn.microsoft.com/en-us/windows/win32/dataxchg/using-data-copy
-            ErrorCopy msg;
-            COPYDATASTRUCT cds{};
-            cds.dwData = 0x09; // PRINT_CONSOLE
-            cds.cbData = sizeof(msg);
-            cds.lpData = &msg;
-#endif
             for (ErrorMsgList::iterator it = m_errors.begin(); it != m_errors.end();)
             {
                 if (t >= it->birthTime && t < it->expireTime)
@@ -4879,14 +4866,12 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
                     DWORD cb = 0;
                     DWORD z = 0xFF000000 | (cr << 16) | (cg << 8) | cb;
                     MilkDropTextOut_Box(buf, it->text, 0xFFFFFFFF, MTO_UPPER_RIGHT, true, it->bold ? z : 0xFF000000);
-#ifdef _FOOBAR
                     if (!it->printed)
                     {
-                        _snwprintf_s(msg.error, 1024, L"%s ", it->msg.c_str());
-                        if (SendMessageTimeout(GetWinampWindow(), WM_COPYDATA, (WPARAM)(HWND)GetWinampWindow(), (LPARAM)(LPVOID)&cds, SMTO_NORMAL | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 100, NULL) != 0)
-                            it->printed = true;
+                        if (m_host.printToConsole)
+                            m_host.printToConsole(it->msg.c_str());
+                        it->printed = true;
                     }
-#endif
                     ++it;
                 }
                 else

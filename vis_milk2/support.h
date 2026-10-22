@@ -49,11 +49,8 @@ void MakeProjectionMatrix(XMMATRIX* pOut,
                           const float fov_vert // Vertical field of view angle, in radians
 );
 
-void GetWinampSongTitle(HWND hWndWinamp, wchar_t* szSongTitle, size_t nSize);
-void GetWinampSongPosAsText(HWND hWndWinamp, wchar_t* szSongPos);
-void GetWinampSongLenAsText(HWND hWndWinamp, wchar_t* szSongLen);
-float GetWinampSongPos(HWND hWndWinamp); // returns answer in seconds
-float GetWinampSongLen(HWND hWndWinamp); // returns answer in seconds
+void FormatSongPosition(double seconds, wchar_t* szOut, size_t nSize);
+void FormatSongLength(double seconds, wchar_t* szOut, size_t nSize);
 
 int GetDX11TexFormatBitsPerPixel(DXGI_FORMAT fmt);
 

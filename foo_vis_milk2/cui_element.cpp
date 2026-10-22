@@ -92,6 +92,7 @@ class milk2_cui_panel : public uie::window,
             {
                 milk2_ui_element::ResolvePwd();
                 s_config.init();
+                PublishPlayback(); // in the title format just read
 #ifdef TIMER_TP
                 InitializeCriticalSection(&s_cs);
 #endif

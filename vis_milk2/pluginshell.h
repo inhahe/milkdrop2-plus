@@ -32,6 +32,10 @@
 #define __NULLSOFT_DX_PLUGIN_SHELL_H__
 
 #include <array>
+#include <chrono>
+#include <functional>
+#include <mutex>
+#include <string>
 #include <vector>
 #include "defines.h"
 #include "shell_defines.h"
@@ -107,6 +111,40 @@ class CPluginShell : public DX::IDeviceNotify
     int GetFontHeight(eFontIndex idx) const; // returns the height of the font, in pixels; see "shell_defines.h" for the definition of the 'eFontIndex' enum.
     static inline FLOAT GetAlpha(DWORD color) { return static_cast<FLOAT>(((color & 0xFF000000) >> 24) / 255.0f); }
     CTextManager m_text;
+
+    // WHAT THE HOST PROGRAM SUPPLIES
+    // ------------------------------------------------------------
+    // The host's thread hands the engine what it shows of the music (any thread may call the
+    // setters), and the engine asks for more through `m_host`, without waiting for the answer:
+    // the render thread must never wait for the host's window, whose thread may itself be waiting
+    // for the render thread.
+    struct NowPlaying
+    {
+        std::wstring title;    // the playing track, in the user's title format; "Stopped." when none plays
+        double position = 0.0; // seconds into the track, at `stamp`
+        double length = 0.0;   // seconds; 0 when unknown (a stream)
+        bool playing = false;  // also while paused
+        bool paused = false;
+        std::chrono::steady_clock::time_point stamp;
+    };
+    // Set whenever it changes, and at least once a second while playing.
+    void SetNowPlaying(NowPlaying np);
+    NowPlaying GetNowPlaying() const;
+    static double SongPositionNow(const NowPlaying& np); // `np.position`, plus the time since `np.stamp` while playing
+    // The host's active playlist, for the playlist overlay: its number of items and the playing
+    // one's index (-1 if none), set whenever either changes or items are edited.
+    void SetPlaylistInfo(int count, int playing);
+    // Titles the host formatted for `m_host.requestPlaylistTitles(first, count, generation)`.
+    void SetPlaylistTitles(int first, unsigned generation, std::vector<std::wstring> titles);
+
+    // What the engine asks of the host, set before rendering starts. The render thread calls
+    // these, so each must hand the work to the host's thread rather than wait for it.
+    struct HostServices
+    {
+        std::function<void(const wchar_t* message)> printToConsole;
+        std::function<void(int first, int count, unsigned generation)> requestPlaylistTitles; // answered with SetPlaylistTitles()
+        std::function<void(int index)> selectPlaylistItem; // in the host's active playlist
+    } m_host;
 
   protected:
     // GET METHODS THAT ONLY WORK ONCE DIRECTX IS READY
@@ -222,6 +260,23 @@ class CPluginShell : public DX::IDeviceNotify
     //int m_playlist_btm_idx;
     float m_playlist_width_pixels; // considered invalid whenever 'm_playlist_top_idx' is -1
     wchar_t m_playlist[MAX_SONGS_PER_PAGE][256]; // considered invalid whenever 'm_playlist_top_idx' is -1
+
+    // What the host supplied (see SetNowPlaying), under `m_hostDataLock`.
+    mutable std::mutex m_hostDataLock;
+    NowPlaying m_nowPlaying;
+    int m_playlistCount = 0;
+    int m_playlistPlaying = -1;
+    unsigned m_playlistGeneration = 0; // counts SetPlaylistInfo() calls, so titles fetched before one are not used after
+    int m_playlistTitlesFirst = -1;    // the titles the host delivered last: from which item, for which generation
+    unsigned m_playlistTitlesGeneration = 0;
+    std::vector<std::wstring> m_playlistTitles;
+    // The playlist overlay's own bookkeeping (render thread only): the page and generation whose
+    // titles `m_playlist` holds and were last asked for, and the selection last told to the host.
+    int m_playlistShownFirst = -1;
+    unsigned m_playlistShownGeneration = 0;
+    int m_playlistRequestedFirst = -1;
+    unsigned m_playlistRequestedGeneration = 0;
+    LRESULT m_playlistPosSent = -1;
     //int m_exiting;
     int m_upper_left_corner_y;
     int m_lower_left_corner_y;

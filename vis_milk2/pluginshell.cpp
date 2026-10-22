@@ -1400,15 +1400,59 @@ void CPluginShell::RenderBuiltInTextMsgs()
     }
 }
 
+void CPluginShell::SetNowPlaying(NowPlaying np)
+{
+    np.stamp = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(m_hostDataLock);
+    m_nowPlaying = std::move(np);
+}
+
+CPluginShell::NowPlaying CPluginShell::GetNowPlaying() const
+{
+    std::lock_guard<std::mutex> lock(m_hostDataLock);
+    return m_nowPlaying;
+}
+
+double CPluginShell::SongPositionNow(const NowPlaying& np)
+{
+    double position = np.position;
+    if (np.playing && !np.paused)
+        position += std::chrono::duration<double>(std::chrono::steady_clock::now() - np.stamp).count();
+    if (np.length > 0.0)
+        position = std::min(position, np.length);
+    return std::max(position, 0.0);
+}
+
+void CPluginShell::SetPlaylistInfo(int count, int playing)
+{
+    std::lock_guard<std::mutex> lock(m_hostDataLock);
+    m_playlistCount = count;
+    m_playlistPlaying = playing;
+    ++m_playlistGeneration;
+}
+
+void CPluginShell::SetPlaylistTitles(int first, unsigned generation, std::vector<std::wstring> titles)
+{
+    std::lock_guard<std::mutex> lock(m_hostDataLock);
+    m_playlistTitlesFirst = first;
+    m_playlistTitlesGeneration = generation;
+    m_playlistTitles = std::move(titles);
+}
+
 // Draws playlist.
 void CPluginShell::RenderPlaylist()
 {
     if (m_show_playlist)
     {
         D2D1_RECT_F r;
-        DWORD_PTR pSongs = NULL, p_now_playing = NULL;
-        SendMessageTimeout(m_hWndWinamp, WM_USER, 0, IPC_GETLISTLENGTH, SMTO_NORMAL | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 100, &pSongs); int nSongs = static_cast<int>(pSongs);
-        SendMessageTimeout(m_hWndWinamp, WM_USER, 0, IPC_GETLISTPOS, SMTO_NORMAL | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 100, &p_now_playing); int now_playing = static_cast<int>(p_now_playing);
+        int nSongs, now_playing;
+        unsigned generation;
+        {
+            std::lock_guard<std::mutex> lock(m_hostDataLock);
+            nSongs = m_playlistCount;
+            now_playing = m_playlistPlaying;
+            generation = m_playlistGeneration;
+        }
         DWORD dwFlags = DT_SINGLELINE; //| DT_NOPREFIX | DT_WORD_ELLIPSIS; // Note: `dwFlags` is used for both DDRAW and DX9
         int nFontHeight = GetFontHeight(PLAYLIST_FONT);
         if (nSongs <= 0)
@@ -1433,38 +1477,65 @@ void CPluginShell::RenderPlaylist()
             if (m_playlist_pos >= nSongs)
                 m_playlist_pos = nSongs - 1;
 
-#ifdef _FOOBAR
-            SendMessageTimeout(m_hWndWinamp, WM_USER, m_playlist_pos, IPC_SETPLAYLISTPOS, SMTO_NORMAL | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 100, NULL);
-#endif
+            // Have the host select the item, when it moved here (Page Up/Down, or a shorter playlist).
+            if (m_playlist_pos != m_playlistPosSent)
+            {
+                m_playlistPosSent = m_playlist_pos;
+                if (m_host.selectPlaylistItem)
+                    m_host.selectPlaylistItem(static_cast<int>(m_playlist_pos));
+            }
 
             int cur_page = static_cast<int>(m_playlist_pos / disp_lines);
             //int cur_line = (m_playlist_pos + disp_lines - 1) % disp_lines;
             int new_top_idx = cur_page * disp_lines;
             int new_btm_idx = new_top_idx + disp_lines;
-            wchar_t buf[1024] = {0};
+            const bool bPageChanged = m_playlist_top_idx != new_top_idx || m_playlist_btm_idx != new_btm_idx;
+            bool bTitlesArrived = false;
 
-            // Ask Winamp for the song names, but DO IT BEFORE getting the DC,
-            // otherwise might crash (~DDRAW port).
-            if (m_playlist_top_idx != new_top_idx || m_playlist_btm_idx != new_btm_idx)
+            // The page's titles come from the host, asked for when the page or the playlist
+            // changes; a new page shows just the numbers until they come (a frame or two).
+            if (m_playlistShownFirst != new_top_idx || m_playlistShownGeneration != generation)
             {
-                for (int i = 0; i < disp_lines; i++)
+                std::vector<std::wstring> titles;
                 {
-                    int j = new_top_idx + i;
-                    if (j < nSongs)
+                    std::lock_guard<std::mutex> lock(m_hostDataLock);
+                    if (m_playlistTitlesFirst == new_top_idx && m_playlistTitlesGeneration == generation)
                     {
-                        // Clip maximum length of song name to 240 characters, to prevent overflows.
-                        DWORD_PTR szTitle = NULL;
-                        if (SendMessageTimeout(m_hWndWinamp, WM_WA_IPC, j, IPC_GETPLAYLISTTITLEW, SMTO_NORMAL | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT, 100, &szTitle) != 0)
-                        {
-                            wcsncpy_s(buf, reinterpret_cast<wchar_t*>(szTitle), 240);
-                            swprintf_s(m_playlist[i], L"%d. %s ", j + 1, buf); // leave an extra space at end, so italicized fonts do not get clipped
-                        }
+                        titles = m_playlistTitles;
+                        bTitlesArrived = true;
                     }
+                }
+                if (bTitlesArrived)
+                {
+                    for (int i = 0; i < disp_lines; i++)
+                        if (new_top_idx + i < nSongs)
+                        {
+                            // Clip maximum length of song name to 240 characters, to prevent overflows; leave an
+                            // extra space at the end, so italicized fonts do not get clipped.
+                            const std::wstring title = i < static_cast<int>(titles.size()) ? titles[i].substr(0, 240) : std::wstring();
+                            swprintf_s(m_playlist[i], L"%d. %s ", new_top_idx + i + 1, title.c_str());
+                        }
+                    m_playlistShownFirst = new_top_idx;
+                    m_playlistShownGeneration = generation;
+                }
+                else
+                {
+                    if (m_playlistRequestedFirst != new_top_idx || m_playlistRequestedGeneration != generation)
+                    {
+                        m_playlistRequestedFirst = new_top_idx;
+                        m_playlistRequestedGeneration = generation;
+                        if (m_host.requestPlaylistTitles)
+                            m_host.requestPlaylistTitles(new_top_idx, disp_lines, generation);
+                    }
+                    if (bPageChanged && m_playlistShownFirst != new_top_idx)
+                        for (int i = 0; i < disp_lines; i++)
+                            if (new_top_idx + i < nSongs)
+                                swprintf_s(m_playlist[i], L"%d. ", new_top_idx + i + 1);
                 }
             }
 
             // Update playlist cache, if necessary.
-            if (m_playlist_top_idx != new_top_idx || m_playlist_btm_idx != new_btm_idx)
+            if (bPageChanged || bTitlesArrived)
             {
                 m_playlist_top_idx = new_top_idx;
                 m_playlist_btm_idx = new_btm_idx;

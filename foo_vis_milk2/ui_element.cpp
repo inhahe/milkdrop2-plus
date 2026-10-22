@@ -38,7 +38,7 @@ namespace
 milk2_ui_element::milk2_ui_element(ui_element_config::ptr config, ui_element_instance_callback_ptr p_callback) :
     m_callback(p_callback),
     m_bMsgHandled(TRUE),
-    play_callback_impl_base(flag_on_playback_starting | flag_on_playback_new_track | flag_on_playback_stop),
+    play_callback_impl_base(flag_on_playback_new_track),
     playlist_callback_impl_base(flag_on_items_added | flag_on_items_reordered | flag_on_items_removed | flag_on_items_selection_change |
                                 flag_on_item_focus_change | flag_on_items_modified | flag_on_playlist_activate | flag_on_playlists_reorder |
                                 flag_on_playlists_removed | flag_on_playback_order_changed)
@@ -144,6 +144,7 @@ int milk2_ui_element::OnCreate(LPCREATESTRUCT cs)
     {
         ResolvePwd();
         s_config.init();
+        PublishPlayback(); // in the title format just read
 #ifdef TIMER_TP
         InitializeCriticalSection(&s_cs);
 #endif
@@ -457,28 +458,6 @@ LRESULT milk2_ui_element::OnNcCalcSize(BOOL bCalcValidRects, LPARAM lParam)
         return 0;
     }
     return 0;
-}
-
-BOOL milk2_ui_element::OnCopyData(CWindow wnd, PCOPYDATASTRUCT pcds)
-{
-    UNREFERENCED_PARAMETER(wnd);
-    //typedef struct
-    //{
-    //    wchar_t error[1024];
-    //} ErrorCopy;
-
-    MILK2_CONSOLE_LOG("OnCopyData ", GetWnd())
-    switch (pcds->dwData)
-    {
-        case 0x09: // PRINT STDOUT
-            {
-                LPCTSTR lpszString = (LPCTSTR)((ErrorCopy*)(pcds->lpData))->error;
-                FB2K_console_print(core_api::get_my_file_name(), ": ", lpszString);
-                break;
-            }
-    }
-
-    return TRUE;
 }
 
 void milk2_ui_element::OnDisplayChange(UINT uBitsPerPixel, CSize sizeScreen)
@@ -957,7 +936,7 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
     if (uMsg != WM_MILK2)
         return -1;
 
-    auto api = playlist_manager::get();
+    // The engine no longer asks the window what is playing (see milk2_playback_feed).
     if (LOBYTE(wParam) == 0x21 && HIBYTE(wParam) == 0x09)
     {
         wchar_t buf[2048], title[64];
@@ -976,7 +955,6 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
     {
         MILK2_CONSOLE_LOG("IPC_GETVERSIONSTRING")
         return reinterpret_cast<LRESULT>(core_version_info_v2::g_get_version_string()); // "foobar2000 v2.1.2"
-        return 0;
     }
     else if (lParam == IPC_ISPLAYING)
     {
@@ -987,77 +965,6 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
             return 3;
         else
             return 0;
-    }
-    else if (lParam == IPC_SETPLAYLISTPOS)
-    {
-        //MILK2_CONSOLE_LOG("IPC_SETPLAYLISTPOS")
-        SetSelectionSingle(static_cast<size_t>(g_plugin.m_playlist_pos));
-        return static_cast<LRESULT>(wParam);
-    }
-    else if (lParam == IPC_GETLISTLENGTH)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GETLISTLENGTH")
-        const size_t count = api->activeplaylist_get_item_count();
-        return static_cast<LRESULT>(count);
-    }
-    else if (lParam == IPC_GETLISTPOS)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GETLISTPOS")
-        if (m_playback_control->is_playing())
-        {
-            size_t playing_index = NULL, playing_playlist = NULL;
-            bool valid = api->get_playing_item_location(&playing_playlist, &playing_index);
-            if (valid && playing_playlist == api->get_active_playlist())
-                return static_cast<LRESULT>(playing_index);
-        }
-        return -1;
-    }
-    else if (lParam == IPC_GETPLAYLISTTITLEW || lParam == IPC_GET_PLAYING_TITLE)
-    {
-        //MILK2_CONSOLE_LOG(IPC_GETPLAYLISTTITLEW ? "IPC_GETPLAYLISTTITLEW" : "IPC_GET_PLAYING_TITLE")
-        titleformat_object::ptr title_format;
-        if (lParam == IPC_GETPLAYLISTTITLEW && m_script.is_empty())
-        {
-            pfc::string8 pattern = pfc::utf8FromWide(s_config.settings.m_szTitleFormat);
-            static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(m_script, pattern);
-        }
-        if (lParam == IPC_GET_PLAYING_TITLE && m_title.is_empty())
-        {
-            pfc::string8 pattern = default_szTitleFormat;
-            static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(m_title, pattern);
-        }
-        pfc::string_formatter state;
-        metadb_handle_list list;
-        api->activeplaylist_get_all_items(list);
-        if (list.size() == 0)
-            state = ""; // no playlist
-        else if (wParam == -1 || !(list.get_item(static_cast<size_t>(wParam)))->format_title(NULL, state, IPC_GETPLAYLISTTITLEW ? m_script : m_title, NULL))
-            if (m_playback_control->is_playing())
-                state = "Opening...";
-            else
-                state = "Stopped.";
-        m_szBuffer = pfc::wideFromUTF8(state);
-        return reinterpret_cast<LRESULT>(m_szBuffer.c_str());
-    }
-    else if (lParam == IPC_GETOUTPUTTIME)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GETOUTPUTTIME")
-        if (wParam == 0)
-        {
-            if (m_playback_control->is_playing())
-                return static_cast<LRESULT>(m_playback_control->playback_get_position() * 1000);
-        }
-        else if (wParam == 1)
-        {
-            if (m_playback_control->is_playing())
-                return static_cast<LRESULT>(m_playback_control->playback_get_length());
-        }
-        else if (wParam == 2)
-        {
-            if (m_playback_control->is_playing())
-                return static_cast<LRESULT>(m_playback_control->playback_get_length() * 1000);
-        }
-        return -1;
     }
     else if (lParam == IPC_GETPLUGINDIRECTORYW)
     {
@@ -1156,7 +1063,7 @@ LRESULT milk2_ui_element::OnConfigurationChange(UINT uMsg, WPARAM wParam, LPARAM
         case 0: // Preferences Dialog
             {
                 s_config.reset();
-                m_script.reset();
+                PublishPlayback(); // the title format may have changed
                 m_refresh_interval = static_cast<DWORD>(lround(1000.0f / s_config.settings.m_max_fps_fs));
                 g_plugin.PanelSettings(&s_config.settings);
                 break;
@@ -1607,33 +1514,10 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-void milk2_ui_element::UpdateTrack()
+// Shows the new track's album art, if that option is on. (Its title and the like reach the engine
+// through milk2_playback_feed.)
+void milk2_ui_element::UpdateAlbumArt(metadb_handle_ptr p_track)
 {
-    if (m_script.is_empty())
-    {
-        pfc::string8 pattern = pfc::utf8FromWide(s_config.settings.m_szTitleFormat);
-        static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(m_script, pattern);
-    }
-
-    if (m_playback_control->playback_format_title(NULL, m_state, m_script, NULL, playback_control::display_level_all))
-    {
-        // Succeeded already.
-    }
-    else if (m_playback_control->is_playing())
-    {
-        // Starting playback but not done opening the first track yet.
-        m_state = "Opening...";
-    }
-    else
-    {
-        m_state = "Stopped.";
-    }
-}
-
-void milk2_ui_element::UpdateTrack(metadb_handle_ptr p_track)
-{
-    UpdateTrack();
-
     if (!p_track.is_valid())
         return;
 
@@ -1702,7 +1586,6 @@ void milk2_ui_element::UpdatePlaylist()
             g_plugin.m_playlist_pos = i;
         }
     }
-    g_plugin.m_playlist_top_idx = -1;
 }
 
 void milk2_ui_element::LaunchSongTitle()
@@ -1941,6 +1824,123 @@ void milk2_ui_element::LoadAlbumArt(const metadb_handle_ptr& track, abort_callba
 static service_factory_single_t<ui_element_milk2> g_ui_element_milk2_factory;
 #pragma endregion
 
+#pragma region Playback feed
+// The title format the engine shows titles in (the song title, the playlist overlay): the
+// setting, or the default until the settings are read. Recompiled when it changes. Main thread.
+static titleformat_object::ptr PlaybackTitleScript()
+{
+    static titleformat_object::ptr script;
+    static pfc::string8 compiledFrom;
+    pfc::string8 pattern = s_config.settings.m_szTitleFormat[0] ? pfc::string8(pfc::utf8FromWide(s_config.settings.m_szTitleFormat)) : pfc::string8(default_szTitleFormat);
+    if (script.is_empty() || pattern != compiledFrom)
+    {
+        static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(script, pattern);
+        compiledFrom = pattern;
+    }
+    return script;
+}
+
+static void PublishNowPlaying()
+{
+    auto pc = playback_control::get();
+    CPluginShell::NowPlaying np;
+    pfc::string8 title;
+    if (pc->playback_format_title(nullptr, title, PlaybackTitleScript(), nullptr, playback_control::display_level_all))
+        np.title = pfc::wideFromUTF8(title);
+    else
+        np.title = pc->is_playing() ? L"Opening..." : L"Stopped."; // opening the first track, or stopped
+    np.playing = pc->is_playing();
+    np.paused = pc->is_paused();
+    np.position = pc->playback_get_position();
+    np.length = std::max(pc->playback_get_length(), 0.0);
+    g_plugin.SetNowPlaying(std::move(np));
+}
+
+static void PublishPlaylist()
+{
+    auto pm = playlist_manager::get();
+    const t_size active = pm->get_active_playlist();
+    const int count = active == pfc::infinite_size ? 0 : static_cast<int>(pm->activeplaylist_get_item_count());
+    t_size playlist = 0, item = 0;
+    int playing = -1;
+    if (active != pfc::infinite_size && pm->get_playing_item_location(&playlist, &item) && playlist == active)
+        playing = static_cast<int>(item);
+    g_plugin.SetPlaylistInfo(count, playing);
+}
+
+void PublishPlayback()
+{
+    PublishNowPlaying();
+    PublishPlaylist();
+}
+
+// Titles of the active playlist's items from `first`, at most `count` of them. Main thread.
+static std::vector<std::wstring> FormatPlaylistTitles(int first, int count)
+{
+    std::vector<std::wstring> titles;
+    auto pm = playlist_manager::get();
+    const t_size total = pm->activeplaylist_get_item_count();
+    const titleformat_object::ptr script = PlaybackTitleScript();
+    for (t_size i = static_cast<t_size>(std::max(first, 0)); i < total && i < static_cast<t_size>(first) + static_cast<t_size>(count); ++i)
+    {
+        pfc::string8 title;
+        pm->activeplaylist_item_format_title(i, nullptr, title, script, nullptr, playback_control::display_level_all);
+        titles.emplace_back(pfc::wideFromUTF8(title));
+    }
+    return titles;
+}
+
+// Hands the engine (g_plugin) what it shows of the music, from foobar2000's own callbacks on the
+// main thread: the playing track's title, position and length, and the active playlist for the
+// playlist overlay; and answers the engine's requests (m_host) on the main thread too. The
+// render thread so never sends the window a message and waits: the window's thread may itself
+// be waiting for the render thread. One for the whole component, whichever UI hosts the
+// visualization (the Columns UI panel answered no such messages at all).
+class milk2_playback_feed : private play_callback_impl_base, private playlist_callback_single_impl_base
+{
+  public:
+    milk2_playback_feed() :
+        play_callback_impl_base(flag_on_playback_starting | flag_on_playback_new_track | flag_on_playback_stop | flag_on_playback_seek | flag_on_playback_pause |
+                                flag_on_playback_edited | flag_on_playback_dynamic_info_track | flag_on_playback_time),
+        playlist_callback_single_impl_base(flag_on_items_added | flag_on_items_reordered | flag_on_items_removed | flag_on_items_modified | flag_on_items_replaced |
+                                           flag_on_playlist_switch)
+    {
+        auto& host = g_plugin.m_host;
+        host.printToConsole = [](const wchar_t* message) {
+            FB2K_console_print(core_api::get_my_file_name(), ": ", pfc::utf8FromWide(message).c_str()); // thread-safe
+        };
+        host.requestPlaylistTitles = [](int first, int count, unsigned generation) {
+            fb2k::inMainThread([first, count, generation] { g_plugin.SetPlaylistTitles(first, generation, FormatPlaylistTitles(first, count)); });
+        };
+        host.selectPlaylistItem = [](int index) {
+            fb2k::inMainThread([index] {
+                if (index >= 0 && static_cast<t_size>(index) < playlist_manager::get()->activeplaylist_get_item_count())
+                    milk2_ui_element::SetSelectionSingle(static_cast<size_t>(index));
+            });
+        };
+        PublishPlayback();
+    }
+
+  private:
+    void on_playback_starting(play_control::t_track_command, bool) override { PublishNowPlaying(); }
+    void on_playback_new_track(metadb_handle_ptr) override { PublishPlayback(); }
+    void on_playback_stop(play_control::t_stop_reason) override { PublishPlayback(); }
+    void on_playback_seek(double) override { PublishNowPlaying(); }
+    void on_playback_pause(bool) override { PublishNowPlaying(); }
+    void on_playback_edited(metadb_handle_ptr) override { PublishNowPlaying(); }
+    void on_playback_dynamic_info_track(const file_info&) override { PublishNowPlaying(); }
+    void on_playback_time(double) override { PublishNowPlaying(); } // each second: keeps the position from drifting
+
+    void on_items_added(t_size, metadb_handle_list_cref, const bit_array&) override { PublishPlaylist(); }
+    void on_items_reordered(const t_size*, t_size) override { PublishPlaylist(); }
+    void on_items_removed(const bit_array&, t_size, t_size) override { PublishPlaylist(); }
+    void on_items_modified(const bit_array&) override { PublishPlaylist(); }
+    void on_items_replaced(const bit_array&, const pfc::list_base_const_t<playlist_callback::t_on_items_replaced_entry>&) override { PublishPlaylist(); }
+    void on_playlist_switch() override { PublishPlaylist(); }
+};
+static std::unique_ptr<milk2_playback_feed> s_playbackFeed;
+#pragma endregion
+
 #pragma region Initialize/Quit
 class milk2_initquit : public initquit
 {
@@ -1950,6 +1950,7 @@ class milk2_initquit : public initquit
         MILK2_CONSOLE_LOG("on_init")
         if (core_api::is_quiet_mode_enabled())
             return;
+        s_playbackFeed = std::make_unique<milk2_playback_feed>();
         //create_first_run();
     }
 
@@ -1957,6 +1958,7 @@ class milk2_initquit : public initquit
     {
         MILK2_CONSOLE_LOG("on_quit")
         //NSEEL_quit();
+        s_playbackFeed.reset();
         if (core_api::is_quiet_mode_enabled())
             return;
         //delete_first_run();
