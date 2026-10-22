@@ -806,7 +806,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
         case IDM_SHOW_ALBUM:
             s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
             s_config.save_menu_toggles();
-            ShowNowPlayingAlbumArt(false);
+            ShowNowPlayingAlbumArt();
             break;
         case IDM_QUIT:
             break;
@@ -975,7 +975,7 @@ bool milk2_ui_element::Initialize(HWND window, int width, int height)
 
         s_milk2 = true;
         if (s_config.settings.m_bShowAlbum)
-            ShowNowPlayingAlbumArt(false);
+            ShowNowPlayingAlbumArt();
     }
     else
     {
@@ -1404,15 +1404,20 @@ static std::vector<uint8_t> AlbumArtFile(const metadb_handle_ptr& track, const p
 }
 
 // foobar2000's album art settings without image files: the album art search with no external
-// pattern (such as folder.jpg beside the track, or a central covers folder), but with embedded
-// pictures, which it alone reads for a stream or an archive, and with fallbacks (an online lookup
-// component). For when the user turns image files off. Any thread.
+// pattern (such as folder.jpg beside the track, or a central covers folder), but with fallbacks (an
+// online lookup component), and with embedded pictures unless `embedded` is false, for a file
+// already looked in (the search alone reads them for a stream, an archive or a cue sheet). For
+// when the user turns image files off. Any thread.
 class album_art_config_without_files : public album_art_manager_config
 {
   public:
+    explicit album_art_config_without_files(bool embedded) : m_embedded(embedded) {}
     bool get_external_pattern(pfc::string_base&, const GUID&) override { return false; }
-    bool use_embedded_pictures() override { return true; }
+    bool use_embedded_pictures() override { return m_embedded; }
     bool use_fallbacks() override { return true; }
+
+  private:
+    const bool m_embedded;
 };
 
 // The front cover of `track` as an encoded image: the one embedded in its file, which is the
@@ -1428,15 +1433,23 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool f
         auto data = static_cast<const uint8_t*>(aad->data());
         return std::vector<uint8_t>(data, data + aad->size());
     };
+    bool lookedIn = false; // whether the file was opened and found to have no front cover embedded
     if (!filesystem::g_is_remote_or_unrecognized(track->get_path())) // not a stream to open again here
     {
         try
         {
             auto embedded = album_art_extractor::g_open(nullptr, track->get_path(), abort);
-            if (auto image = bytes(embedded->query(album_art_ids::cover_front, abort)); !image.empty())
-                return image;
+            try
+            {
+                if (auto image = bytes(embedded->query(album_art_ids::cover_front, abort)); !image.empty())
+                    return image;
+            }
+            catch (const exception_album_art_not_found&)
+            {
+            }
+            lookedIn = true;
         }
-        catch (const std::exception&) // none embedded, a format that embeds none, unreadable, or aborted
+        catch (const std::exception&) // a format with no extractor (a cue sheet), unreadable, or aborted
         {
         }
     }
@@ -1444,7 +1457,7 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool f
     {
         album_art_manager_config::ptr config; // none: foobar2000's own settings
         if (!files)
-            config = fb2k::service_new<album_art_config_without_files>();
+            config = fb2k::service_new<album_art_config_without_files>(!lookedIn);
         auto extractor = album_art_manager_v3::get()->open_v3(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), config, abort);
         return bytes(extractor->query(album_art_ids::cover_front, abort));
     }
@@ -1454,37 +1467,48 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool f
     return {};
 }
 
-// The track that started last (milk2_playback_feed), whatever the album art settings: the one
-// whose art a change of the settings while playback is stopped reads again, as a stop leaves its
-// art up. Released when foobar2000 quits (milk2_initquit), before the core it belongs to goes.
-// Main thread.
+// The track whose art the running engine shows, or is reading, with the album art option on: the
+// one whose art a change of the settings while playback is stopped reads again, as a stop leaves
+// the art up. None while the option is off, and none from an engine before the running one, which
+// starts with no art up (ShowNowPlayingAlbumArt). Released when foobar2000 quits (milk2_initquit),
+// before the core it belongs to goes. Main thread.
 static metadb_handle_ptr s_albumArtTrack;
+// Whether the next art handed to the engine is a new track's, which it launches afresh, fading in,
+// even when the image is the one already up; other art that is the same stays, its fades going on.
+// It stays set until art is handed over, so a read for a change of the settings that replaces the
+// new track's before it is done does not cost the new track its fade in. Main thread.
+static bool s_albumArtNewTrack = false;
 
 // Shows `track`'s album art in place of the last, if that option is on: the file the artwork
 // format names, if foobar2000 can read it, or else the track's front cover. With the option off,
-// removes it. With the option on and no track, leaves the art, shown or being read. With
-// `bKeepIfSame`, art found to be the one on screen is left there, its fades going on (a change of
-// the settings that did not change it). Other sprites stay. Nothing with no engine running. The
-// art is read on a worker thread, as a file on a slow disk or a network share must not hold up
-// foobar2000's windows, nor the render thread, which decodes it from memory. Main thread.
-static void ShowAlbumArt(const metadb_handle_ptr& track, bool bKeepIfSame = false)
+// removes it. With the option on and no track, leaves the art, shown or being read. `bNewTrack`
+// says that `track` has just started (s_albumArtNewTrack). Other sprites stay. Nothing with no
+// engine running. The art is read on a worker thread, as a file on a slow disk or a network share
+// must not hold up foobar2000's windows, nor the render thread, which decodes it from memory. Main
+// thread.
+static void ShowAlbumArt(const metadb_handle_ptr& track, bool bNewTrack = false)
 {
     if (s_config.settings.m_bShowAlbum && !track.is_valid())
         return;
     const unsigned read = CancelAlbumArtReads(); // even with no engine: a later one shows this track's
     if (!s_milk2)
         return;
+    s_albumArtNewTrack = s_albumArtNewTrack || bNewTrack;
     // Hands the engine the art read, on the render thread, which draws the sprites. Main thread.
-    const auto show = [read, bKeepIfSame](std::vector<uint8_t> image) {
+    const auto show = [read](std::vector<uint8_t> image) {
         if (read != s_albumArtReads || !s_milk2) // another read replaced it, or the engine stopped
             return;
+        const bool bKeepIfSame = !s_albumArtNewTrack;
+        s_albumArtNewTrack = false;
         g_plugin.RunOnRenderThread([image = std::move(image), bKeepIfSame]() mutable { g_plugin.SetAlbumArt(std::move(image), bKeepIfSame); });
     };
     if (!s_config.settings.m_bShowAlbum)
     {
+        s_albumArtTrack.release();
         show({});
         return;
     }
+    s_albumArtTrack = track;
     s_albumArtAbort = std::make_shared<abort_callback_impl>();
     fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), files = s_config.settings.m_bAlbumArtFiles,
                      abort = s_albumArtAbort, show] {
@@ -1495,12 +1519,12 @@ static void ShowAlbumArt(const metadb_handle_ptr& track, bool bKeepIfSame = fals
     });
 }
 
-void ShowNowPlayingAlbumArt(bool bKeepIfSame)
+void ShowNowPlayingAlbumArt()
 {
+    s_albumArtTrack.release(); // a new engine, or the option just switched on or off, has no art up
     metadb_handle_ptr track;
-    if (!playback_control::get()->get_now_playing(track))
-        track = s_albumArtTrack; // stopped: the last track's, whose art a stop leaves up
-    ShowAlbumArt(track, bKeepIfSame);
+    playback_control::get()->get_now_playing(track);
+    ShowAlbumArt(track);
 }
 
 void milk2_ui_element::UpdatePlaylist()
@@ -1793,9 +1817,8 @@ class milk2_playback_feed : private play_callback_impl_base, private playlist_ca
     {
         ++s_nowPlayingTrack;
         PublishPlayback();
-        s_albumArtTrack = track;
         if (s_config.settings.m_bShowAlbum)
-            ShowAlbumArt(track);
+            ShowAlbumArt(track, true);
     }
     void on_playback_stop(play_control::t_stop_reason) override { PublishPlayback(); }
     void on_playback_seek(double) override { PublishNowPlaying(); }
@@ -3266,9 +3289,11 @@ void ApplyMilkDropPreferences(bool bRemakeResources)
     const bool albumArtFiles = s_config.settings.m_bAlbumArtFiles;
     s_config.reset();
     PublishPlayback(); // the title format may have changed
-    if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat ||
-        s_config.settings.m_bAlbumArtFiles != albumArtFiles) // what to show; how is in the settings the sprites take each frame
-        ShowNowPlayingAlbumArt(true); // the cover on screen may not change: then its fades go on
+    // What to show; how is in the settings the sprites take each frame.
+    if (s_config.settings.m_bShowAlbum != showAlbum)
+        ShowNowPlayingAlbumArt(); // as the context menu's switch does
+    else if (s_config.settings.m_bShowAlbum && (artworkFormat != s_config.settings.m_szArtworkFormat || s_config.settings.m_bAlbumArtFiles != albumArtFiles))
+        ShowAlbumArt(s_albumArtTrack); // the art up, playing or stopped, found again; if the same, it stays
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif

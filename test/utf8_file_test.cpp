@@ -141,6 +141,21 @@ TEST_CLASS(Utf8FileTest)
         Assert::IsFalse(std::filesystem::exists(dir / L"i.ini.tmp"));
     }
 
+    TEST_METHOD(AReadOnlyFileIsNotWaitedFor)
+    {
+        // Denied for good: waiting a second for it at each save would only stall foobar2000.
+        Assert::IsTrue(WriteUtf8TextFile(PathOf(L"j.ini"), L"old\n"));
+        Assert::IsTrue(SetFileAttributesW(PathOf(L"j.ini").c_str(), FILE_ATTRIBUTE_READONLY) != FALSE);
+        const ULONGLONG start = GetTickCount64();
+        const bool written = WriteUtf8TextFile(PathOf(L"j.ini"), L"new\n");
+        const ULONGLONG elapsed = GetTickCount64() - start;
+        SetFileAttributesW(PathOf(L"j.ini").c_str(), FILE_ATTRIBUTE_NORMAL); // so that Cleanup can delete it
+        Assert::IsFalse(written);
+        Assert::IsTrue(elapsed < 300, L"gave up only after waiting");
+        Assert::AreEqual(std::string("old\r\n"), ReadBytes(L"j.ini"));
+        Assert::IsFalse(std::filesystem::exists(dir / L"j.ini.tmp"));
+    }
+
     TEST_METHOD(KeyValueLines)
     {
         WriteBytes(L"g.ini", "[Section]\r\n; comment\r\nno equals sign\r\nkey=value  \t\r\npath=C:\\a=b\\\r\nempty=\r\n");

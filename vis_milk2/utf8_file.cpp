@@ -48,6 +48,9 @@ bool MoveReplacing(const std::wstring& from, const std::wstring& to)
         const DWORD error = GetLastError();
         if ((error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION) || delay > 512)
             return false;
+        const DWORD attributes = GetFileAttributesW(to.c_str());
+        if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY))
+            return false; // denied for good, not for a moment
         Sleep(delay); // 1 + 2 + ... + 512 ms: about a second in all
     }
 }

@@ -43,12 +43,10 @@ const struct RenderLockLife
 // ui_element.cpp). Main thread.
 void PublishPlayback();
 // Shows the playing track's album art in the running engine, or removes it if that option is off;
-// with nothing playing, the last track's, whose art a stop leaves up. With `bKeepIfSame`, art that
-// turns out to be the one on screen stays as it is, its fades going on: for a change of the
-// settings, which may not change it. Does nothing with no engine running. For when the engine
-// starts (a track already playing gets no new-track callback; the playback feed shows each new
-// track's) and when the settings that choose the art change. Main thread.
-void ShowNowPlayingAlbumArt(bool bKeepIfSame);
+// with nothing playing, none. Does nothing with no engine running. For when the engine starts (a
+// track already playing gets no new-track callback; the playback feed shows each new track's) and
+// when the option is switched on or off. Main thread.
+void ShowNowPlayingAlbumArt();
 
 #pragma region UI Element
 class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private playlist_callback_impl_base

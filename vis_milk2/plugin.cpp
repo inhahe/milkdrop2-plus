@@ -1857,14 +1857,15 @@ void CPlugin::RelaunchSprites()
 
 void CPlugin::SetAlbumArt(std::vector<uint8_t> image, bool bKeepIfSame)
 {
-    if (bKeepIfSame && !image.empty() && image == m_albumArtImage)
-        for (int x = 0; x < NUM_TEX; x++)
-            if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
-                return; // on screen already
-    m_albumArtImage = std::move(image);
+    const bool bKeep = bKeepIfSame && !image.empty() && image == m_albumArtImage;
     for (int x = 0; x < NUM_TEX; x++)
         if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
+        {
+            if (bKeep)
+                return; // on screen already, and nothing killed yet
             KillSprite(x);
+        }
+    m_albumArtImage = std::move(image);
     LaunchAlbumArt();
 }
 
