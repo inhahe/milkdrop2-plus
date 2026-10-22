@@ -633,7 +633,10 @@ void texmgr::KillTex(int iSlot)
                 refcount++;
 
         if (refcount == 1)
+        {
+            m_lpDD->ForgetTexture(m_tex[iSlot].pSurface); // the views the device keeps of it
             m_tex[iSlot].pSurface->Release();
+        }
         m_tex[iSlot].pSurface = NULL;
     }
     m_tex[iSlot].szFileName[0] = L'\0';

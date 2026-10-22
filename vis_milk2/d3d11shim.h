@@ -8,8 +8,11 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <d3d11_1.h>
+#include <wrl/client.h>
 #include <DirectXMath.h>
 #include <CommonStates.h>
 #include "constanttable.h"
@@ -44,6 +47,15 @@ class D3D11Shim
     void SetShader(unsigned int iIndex);
     void SetTexture(unsigned int iSlot, ID3D11Resource* pResource);
     void ClearTextures(); // empties the 16 texture slots the engine binds to, in one call
+
+    // SetTexture, SetRenderTarget and ClearRenderTarget make the view of a texture they need once
+    // and keep it, rather than at every call (several per frame). A view holds its texture, so
+    // whoever releases a texture it may have drawn or bound must ForgetTexture() it first, or
+    // ForgetTextures() for all (CleanUpMilkDropDX11 does). Render targets that are not also
+    // sampled, such as the swap chain's back buffer, get a fresh view each time instead: holding
+    // the back buffer would make the swap chain fail to resize.
+    void ForgetTexture(ID3D11Resource* pResource);
+    void ForgetTextures();
     void SetTransform(unsigned int transType, DirectX::XMMATRIX* pMatrix);
     void SetVertexColor(bool bUseColor);
 
@@ -75,6 +87,20 @@ class D3D11Shim
     int NumVertsFromType(unsigned int primType, int iPrimCount);
     void UpdateVBuffer(unsigned int iNumVerts, const void* pVData, unsigned int vertexStride);
     void UpdateIBuffer(unsigned int iNumIndices, const void* pIData);
+    ID3D11ShaderResourceView* ShaderResourceViewOf(ID3D11Resource* pResource);
+    ID3D11RenderTargetView* RenderTargetViewOf(ID3D11Texture2D* pTexture);
+
+    struct TextureViews
+    {
+        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtv;
+    };
+    // The views kept, by texture. Past kMaxTextureViews (far more than the engine's textures, a
+    // dozen or two) it is emptied, so a texture released without ForgetTexture() is not kept
+    // for long. Locked: sprites are loaded and killed on the UI thread.
+    static constexpr size_t kMaxTextureViews = 256;
+    std::unordered_map<ID3D11Resource*, TextureViews> m_textureViews;
+    std::mutex m_textureViewsLock;
 
     cbTransforms m_transforms;
     ID3D11Device* m_pDevice;

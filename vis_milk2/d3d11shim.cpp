@@ -320,11 +320,13 @@ void D3D11Shim::SetRenderTarget(ID3D11Texture2D* pTexture, ID3D11DepthStencilVie
 
     if (pTexture)
     {
-
-        CD3D11_RENDER_TARGET_VIEW_DESC rtvDesc(pTexture, D3D11_RTV_DIMENSION_TEXTURE2D);
-        m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, &pRTView);
+        pRTView = RenderTargetViewOf(pTexture);
         if (!pRTView)
+        {
+            if (!ppView)
+                SafeRelease(pDSView);
             return;
+        }
         CD3D11_VIEWPORT vp(pTexture, pRTView);
         m_pContext->RSSetViewports(1, &vp);
     }
@@ -376,30 +378,72 @@ void D3D11Shim::SetShader(unsigned int iIndex)
 
 void D3D11Shim::SetTexture(unsigned int iSlot, ID3D11Resource* pResource)
 {
-    ID3D11ShaderResourceView* views[1] = {NULL};
-    if (pResource)
+    ID3D11ShaderResourceView* views[1] = {pResource ? ShaderResourceViewOf(pResource) : nullptr};
+    m_pContext->PSSetShaderResources(iSlot, 1, views);
+    if (views[0])
+        views[0]->Release();
+}
+
+// The shader resource view of `pResource`, made the first time and kept (see ForgetTexture),
+// AddRef'd for the caller to release (another thread may forget it meanwhile). Null on failure.
+ID3D11ShaderResourceView* D3D11Shim::ShaderResourceViewOf(ID3D11Resource* pResource)
+{
+    std::lock_guard<std::mutex> lock(m_textureViewsLock);
+    if (m_textureViews.size() >= kMaxTextureViews && m_textureViews.find(pResource) == m_textureViews.end())
+        m_textureViews.clear();
+    TextureViews& views = m_textureViews[pResource];
+    if (!views.srv)
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
         D3D11_RESOURCE_DIMENSION dim{};
         pResource->GetType(&dim);
-
         if (dim == D3D11_RESOURCE_DIMENSION_TEXTURE2D)
-        {
-            CD3D11_SHADER_RESOURCE_VIEW_DESC srvDesc1(reinterpret_cast<ID3D11Texture2D*>(pResource), D3D11_SRV_DIMENSION_TEXTURE2D);
-            srvDesc = srvDesc1;
-        }
+            srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(reinterpret_cast<ID3D11Texture2D*>(pResource), D3D11_SRV_DIMENSION_TEXTURE2D);
         if (dim == D3D11_RESOURCE_DIMENSION_TEXTURE3D)
-        {
-            CD3D11_SHADER_RESOURCE_VIEW_DESC srvDesc1(reinterpret_cast<ID3D11Texture3D*>(pResource));
-            srvDesc = srvDesc1;
-        }
-        m_pDevice->CreateShaderResourceView(pResource, &srvDesc, &views[0]);
+            srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(reinterpret_cast<ID3D11Texture3D*>(pResource));
+        m_pDevice->CreateShaderResourceView(pResource, &srvDesc, views.srv.ReleaseAndGetAddressOf());
     }
+    ID3D11ShaderResourceView* pView = views.srv.Get();
+    if (pView)
+        pView->AddRef();
+    return pView;
+}
 
-    m_pContext->PSSetShaderResources(iSlot, 1, views);
+// The render target view of `pTexture`, AddRef'd for the caller to release: the kept one for a
+// texture the engine also samples, a fresh one for any other (the back buffer). Null on failure.
+ID3D11RenderTargetView* D3D11Shim::RenderTargetViewOf(ID3D11Texture2D* pTexture)
+{
+    D3D11_TEXTURE2D_DESC desc{};
+    pTexture->GetDesc(&desc);
+    CD3D11_RENDER_TARGET_VIEW_DESC rtvDesc(pTexture, D3D11_RTV_DIMENSION_TEXTURE2D);
+    ID3D11RenderTargetView* pView = nullptr;
+    if (!(desc.BindFlags & D3D11_BIND_SHADER_RESOURCE))
+    {
+        m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, &pView);
+        return pView;
+    }
+    std::lock_guard<std::mutex> lock(m_textureViewsLock);
+    if (m_textureViews.size() >= kMaxTextureViews && m_textureViews.find(pTexture) == m_textureViews.end())
+        m_textureViews.clear();
+    TextureViews& views = m_textureViews[pTexture];
+    if (!views.rtv)
+        m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, views.rtv.ReleaseAndGetAddressOf());
+    pView = views.rtv.Get();
+    if (pView)
+        pView->AddRef();
+    return pView;
+}
 
-    if (views[0])
-        views[0]->Release();
+void D3D11Shim::ForgetTexture(ID3D11Resource* pResource)
+{
+    std::lock_guard<std::mutex> lock(m_textureViewsLock);
+    m_textureViews.erase(pResource);
+}
+
+void D3D11Shim::ForgetTextures()
+{
+    std::lock_guard<std::mutex> lock(m_textureViewsLock);
+    m_textureViews.clear();
 }
 
 void D3D11Shim::ClearTextures()
@@ -472,17 +516,11 @@ void D3D11Shim::SetPixelShader(ID3D11PixelShader* pPShader, CConstantTable* pTab
 
 void D3D11Shim::ClearRenderTarget(ID3D11Texture2D* pRTTexture, const float color[4])
 {
-    ID3D11RenderTargetView* pRTView = nullptr;
-    if (pRTTexture)
-    {
-        CD3D11_RENDER_TARGET_VIEW_DESC rtvDesc(pRTTexture, D3D11_RTV_DIMENSION_TEXTURE2D);
-        m_pDevice->CreateRenderTargetView(pRTTexture, &rtvDesc, &pRTView);
-        if (!pRTView)
-            return;
-        m_pContext->ClearRenderTargetView(pRTView, color);
-    }
-    if (pRTView)
-        pRTView->Release();
+    ID3D11RenderTargetView* pRTView = pRTTexture ? RenderTargetViewOf(pRTTexture) : nullptr;
+    if (!pRTView)
+        return;
+    m_pContext->ClearRenderTargetView(pRTView, color);
+    pRTView->Release();
 }
 
 void D3D11Shim::CopyResource(ID3D11Resource* pDstResource, ID3D11Resource* pSrcResource)

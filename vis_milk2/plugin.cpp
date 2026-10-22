@@ -1372,8 +1372,12 @@ int CPlugin::AllocateMilkDropDX11()
         //bool bRevertedBitDepth = false;
         do
         {
-            SafeRelease(m_lpVS[0]);
-            SafeRelease(m_lpVS[1]);
+            for (ID3D11Texture2D*& vs : m_lpVS)
+            {
+                if (vs)
+                    GetDevice()->ForgetTexture(vs);
+                SafeRelease(vs);
+            }
 
             // Create VS1.
             bSuccess = (GetDevice()->CreateTexture(m_nTexSizeX, m_nTexSizeY, 1, vs_flags, fmt, &m_lpVS[0]));
@@ -2277,6 +2281,7 @@ void CPlugin::DropTexture(size_t i)
     // Notify all CShaderParams classes that we're releasing a bindable texture!!
     for (auto const& p : global_CShaderParams_master_list)
         p->OnTextureEvict(m_textures[i].texptr);
+    GetDevice()->ForgetTexture(m_textures[i].texptr);
     SafeRelease(m_textures[i].texptr);
     m_textures.erase(m_textures.begin() + i);
 }
@@ -3247,6 +3252,10 @@ void CPlugin::CleanUpMilkDropDX11(int /* final_cleanup */)
 
     // Force this.
     m_pState->m_bBlending = false;
+
+    // Every texture below is released, so the views the device keeps of them must go first.
+    if (GetDevice())
+        GetDevice()->ForgetTextures();
 
     for (size_t i = 0; i < m_textures.size(); i++)
         if (m_textures[i].texptr)
