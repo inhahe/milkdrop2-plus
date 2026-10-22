@@ -24,7 +24,6 @@ static cfg_bool cfg_bShowPressF1ForHelp(guid_cfg_bShowPressF1ForHelp, default_bS
 static cfg_bool cfg_bSkipCompShader(guid_cfg_bSkipCompShader, default_bSkipCompShader);
 static cfg_bool cfg_allow_page_tearing_fs(guid_cfg_allow_page_tearing_fs, default_allow_page_tearing_fs);
 static cfg_bool cfg_bSongTitleAnims(guid_cfg_bSongTitleAnims, default_bSongTitleAnims);
-static cfg_bool cfg_bAutoGamma(guid_cfg_bAutoGamma, default_bAutoGamma);
 static cfg_bool cfg_bHardCutsDisabled(guid_cfg_bHardCutsDisabled, default_bHardCutsDisabled);
 static cfg_bool cfg_bShowFPS(guid_cfg_bShowFPS, default_bShowFPS);
 static cfg_bool cfg_bShowRating(guid_cfg_bShowRating, default_bShowRating);
@@ -43,7 +42,6 @@ static cfg_int cfg_nAlbumArtPosition(guid_cfg_nAlbumArtPosition, static_cast<int
 static cfg_int cfg_nAlbumArtSize(guid_cfg_nAlbumArtSize, static_cast<int64_t>(default_nAlbumArtSize));
 static cfg_bool cfg_bEnableHDR(guid_cfg_bEnableHDR, default_bEnableHDR);
 static cfg_int cfg_max_fps_fs(guid_cfg_max_fps_fs, static_cast<int64_t>(default_max_fps_fs));
-static cfg_int cfg_n16BitGamma(guid_cfg_n16BitGamma, static_cast<int64_t>(default_n16BitGamma));
 static cfg_int cfg_nMaxBytes(guid_cfg_nMaxBytes, static_cast<int64_t>(default_nMaxBytes));
 static cfg_int cfg_nMaxImages(guid_cfg_nMaxImages, static_cast<int64_t>(default_nMaxImages));
 static cfg_int cfg_nCanvasStretch(guid_cfg_nCanvasStretch, static_cast<int64_t>(default_nCanvasStretch));
@@ -1196,9 +1194,6 @@ void milk2_config::reset()
     settings.m_bShowSongLen = cfg_bShowSongLen;
     settings.m_bShowShaderHelp = cfg_bShowShaderHelp;
 
-    //settings.m_bFixPinkBug = default_bFixPinkBug;
-    settings.m_n16BitGamma = static_cast<uint32_t>(cfg_n16BitGamma);
-    settings.m_bAutoGamma = cfg_bAutoGamma;
     //settings.m_bAlways3D = default_bAlways3D;
     //settings.m_fStereoSep = default_fStereoSep;
     //settings.m_bFixSlowText = default_bFixSlowText;
@@ -1486,9 +1481,6 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_bShowSongLen = settings.m_bShowSongLen;
         cfg_bShowShaderHelp = settings.m_bShowShaderHelp;
 
-        //builder << settings.m_bFixPinkBug;
-        cfg_n16BitGamma = settings.m_n16BitGamma;
-        cfg_bAutoGamma = settings.m_bAutoGamma;
         //builder << settings.m_bAlways3D;
         //builder << settings.m_fStereoSep;
         //builder << settings.m_bFixSlowText;

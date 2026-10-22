@@ -126,9 +126,6 @@ typedef struct
     bool m_bShowSongLen;
     bool m_bShowShaderHelp;
 
-    //int32_t m_bFixPinkBug;
-    uint32_t m_n16BitGamma;
-    bool m_bAutoGamma;
     //bool m_bAlways3D;
     //float m_fStereoSep;
     //bool m_bFixSlowText;

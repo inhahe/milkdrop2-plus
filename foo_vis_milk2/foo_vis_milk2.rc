@@ -870,8 +870,6 @@ BEGIN
     //IDS_START_WITH_PRESET_LOCK_ON "Start with preset lock ON"
     IDS_START_WITH_PRESET_LOCK_ON_HELP 
                             "Check this box to make MilkDrop automatically start in 'preset lock' mode, meaning that the preset will not change until it is manually changed." //\n(either by pressing SPACE, hitting H for a hard cut, or by selecting a new preset from the 'L'oad menu).\n\nUse the SCROLL LOCK key while MilkDrop is running to toggle the preset\nlock on or off. When the SCROLL LOCK light is on, that means that the preset lock is also on, and vice versa.
-    IDS_BRIGHT_SLIDER_HELP  "Use this brightness slider to control the overall brightness of the image for 16-bit color modes." //If the image is continually washed out to bright purple or white, crank this down to (probably) zero. If the image is chronically dark, crank this up.\n\nNote that the slider is not visible when the nearby 'guess' checkbox is checked. Uncheck it to manually set the brightness.\n\nAlso note that this brightness adjustment is only a concern in 16-bit color modes; 32-bit doesn't have this problem. So, if you're running Windows in 16-bit color, this slider will affect\nwindowed, desktop, and 'fake' fullscreen modes. And if you've selected a 16-bit fullscreen display mode, it will affect that too.
-    IDS_CB_AUTOGAMMA_HELP   "Check this box to ask MilkDrop to make an educated guess for the 'brightness control for 16-bit color' setting, based on the video card vendor." //This usually gets it, but not always.\n\nThe slider is only visible when this option is unchecked.\n\nSee the help for the slider for more information.
 END
 
 STRINGTABLE

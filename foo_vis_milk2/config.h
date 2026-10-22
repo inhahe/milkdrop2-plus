@@ -69,12 +69,6 @@ static constexpr GUID guid_cfg_fHardCutLoudnessThresh = {
 static constexpr GUID guid_cfg_bHardCutsDisabled = {
     0x5d1a0e92, 0x3f95, 0x410c, {0xad, 0x66, 0xb4, 0xa5, 0xfa, 0x4f, 0xdc, 0xf4}
 }; // {5D1A0E92-3F95-410C-AD66-B4A5FA4FDCF4}
-static constexpr GUID guid_cfg_n16BitGamma = {
-    0x350ba0d5, 0xee5b, 0x4886, {0x96, 0x3, 0x7f, 0xd4, 0xf5, 0xf8, 0x1b, 0x10}
-}; // {350BA0D5-EE5B-4886-9603-7FD4F5F81B10}
-static constexpr GUID guid_cfg_bAutoGamma = {
-    0xe40b6e03, 0xdeea, 0x4515, {0x96, 0xb2, 0xd0, 0xe0, 0xe6, 0x8b, 0x58, 0x86}
-}; // {E40B6E03-DEEA-4515-96B2-D0E0E68B5886}
 static constexpr GUID guid_cfg_nMaxImages = {
     0x779da878, 0xf890, 0x4dd5, {0x9b, 0xb1, 0xb8, 0xfc, 0x64, 0x3d, 0xa, 0xfb}
 }; // {779DA878-F890-4DD5-9BB1-B8FC643D0AFB}
@@ -231,9 +225,6 @@ static constexpr bool default_bShowPresetInfo = false;
 static constexpr bool default_bShowSongTitle = false;
 static constexpr bool default_bShowSongTime = false;
 static constexpr bool default_bShowSongLen = false;
-//static constexpr bool default_bFixPinkBug = -1;
-static constexpr int default_n16BitGamma = 2;
-static constexpr bool default_bAutoGamma = true;
 //static constexpr bool default_bAlways3D = false;
 static constexpr float default_fStereoSep = 1.0f;
 //static constexpr bool default_bFixSlowText = true;

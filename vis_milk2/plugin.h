@@ -324,8 +324,6 @@ class CPlugin : public CPluginShell
 
     bool m_bShowPressF1ForHelp;
     bool m_bShowMenuToolTips;
-    int m_n16BitGamma;
-    bool m_bAutoGamma;
     //int m_nFpsLimit;
     //int m_cLeftEye3DColor[3];
     //int m_cRightEye3DColor[3];

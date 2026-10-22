@@ -1024,11 +1024,6 @@ void CPlugin::RenderFrame(int bRedraw)
         lpDevice->SetRenderTarget(m_lpVS[1]);
     }
 
-    if (m_bAutoGamma && GetFrame() == 0)
-    {
-        m_n16BitGamma = 0; // skip gamma correction for 32-bit color in Direct3D 11
-    }
-
     ComputeGridAlphaValues();
 
     // Do the warping for this frame [warp shader].
@@ -1817,16 +1812,6 @@ void CPlugin::WarpedBlit_NoShaders(int /* nPass */, bool bAlphaBlend, bool bFlip
 
     //if (m_pState->m_bBlending)
     //    fDecay = fDecay * (fCosineBlend) + (1.0f - fCosineBlend) * ((float)(*m_pOldState->var_pf_decay));
-
-    // Skip gamma correction for 32-bit color in Direct3D 11.
-    /*if (m_n16BitGamma > 0 &&
-        (GetBackBufFormat() == D3DFMT_R5G6B5 || GetBackBufFormat() == D3DFMT_X1R5G5B5 || GetBackBufFormat() == D3DFMT_A1R5G5B5 || GetBackBufFormat() == D3DFMT_A4R4G4B4) &&
-        fDecay < 0.9999f)
-    {
-        fDecay = std::min(fDecay, (32.0f - m_n16BitGamma) / 32.0f);
-    }
-
-    D3DCOLOR cDecay = D3DCOLOR_RGBA_01(fDecay, fDecay, fDecay, 1);*/
 
     // Hurl the triangle strips at the video card.
     int poly;

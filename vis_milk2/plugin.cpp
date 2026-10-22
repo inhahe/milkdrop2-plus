@@ -539,8 +539,6 @@ void CPlugin::MilkDropPreInitialize()
 
     m_bShowPressF1ForHelp = true;
     m_bShowMenuToolTips = true; // NOTE: THIS IS CURRENTLY HARDWIRED TO TRUE - NO OPTION TO CHANGE
-    m_n16BitGamma = 2;
-    m_bAutoGamma = true;
     //m_nFpsLimit = -1;
     m_bEnableRating = true;
     m_bSongTitleAnims = true;
@@ -729,14 +727,6 @@ void CPlugin::MilkDropReadConfig()
     m_bShowSongTime = GetPrivateProfileBool(L"settings", L"bShowSongTime", m_bShowSongTime, pIni);
     m_bShowSongLen = GetPrivateProfileBool(L"settings", L"bShowSongLen", m_bShowSongLen, pIni);
 
-    //m_bFixPinkBug = GetPrivateProfileBool(L"settings", L"bFixPinkBug", m_bFixPinkBug, pIni);
-    int nTemp = GetPrivateProfileBool(L"settings", L"bFixPinkBug", -1, pIni);
-    if (nTemp == 0)
-        m_n16BitGamma = 0;
-    else if (nTemp == 1)
-        m_n16BitGamma = 2;
-    m_n16BitGamma = GetPrivateProfileInt(L"settings", L"n16BitGamma", m_n16BitGamma, pIni);
-    m_bAutoGamma = GetPrivateProfileBool(L"settings", L"bAutoGamma", m_bAutoGamma, pIni);
     //m_bAlways3D = GetPrivateProfileBool(L"settings", L"bAlways3D", m_bAlways3D, pIni);
     //m_fStereoSep = GetPrivateProfileFloat(L"settings", L"fStereoSep", m_fStereoSep, pIni);
     //m_bFixSlowText = GetPrivateProfileBool(L"settings", L"bFixSlowText", m_bFixSlowText, pIni);
@@ -824,12 +814,9 @@ void CPlugin::MilkDropWriteConfig()
 
     //WritePrivateProfileInt(m_bShowPresetInfo, "bShowPresetInfo", pIni, "settings");
     //WritePrivateProfileInt(m_bShowSongInfo, "bShowSongInfo", pIni, "settings");
-    //WritePrivateProfileInt(m_bFixPinkBug, "bFixPinkBug", pIni, "settings");
 
     WritePrivateProfileInt(m_bShowPressF1ForHelp, L"bShowPressF1ForHelp", pIni, L"settings");
     //WritePrivateProfileInt(m_bShowMenuToolTips, "bShowMenuToolTips", pIni, "settings");
-    WritePrivateProfileInt(m_n16BitGamma, L"n16BitGamma", pIni, L"settings");
-    WritePrivateProfileInt(m_bAutoGamma, L"bAutoGamma", pIni, L"settings");
 
     //WritePrivateProfileInt(m_bAlways3D, "bAlways3D", pIni, "settings");
     //WritePrivateProfileFloat(m_fStereoSep, "fStereoSep", pIni, "settings");
@@ -898,9 +885,6 @@ bool CPlugin::PanelSettings(plugin_config* settings)
     m_bShowSongLen = settings->m_bShowSongLen;
     m_bShowShaderHelp = settings->m_bShowShaderHelp;
 
-    //m_bFixPinkBug = settings->m_bFixPinkBug;
-    m_n16BitGamma = settings->m_n16BitGamma;
-    m_bAutoGamma = settings->m_bAutoGamma;
     //m_bAlways3D = settings->m_bAlways3D;
     //m_fStereoSep = settings->m_fStereoSep;
     //m_bFixSlowText = settings->m_bFixSlowText;
