@@ -56,7 +56,8 @@ Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`
 It relies on these contracts of the component, so a change to any of them must change it too:
 
 - The profile: `<foobar2000>\profile` when `portable_mode_enabled` exists beside foobar2000.exe, `%APPDATA%\foobar2000-v2` otherwise; components in `user-components-x64\<DLL name>\`.
-- Every name the component's DLL has had (`$ComponentNames`: `foo_vis_milk2` until v0.2.1, `foo_milkdrop2_plus` since). All register the Default UI element `guid_milk2`, so it moves the others aside; it also looks for that GUID in a layout.
+- Every name the component's DLL has had (`$ComponentNames`: `foo_vis_milk2` until v0.2.1, `milkdrop2_plus` from an earlier `install.bat`, `foo_milkdrop2_plus` since; `uninstall.bat` lists the same three). All register the Default UI element `guid_milk2`, so it moves the others aside; it also looks for that GUID in a layout.
+- A running foobar2000 keeps its profile's `config.sqlite` open, which is how it tells that foobar2000 is running with the profile it is about to change.
 - `PresetLibraryPath` in `browser_config.ini`, which it sets to `milkdrop2\presets\`, relative to the profile (`FromStoredPath`, v0.3.0 and later), keeping the file's other lines and their encodings as [Settings and files](#settings-and-files) describes.
 - Textures in `<profile>\milkdrop2\textures\`.
 - The release asset: one `*.fb2k-component`, a zip with one DLL at its top.

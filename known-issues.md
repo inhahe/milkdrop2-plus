@@ -33,3 +33,11 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 **What happens:** the cache is written after the shuffle mode's filters, so presets they excluded are cached with the default rating 3.0 instead of their own; after the filters change, those presets keep that rating until the folder's files change and force a full scan.
 
 **Fix:** read the ratings of all files before filtering, or write the cache from the unfiltered pass.
+
+## install.bat can leave two builds of the component installed
+
+**Where:** `install.bat`, which copies a local build into `user-components-x64\foo_milkdrop2_plus\`.
+
+**What happens:** it leaves a build under the component's older names (`foo_vis_milk2`, `milkdrop2_plus`) in place, and all of them register the same Default UI element, so foobar2000 loads two components that claim it. `install-milkdrop2-plus.cmd` moves those aside, and `uninstall.bat` removes all three, but each script keeps its own copy of what the component is called and where it goes, and they have drifted apart before.
+
+**Fix:** give `install-milkdrop2-plus.cmd` an option to install a local build (`Bin\x64\Release` instead of the latest release), and make `install.bat` a thin wrapper around it, so that the component's names, the profile's layout and the running check live in one place.

@@ -68,7 +68,7 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 3. Double-click it. It finds foobar2000 and asks before installing there (or lets you pick `foobar2000.exe`), then asks whether to install the layout. If Windows says "Windows protected your PC", click More info, then Run anyway.
 4. Start foobar2000.
 
-From a command prompt: `install-milkdrop2-plus.cmd "C:\foobar2000"`, with `-Layout` or `-NoLayout` to answer the layout question in advance. Everything goes into foobar2000's profile folder, and whatever it replaces (the layout, the preset folder setting, an earlier build of the plugin) is first saved in `<profile>\milkdrop2-plus-install-backup\`. Run it again to update the plugin, presets and textures. Its other options (`-LayoutFrom`, `-Force`, `-ReleaseTag`) are described at the top of the file.
+From a command prompt: `install-milkdrop2-plus.cmd "C:\foobar2000"`, with `-Layout` or `-NoLayout` to answer the layout question in advance. Everything goes into foobar2000's profile folder, and whatever it replaces (the layout, the preset folder setting, an earlier build of the plugin) is first saved in `<profile>\milkdrop2-plus-install-backup\`. Run it again to update the plugin and add any new presets and textures; those already there are kept, edited or not. Its other options (`-LayoutFrom`, `-Force`) are described at the top of the file.
 
 ### Install from Source
 

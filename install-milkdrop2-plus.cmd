@@ -4,21 +4,29 @@ rem Installs MilkDrop 2 Plus into foobar2000: double-click this file, drop the f
 rem or run  install-milkdrop2-plus.cmd "C:\foobar2000" [-Layout or -NoLayout]  -  the PowerShell part
 rem below tells the rest. No labels or blocks here, which cmd misreads in a file with LF line endings.
 setlocal
-rem PowerShell runs only files named .ps1, so it runs a copy of this one.
-set "COPY=%TEMP%\install-milkdrop2-plus-%RANDOM%%RANDOM%.ps1"
-copy /y "%~f0" "%COPY%" >nul
-rem Neither "echo" nor "if" changes ERRORLEVEL, so a failed copy leaves it at 1 for RESULT.
-if errorlevel 1 echo Could not copy this script to "%COPY%".
-if not errorlevel 1 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%COPY%" %*
-set "RESULT=%ERRORLEVEL%"
-del "%COPY%" >nul 2>&1
-rem Started from Explorer or Windows+R, cmd's command line names this file, and the window would close
-rem as soon as the script ends: keep it open so that its messages can be read. A command prompt's does not.
-rem (An "if" ignores a substitution made in the dynamic variable CMDCMDLINE itself, so it is copied first.)
+rem cmd's command line names this file when Explorer or Windows+R started it (an interactive command
+rem prompt's does not), and then the PowerShell part may keep the window open at the end: see
+rem Wait-IfOwnWindow. An "if" ignores a substitution made in the dynamic variable CMDCMDLINE itself,
+rem so it is copied first.
 setlocal EnableDelayedExpansion
 set "CMDLINE=!CMDCMDLINE!"
-if not "!CMDLINE!"=="!CMDLINE:%~nx0=!" pause
-endlocal
+set "NAMED="
+if not "!CMDLINE!"=="!CMDLINE:%~nx0=!" set "NAMED=1"
+endlocal & set "MD2P_PAUSE_IF_ALONE=%NAMED%"
+rem PowerShell runs only files named .ps1, so it runs a copy of this one. "type" makes it, as "copy"
+rem would carry over the mark of the web, which a RemoteSigned execution policy refuses.
+set "COPY=%TEMP%\install-milkdrop2-plus-%RANDOM%%RANDOM%.ps1"
+set "COPIED="
+type "%~f0" > "%COPY%" && set "COPIED=1"
+if not defined COPIED echo Could not copy this script to "%COPY%".
+if not defined COPIED if defined MD2P_PAUSE_IF_ALONE pause
+if not defined COPIED exit /b 1
+rem The 64-bit PowerShell even when a 32-bit program started this, so that it sees 64-bit foobar2000.
+set "PS=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if exist "%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe" set "PS=%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%COPY%" %*
+set "RESULT=%ERRORLEVEL%"
+del "%COPY%" >nul 2>&1
 exit /b %RESULT%
 #>
 <#
@@ -29,7 +37,7 @@ exit /b %RESULT%
 .DESCRIPTION
     This file is both a batch file and a PowerShell script, so that it is one file to pass around and
     runs with a double-click: cmd runs the batch commands at the top, which run the rest in Windows
-    PowerShell, whatever its execution policy.
+    PowerShell, bypassing its execution policy (unless Group Policy enforces one).
 
     It downloads everything first, then installs it into the installation's profile folder
     (<foobar2000>\profile in a portable installation, %APPDATA%\foobar2000-v2 otherwise):
@@ -50,8 +58,9 @@ exit /b %RESULT%
     current layout already has a MilkDrop view (a customised one, perhaps, or this one from an earlier
     run). -Layout and -NoLayout answer without asking.
 
-    Run again, it updates the plugin, presets and textures, but keeps a preset folder that exists, so
-    as not to undo a change made since. -Force replaces it.
+    Run again, it updates the plugin and adds the presets and textures that are missing, keeping those
+    there already, which may have been edited. It also keeps a preset folder that exists, so as not to
+    undo a change made since; -Force replaces it.
 
     What it replaces is first moved or copied to <profile>\milkdrop2-plus-install-backup\<date and time>\:
     the plugin's previous build, a build under the plugin's older name (foo_vis_milk2, which claims
@@ -78,10 +87,6 @@ exit /b %RESULT%
     Point the plugin at the installed presets even when its preset folder is set to one that exists,
     and install the layout without asking.
 
-.PARAMETER ReleaseTag
-    Install this release of MilkDrop 2 Plus, for example v0.3.0, instead of the latest. Releases
-    before v0.3.0 do not understand a preset folder relative to the profile.
-
 .EXAMPLE
     Double-click install-milkdrop2-plus.cmd, or drop the foobar2000 folder on it.
 
@@ -97,8 +102,7 @@ param(
     [switch] $Layout,
     [switch] $NoLayout,
     [string] $LayoutFrom,
-    [switch] $Force,
-    [string] $ReleaseTag
+    [switch] $Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -117,8 +121,9 @@ $TexturesUrl = 'https://github.com/projectM-visualizer/presets-milkdrop-texture-
 # The plugin's preset folder as browser_config.ini stores it: relative to the profile.
 $PresetLibraryStored = 'milkdrop2\presets\'
 # Every name the plugin's component has had: foo_vis_milk2 until v0.2.1 (the name of jecassis's
-# original, too). They all register the same Default UI element, so only one may be installed.
-$ComponentNames = @('foo_vis_milk2', 'foo_milkdrop2_plus')
+# original, too), and milkdrop2_plus in builds that an earlier install.bat installed. They all
+# register the same Default UI element, so only one may be installed.
+$ComponentNames = @('foo_vis_milk2', 'milkdrop2_plus', 'foo_milkdrop2_plus')
 # The first 16 bytes of every .fth file.
 $ThemeMagic = [byte[]](0x98, 0xBA, 0xA0, 0xAD, 0xD4, 0x36, 0x16, 0x4A, 0x8E, 0x14, 0x41, 0x5F, 0x73, 0xB4, 0xCB, 0x21)
 # The MilkDrop Default UI element, as a layout stores it.
@@ -134,12 +139,11 @@ function Get-Download([string] $Url, [string] $OutFile) {
     Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
 }
 
-# The SHA-256 of the file $Path, in hexadecimal.
-function Get-Sha256([string] $Path) {
+# The SHA-256 of what $Stream holds, in hexadecimal. Closes the stream.
+function Get-Sha256([IO.Stream] $Stream) {
     $sha = [Security.Cryptography.SHA256]::Create()
-    $stream = [IO.File]::OpenRead($Path)
-    try { [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
-    finally { $stream.Dispose(); $sha.Dispose() }
+    try { [BitConverter]::ToString($sha.ComputeHash($Stream)).Replace('-', '') }
+    finally { $Stream.Dispose(); $sha.Dispose() }
 }
 
 # The path $Path, as typed or pasted, without surrounding blanks and quotes. $What names it in errors.
@@ -158,17 +162,18 @@ function Get-ProfileDir([string] $Dir) {
     else { Join-Path $env:APPDATA 'foobar2000-v2' }
 }
 
-# Stops if a foobar2000 is running with the profile $ProfileDir, or one whose folder this cannot see
-# (running as administrator when this is not, say), which might be.
+# Stops if foobar2000 is running with the profile $ProfileDir. A running foobar2000 keeps the
+# profile's config.sqlite open, which shows whoever runs it and by whatever path: another user, an
+# administrator, a subst drive or a short name. Its process is named too, when this can see it.
 function Assert-NotRunning([string] $ProfileDir) {
-    foreach ($process in @(Get-Process foobar2000 -ErrorAction SilentlyContinue)) {
-        if (-not $process.Path) {
-            throw "foobar2000 is running (process $($process.Id)) from a folder this script cannot see, perhaps as administrator. Close it, or run this script as administrator."
-        }
-        if ((Get-ProfileDir (Split-Path -Parent $process.Path)) -eq $ProfileDir) {
-            throw "foobar2000 is running from $($process.Path) (process $($process.Id)) with this profile. Close it first: it rewrites the layout when it exits."
-        }
-    }
+    $db = Join-Path $ProfileDir 'config.sqlite'
+    if (-not (Test-Path -LiteralPath $db -PathType Leaf)) { return }
+    try { [IO.File]::Open($db, 'Open', 'Read', 'None').Dispose(); return }
+    catch [IO.IOException] { }
+    $process = Get-Process foobar2000 -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -and (Get-ProfileDir (Split-Path -Parent $_.Path)) -eq $ProfileDir } | Select-Object -First 1
+    $which = if ($process) { " ($($process.Path), process $($process.Id))" } else { '' }
+    throw "foobar2000 is running with this profile$which. Close it first: it rewrites the layout when it exits."
 }
 
 # The machine type in the PE header of $Path: 0x8664 for x64, 0x14C for x86, 0xAA64 for ARM64.
@@ -228,15 +233,18 @@ function Get-ZipFiles($Archive, [string] $Folder, [switch] $SkipRoot) {
     $files
 }
 
-# Writes the files $Files (from Get-ZipFiles) below the folder $Dest, replacing files there, and
-# returns how many it wrote.
-function Expand-ZipFiles([hashtable] $Files, [string] $Dest) {
+# Writes the files $Files (from Get-ZipFiles) below the folder $Dest and returns how many it wrote.
+# It replaces files already there, or with -KeepExisting leaves them alone, as they may have been edited.
+function Expand-ZipFiles([hashtable] $Files, [string] $Dest, [switch] $KeepExisting) {
+    $written = 0
     foreach ($relative in $Files.Keys) {
         $target = Join-Path $Dest $relative
+        if ($KeepExisting -and [IO.File]::Exists($target)) { continue }
         [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target))
         [IO.Compression.ZipFileExtensions]::ExtractToFile($Files[$relative], $target, $true)
+        $written++
     }
-    $Files.Count
+    $written
 }
 
 # The layout to install, as the bytes of a .fth file: from $From (see -LayoutFrom), or the embedded one.
@@ -315,16 +323,21 @@ function Find-Foobar {
     foreach ($app in $apps) {
         # A folder, or a program in it, perhaps quoted and followed by arguments or an icon index.
         foreach ($value in @($app.InstallLocation, $app.DisplayIcon, $app.UninstallString) | Where-Object { $_ }) {
-            if ($value -match '^\s*"?([^",]+?\.exe)') { $dirs += Split-Path -Parent $Matches[1] }
+            if ($value -match '^\s*"?([^",]+?\.exe)') { $dirs += $Matches[1] -replace '\\[^\\]*$', '' }
             else { $dirs += $value.Trim().Trim('"') }
         }
     }
-    $dirs += (Join-Path $env:ProgramFiles 'foobar2000'), (Join-Path $env:SystemDrive 'foobar2000')
+    $dirs += [IO.Path]::Combine($env:ProgramFiles, 'foobar2000'), [IO.Path]::Combine($env:SystemDrive + '\', 'foobar2000')
     $found = @()
     foreach ($dir in $dirs) {
-        if (-not (Test-Path -LiteralPath (Join-Path $dir 'foobar2000.exe') -PathType Leaf)) { continue }
-        $full = (Get-Item -LiteralPath $dir).FullName.TrimEnd('\')
-        if ($found -notcontains $full) { $found += $full }
+        # .NET rather than Test-Path and Join-Path, which fail on a drive that does not exist, as a
+        # stale entry in the list of installed programs may name; and the search is only a guess.
+        try {
+            if (-not [IO.Path]::IsPathRooted($dir) -or -not [IO.File]::Exists([IO.Path]::Combine($dir, 'foobar2000.exe'))) { continue }
+            $full = [IO.Path]::GetFullPath($dir).TrimEnd('\')
+            if ($found -notcontains $full) { $found += $full }
+        }
+        catch { }
     }
     $found
 }
@@ -424,13 +437,9 @@ function Install-MilkDrop {
     try {
         # --- Download everything, so that a failed download leaves the installation untouched -----
         Step 'Downloading'
-        $api = if ($ReleaseTag) { "https://api.github.com/repos/$PluginRepo/releases/tags/$ReleaseTag" }
-               else { "https://api.github.com/repos/$PluginRepo/releases/latest" }
+        $api = "https://api.github.com/repos/$PluginRepo/releases/latest"
         try { $release = Invoke-RestMethod -Uri $api -Headers @{ Accept = 'application/vnd.github+json' } -UseBasicParsing }
-        catch {
-            $which = if ($ReleaseTag) { "release $ReleaseTag" } else { 'the latest release' }
-            throw "Could not get $which of $PluginRepo from GitHub ($api): $($_.Exception.Message)"
-        }
+        catch { throw "Could not get the latest release of $PluginRepo from GitHub ($api): $($_.Exception.Message)" }
         $assets = @($release.assets | Where-Object { $_.name -like '*.fb2k-component' })
         if ($assets.Count -ne 1) {
             throw "Release $($release.tag_name) of $PluginRepo has $($assets.Count) .fb2k-component files; expected one."
@@ -440,7 +449,7 @@ function Install-MilkDrop {
         Get-Download $asset.browser_download_url $componentZip
         if ("$($asset.digest)" -match '^sha256:([0-9a-fA-F]{64})$') {
             $expected = $Matches[1]
-            $actual = Get-Sha256 $componentZip
+            $actual = Get-Sha256 ([IO.File]::OpenRead($componentZip))
             if ($actual -ne $expected) { throw "$($asset.name) is corrupt: its SHA-256 is $actual, GitHub says $expected." }
             Write-Host '  checksum matches'
         }
@@ -467,23 +476,28 @@ function Install-MilkDrop {
         # --- Install ------------------------------------------------------------------------------
         Step "MilkDrop 2 Plus $($release.tag_name)"
         $componentsDir = Join-Path $profileDir 'user-components-x64'
+        $componentDest = Join-Path $componentsDir $componentName
+        # This very build, installed already, is written again rather than saved again.
+        $installedDll = Join-Path $componentDest $dlls[0]
+        $sameBuild = (Test-Path -LiteralPath $installedDll -PathType Leaf) -and
+            (Get-Sha256 ([IO.File]::OpenRead($installedDll))) -eq (Get-Sha256 $componentFiles[$dlls[0]].Open())
         foreach ($name in $ComponentNames + $componentName | Select-Object -Unique) {
             $installed = Join-Path $componentsDir $name
-            if (-not (Test-Path -LiteralPath $installed)) { continue }
+            if (-not (Test-Path -LiteralPath $installed) -or ($name -eq $componentName -and $sameBuild)) { continue }
             if ($name -ne $componentName) { Write-Host "  moving $name out of the way: it would claim the same UI element" }
             Save-Backup $installed -Move
         }
-        $componentDest = Join-Path $componentsDir $componentName
         $n = Expand-ZipFiles $componentFiles $componentDest
-        Write-Host "  $n files in $componentDest"
+        Write-Host "  $n files in $componentDest$(if ($sameBuild) { ' (this build was installed already)' })"
 
+        # Presets and textures already there are kept: they may have been edited since.
         Step 'Presets and textures'
         $presetsDest = Join-Path $profileDir 'milkdrop2\presets\Milkdrop-Original'
-        $n = Expand-ZipFiles $presetFiles $presetsDest
-        Write-Host "  $n presets in $presetsDest"
+        $n = Expand-ZipFiles $presetFiles $presetsDest -KeepExisting
+        Write-Host "  $($presetFiles.Count) presets in ${presetsDest}: $n added, $($presetFiles.Count - $n) there already, kept"
         $texturesDest = Join-Path $profileDir 'milkdrop2\textures'
-        $n = Expand-ZipFiles $textureFiles $texturesDest
-        Write-Host "  $n textures in $texturesDest"
+        $n = Expand-ZipFiles $textureFiles $texturesDest -KeepExisting
+        Write-Host "  $($textureFiles.Count) textures in ${texturesDest}: $n added, $($textureFiles.Count - $n) there already, kept"
 
         Step 'Preset folder'
         Set-PresetFolder (Join-Path $profileDir 'browser_config.ini') $PresetLibraryStored
@@ -584,8 +598,26 @@ Yi1UAAAAboG8/lY5oDa4ZK/lZuptygQAAADni9Ndiv9vQYgtpI4xh4WyAAAAAMFA/Ba6HIVDkzvpMn9u
 ZmUB/ql1kwAA/4Bro+HrCn6aRo7FzwMSkEC1//8AgA==
 '@
 
+# Keeps the window open at the end, so that its messages can be read, when it closes with this script:
+# when the batch part found this file named in cmd's command line (Explorer, Windows+R or another
+# program started it, rather than an interactive command prompt) and no other program shares the
+# console, as a shell that started it from its own window would (PowerShell runs a .cmd with cmd /c).
+function Wait-IfOwnWindow {
+    if (-not $env:MD2P_PAUSE_IF_ALONE) { return }
+    try {
+        Add-Type -Namespace Md2p -Name NativeConsole -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint GetConsoleProcessList(uint[] list, uint count);'
+        # cmd and this PowerShell are two; GetConsoleProcessList returns how many there are, even past 8.
+        if ([Md2p.NativeConsole]::GetConsoleProcessList((New-Object uint32[] 8), 8) -gt 2) { return }
+    }
+    catch { }
+    Read-Host 'Press Enter to close' | Out-Null
+}
+
+$exitCode = 0
 try { Install-MilkDrop }
 catch {
     Write-Host "`nERROR: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+    $exitCode = 1
 }
+Wait-IfOwnWindow
+exit $exitCode
