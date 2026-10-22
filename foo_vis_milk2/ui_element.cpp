@@ -1378,16 +1378,14 @@ static unsigned CancelAlbumArtReads()
 }
 
 // The image file `format` (the artwork format setting) names for `track`, read whole through
-// foobar2000's filesystem, if the format is set and names a file it can read; or else empty. A
-// format with no field (%...%) and no function ($...) is a path as written, not a script: in a
-// script, brackets, quotes and commas are syntax, and folder names often have them, as in
-// "(2000) Gladiator". Any thread.
+// foobar2000's filesystem, if the format is set and names a file it can read; or else empty. The
+// format is a path as written unless IsArtworkFormatScript. Any thread.
 static std::vector<uint8_t> AlbumArtFile(const metadb_handle_ptr& track, const pfc::string8& format, abort_callback& abort)
 {
     if (format.is_empty())
         return {};
     pfc::string8 path = format;
-    if (strchr(format, '%') || strchr(format, '$'))
+    if (IsArtworkFormatScript(format))
     {
         titleformat_object::ptr script;
         if (!titleformat_compiler::get()->compile(script, format) || !track->format_title(nullptr, path, script, nullptr) || path.is_empty())

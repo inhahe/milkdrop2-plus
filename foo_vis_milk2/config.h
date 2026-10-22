@@ -305,6 +305,14 @@ enum
 };
 } // namespace
 
+// Whether `format`, an artwork format, is a foobar2000 script (one with a %field% or a $function)
+// rather than a path taken as written: in a script, brackets, quotes and commas are syntax, and
+// folder names often have them, as in "(2000) Gladiator".
+inline bool IsArtworkFormatScript(const char* format)
+{
+    return strchr(format, '%') || strchr(format, '$');
+}
+
 class milk2_preferences_page : public preferences_page_instance, public CDialogImpl<milk2_preferences_page>
 {
   public:

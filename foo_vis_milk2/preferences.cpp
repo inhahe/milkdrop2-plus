@@ -77,6 +77,22 @@ static advconfig_string_factory cfg_szTextureDir("Texture directory", "milk2.szT
 // clang-format on
 } // namespace
 
+namespace
+{
+// Says, by the edit control `edit` and in the console (OK closes the page with the balloon), that
+// the foobar2000 script typed there does not compile and so was not saved. The control keeps
+// what was typed, to be corrected, and so the page stays changed; the setting keeps the last
+// script that compiled.
+void ShowScriptError(HWND edit)
+{
+    EDITBALLOONTIP tip{sizeof(tip), L"Not saved", L"This script does not compile: check its brackets, quotes and commas. The last one that did stays in use.", TTI_ERROR};
+    Edit_ShowBalloonTip(edit, &tip);
+    WCHAR text[256] = {0};
+    ::GetWindowText(edit, text, 256);
+    FB2K_console_print(core_api::get_my_file_name(), ": this script in the preferences does not compile, so it was not saved: ", pfc::utf8FromWide(text).c_str());
+}
+} // namespace
+
 #pragma region Preferences Page
 BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
 {
@@ -566,17 +582,12 @@ void milk2_preferences_page::apply()
     cfg_bSongTitleAnims = static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS));
 
     titleformat_object::ptr script;
-    pfc::string8 pattern;
     GetDlgItemText(IDC_TITLE_FORMAT, buf, 256);
-    pattern = pfc::utf8FromWide(buf);
-    if (static_api_ptr_t<titleformat_compiler>()->compile(script, pattern))
-    {
-        cfg_szTitleFormat = pfc::utf8FromWide(buf);
-    }
+    const pfc::string8 pattern = pfc::utf8FromWide(buf);
+    if (titleformat_compiler::get()->compile(script, pattern))
+        cfg_szTitleFormat = pattern;
     else
-    {
-        SetDlgItemText(IDC_TITLE_FORMAT, L"<ERROR>");
-    }
+        ShowScriptError(GetDlgItem(IDC_TITLE_FORMAT));
 
     if (m_resetpage)
     {
@@ -864,12 +875,6 @@ void ShowSeconds(CWindow dialog, int id, double seconds)
     dialog.SetDlgItemText(id, buf);
 }
 
-// Whether `format`, an artwork format, is a script rather than a path as written (see
-// AlbumArtFile in ui_element.cpp).
-bool IsArtworkFormatScript(const char* format)
-{
-    return strchr(format, '%') || strchr(format, '$');
-}
 } // namespace
 
 BOOL milk2_album_art_page::OnInitDialog(CWindow, LPARAM)
@@ -991,7 +996,7 @@ void milk2_album_art_page::apply()
     if (!IsArtworkFormatScript(format) || titleformat_compiler::get()->compile(script, format))
         cfg_szArtworkFormat = format;
     else
-        SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
+        ShowScriptError(GetDlgItem(IDC_ARTWORK_FORMAT));
     cfg_nAlbumArtPosition = ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)); // both always have a selection (ShowSettings)
     cfg_nAlbumArtSize = ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE));
     cfg_bAlbumArtFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
