@@ -230,6 +230,8 @@ class milk2_cui_panel : public uie::window,
                         s_milk2 = true;
                         m_dxInitialized = true;
                         FB2K_console_print(core_api::get_my_file_name(), ": CUI MilkDrop initialized (", w, "x", h, ")");
+                        if (s_config.settings.m_bShowAlbum)
+                            ShowNowPlayingAlbumArt();
                     }
                     else
                     {

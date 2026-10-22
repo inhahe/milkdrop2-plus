@@ -37,7 +37,6 @@ namespace
 milk2_ui_element::milk2_ui_element(ui_element_config::ptr config, ui_element_instance_callback_ptr p_callback) :
     m_callback(p_callback),
     m_bMsgHandled(TRUE),
-    play_callback_impl_base(flag_on_playback_new_track),
     playlist_callback_impl_base(flag_on_items_added | flag_on_items_reordered | flag_on_items_removed | flag_on_items_selection_change |
                                 flag_on_item_focus_change | flag_on_items_modified | flag_on_playlist_activate | flag_on_playlists_reorder |
                                 flag_on_playlists_removed | flag_on_playback_order_changed)
@@ -805,14 +804,10 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             LaunchSongTitle();
             break;
         case IDM_SHOW_ALBUM:
-            {
-                s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
-                s_config.save_menu_toggles();
-                metadb_handle_ptr track;
-                m_playback_control->get_now_playing(track);
-                ShowAlbumArt(track);
-                break;
-            }
+            s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
+            s_config.save_menu_toggles();
+            ShowNowPlayingAlbumArt();
+            break;
         case IDM_QUIT:
             break;
         default:
@@ -979,10 +974,8 @@ bool milk2_ui_element::Initialize(HWND window, int width, int height)
         ::SetClassLongPtr(parent, GCLP_HICONSM, (LONG_PTR)hIcon);
 
         s_milk2 = true;
-
-        // A track already playing gets no new-track callback.
-        if (metadb_handle_ptr track; s_config.settings.m_bShowAlbum && m_playback_control->get_now_playing(track))
-            ShowAlbumArt(track);
+        if (s_config.settings.m_bShowAlbum)
+            ShowNowPlayingAlbumArt();
     }
     else
     {
@@ -1422,9 +1415,11 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
 
 // Shows `track`'s album art in place of the last, if that option is on: the file the
 // artwork format names, if that exists, or else the track's front cover. Otherwise, or with no
-// track, removes it. Other sprites stay.
-void milk2_ui_element::ShowAlbumArt(const metadb_handle_ptr& track)
+// track, removes it. Other sprites stay. Nothing with no engine running.
+static void ShowAlbumArt(const metadb_handle_ptr& track)
 {
+    if (!s_milk2)
+        return;
     std::wstring file;
     std::vector<uint8_t> raster;
     if (s_config.settings.m_bShowAlbum && track.is_valid())
@@ -1438,6 +1433,13 @@ void milk2_ui_element::ShowAlbumArt(const metadb_handle_ptr& track)
     g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)]() mutable {
         g_plugin.SetAlbumArt(std::move(file), std::move(raster));
     });
+}
+
+void ShowNowPlayingAlbumArt()
+{
+    metadb_handle_ptr track;
+    playback_control::get()->get_now_playing(track);
+    ShowAlbumArt(track);
 }
 
 void milk2_ui_element::UpdatePlaylist()
@@ -1726,10 +1728,12 @@ class milk2_playback_feed : private play_callback_impl_base, private playlist_ca
 
   private:
     void on_playback_starting(play_control::t_track_command, bool) override { PublishNowPlaying(); }
-    void on_playback_new_track(metadb_handle_ptr) override
+    void on_playback_new_track(metadb_handle_ptr track) override
     {
         ++s_nowPlayingTrack;
         PublishPlayback();
+        if (s_config.settings.m_bShowAlbum)
+            ShowAlbumArt(track);
     }
     void on_playback_stop(play_control::t_stop_reason) override { PublishPlayback(); }
     void on_playback_seek(double) override { PublishNowPlaying(); }

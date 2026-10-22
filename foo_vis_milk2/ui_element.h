@@ -42,9 +42,14 @@ const struct RenderLockLife
 // Hands the engine what is playing and the active playlist now (see milk2_playback_feed in
 // ui_element.cpp). Main thread.
 void PublishPlayback();
+// Shows the playing track's album art in the running engine, or removes it if that option is off
+// or nothing plays; does nothing with no engine running. The playback feed calls it at each new
+// track; a host calls it when it starts the engine, as a track already playing gets no callback.
+// Main thread.
+void ShowNowPlayingAlbumArt();
 
 #pragma region UI Element
-class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private play_callback_impl_base, private playlist_callback_impl_base
+class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private playlist_callback_impl_base
 #ifdef TIMER_DX
     , public idle_handler
 #endif
@@ -303,9 +308,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     titleformat_object::ptr m_search;
 
     // clang-format off
-    // Playback callback methods
-    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") if (s_config.settings.m_bShowAlbum) ShowAlbumArt(p_track); }
-
     // Playlist callback methods
     void on_items_added(size_t /*p_playlist*/, size_t /*p_start*/, metadb_handle_list_cref /*p_data*/, const bit_array& /*p_selection*/) { MILK2_CONSOLE_LOG("* PlaylistItemsAdded") UpdatePlaylist(); }
     void on_items_reordered(size_t /*p_playlist*/, const size_t* /*p_order*/, size_t /*p_count*/) { MILK2_CONSOLE_LOG("* PlaylistItemsReordered") UpdatePlaylist(); }
@@ -323,9 +325,6 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     static void SetSelectionSingle(size_t idx);
     static void SetSelectionSingle(size_t idx, bool toggle, bool focus, bool single_only);
   private:
-
-    // Album art
-    static void ShowAlbumArt(const metadb_handle_ptr& track);
     // clang-format on
 
     // Text
