@@ -40,12 +40,12 @@
 #include <projectm-eval/ns-eel2-shim/ns-eel.h>
 #endif
 
-// What a sprite's code is given to place it by: inputs set before its init code and each frame
-// (texmgr::SetPlacementInputs).
-struct SpritePlacement
+// What a sprite's code is given besides the music and the time: inputs set before its init code
+// and each frame (texmgr::SetSpriteInputs).
+struct SpriteInputs
 {
-    double canvasAspect;   // the canvas's width / height: `aspect`
-    AlbumArtPlacement art; // the album art settings (PlaceAlbumArt): `artx`, `arty`, `artsize`
+    double canvasAspect; // the canvas's width / height: `aspect`
+    AlbumArtInputs art;  // the album art settings: `artx`, `arty`, `artsize`, `arthide`, `artfade`
 };
 
 #define NUM_TEX 16
@@ -90,7 +90,7 @@ typedef struct
     double *var_bass, *var_bass_att, *var_mid, *var_mid_att, *var_treb, *var_treb_att;
     double* var_aspect;    // the canvas's width / height, and
     double* var_imgaspect; // the image's: both set before the init code and each frame, to place by,
-    double *var_artx, *var_arty, *var_artsize; // as are the album art settings (SpritePlacement::art)
+    double *var_artx, *var_arty, *var_artsize, *var_arthide, *var_artfade; // as are the album art settings (SpriteInputs::art)
 
     // Expression outputs
     double *var_x, *var_y;
@@ -113,12 +113,12 @@ class texmgr
     // they are and returns false, so that they outlive a reallocation of the engine's other
     // resources (a resize, a change of settings, a window swap).
     bool Init(D3D11Shim* lpDD);
-    // Sets slot `iSlot`'s placement inputs: `aspect`, `artx`, `arty` and `artsize` from
-    // `placement`, and `imgaspect` from its image.
-    void SetPlacementInputs(int iSlot, const SpritePlacement& placement);
-    // `placement`: what the init code is given to place the sprite by.
-    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpritePlacement& placement);
-    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpritePlacement& placement);
+    // Sets slot `iSlot`'s inputs from `inputs` (`aspect` and the album art settings), and
+    // `imgaspect` from its image.
+    void SetSpriteInputs(int iSlot, const SpriteInputs& inputs);
+    // `inputs`: what the init code is given besides the time.
+    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpriteInputs& inputs);
+    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpriteInputs& inputs);
     void KillTex(int iSlot);
     void Finish();
 
@@ -129,7 +129,7 @@ class texmgr
     void FreeVars(int iSlot);
     void FreeCode(int iSlot);
     void RegisterBuiltInVariables(int iSlot);
-    bool RunInitCode(int iSlot, char* szInitCode, const SpritePlacement& placement);
+    bool RunInitCode(int iSlot, char* szInitCode, const SpriteInputs& inputs);
     bool RecompileExpressions(int iSlot);
     void StripLinefeedCharsAndComments(char* src, char* dest);
 

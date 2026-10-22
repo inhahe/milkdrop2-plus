@@ -194,7 +194,7 @@ bool texmgr::TryCreateDDrawSurface(int iSlot, int w, int h)
 }
 */
 
-int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, const SpritePlacement& placement)
+int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, const SpriteInputs& inputs)
 {
     if (iSlot < 0) return TEXMGR_ERR_BAD_INDEX;
     if (iSlot >= NUM_TEX) return TEXMGR_ERR_BAD_INDEX;
@@ -560,7 +560,7 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     int ret = TEXMGR_ERR_SUCCESS;
 
     // Compile and run initialization code.
-    if (!RunInitCode(iSlot, szInitCode, placement))
+    if (!RunInitCode(iSlot, szInitCode, inputs))
         ret |= TEXMGR_WARN_ERROR_IN_INIT_CODE;
 
     // Compile and save per-frame code.
@@ -574,7 +574,7 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     return ret;
 }
 
-int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, const SpritePlacement& placement)
+int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int /* ck */, const SpriteInputs& inputs)
 {
     if (iSlot < 0)
         return TEXMGR_ERR_BAD_INDEX;
@@ -618,7 +618,7 @@ int texmgr::LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, c
     int ret = TEXMGR_ERR_SUCCESS;
 
     // Compile and run initialization code.
-    if (!RunInitCode(iSlot, szInitCode, placement))
+    if (!RunInitCode(iSlot, szInitCode, inputs))
         ret |= TEXMGR_WARN_ERROR_IN_INIT_CODE;
 
     // Compile and save per-frame code.
@@ -685,7 +685,7 @@ void texmgr::StripLinefeedCharsAndComments(char* src, char* dest)
     dest[i2] = 0;
 }
 
-bool texmgr::RunInitCode(int iSlot, char* szInitCode, const SpritePlacement& placement)
+bool texmgr::RunInitCode(int iSlot, char* szInitCode, const SpriteInputs& inputs)
 {
     // Warning: Destroys contents of `m_tex[iSlot].m_szExpr`,
     //          so be sure to call `RunInitCode()` before writing or
@@ -716,7 +716,7 @@ bool texmgr::RunInitCode(int iSlot, char* szInitCode, const SpritePlacement& pla
     *(m_tex[iSlot].var_blendmode) = 0.0;
     *(m_tex[iSlot].var_done) = 0.0;
     *(m_tex[iSlot].var_burn) = 1.0;
-    SetPlacementInputs(iSlot, placement); // so that init code may place the sprite once
+    SetSpriteInputs(iSlot, inputs); // so that init code may place the sprite once
 
 #ifndef _NO_EXPR_
     if (m_tex[iSlot].m_codehandle)
@@ -774,13 +774,15 @@ bool texmgr::RecompileExpressions(int iSlot)
     return true;
 }
 
-void texmgr::SetPlacementInputs(int iSlot, const SpritePlacement& placement)
+void texmgr::SetSpriteInputs(int iSlot, const SpriteInputs& inputs)
 {
-    *(m_tex[iSlot].var_aspect) = placement.canvasAspect;
+    *(m_tex[iSlot].var_aspect) = inputs.canvasAspect;
     *(m_tex[iSlot].var_imgaspect) = m_tex[iSlot].img_h ? m_tex[iSlot].img_w / static_cast<double>(m_tex[iSlot].img_h) : 1.0;
-    *(m_tex[iSlot].var_artx) = placement.art.x;
-    *(m_tex[iSlot].var_arty) = placement.art.y;
-    *(m_tex[iSlot].var_artsize) = placement.art.size;
+    *(m_tex[iSlot].var_artx) = inputs.art.x;
+    *(m_tex[iSlot].var_arty) = inputs.art.y;
+    *(m_tex[iSlot].var_artsize) = inputs.art.size;
+    *(m_tex[iSlot].var_arthide) = inputs.art.hideAfter;
+    *(m_tex[iSlot].var_artfade) = inputs.art.fadeTime;
 }
 
 // Free the built-in variables AND any user variables.
@@ -819,6 +821,8 @@ void texmgr::RegisterBuiltInVariables(int iSlot)
     m_tex[iSlot].var_artx = NSEEL_VM_regvar(eel_ctx, "artx");
     m_tex[iSlot].var_arty = NSEEL_VM_regvar(eel_ctx, "arty");
     m_tex[iSlot].var_artsize = NSEEL_VM_regvar(eel_ctx, "artsize");
+    m_tex[iSlot].var_arthide = NSEEL_VM_regvar(eel_ctx, "arthide");
+    m_tex[iSlot].var_artfade = NSEEL_VM_regvar(eel_ctx, "artfade");
 
     // Output variables.
     m_tex[iSlot].var_x = NSEEL_VM_regvar(eel_ctx, "x");

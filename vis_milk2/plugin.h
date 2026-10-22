@@ -504,19 +504,24 @@ class CPlugin : public CPluginShell
     unsigned m_nSongTitleTrack = 0; // the NowPlaying::track the song title animation last ran for
 
     std::vector<uint8_t> m_albumArtImage; // the encoded image SetAlbumArt shows
-    // Where and how large the album art is drawn when the image list does not say: an
-    // AlbumArtPosition, and its longer side in percent of the canvas's shorter side.
+    // How the album art is drawn when the image list does not say: an AlbumArtPosition; its longer
+    // side in percent of the canvas's shorter side; whether it fades out, after how many seconds;
+    // and how many seconds a fade in or out takes.
     int m_albumArtPosition = ALBUM_ART_LOWER_RIGHT;
     int m_albumArtSize = DEFAULT_ALBUM_ART_SIZE;
+    bool m_albumArtFadeOut = false;
+    double m_albumArtShowFor = DEFAULT_ALBUM_ART_SHOW_FOR;
+    double m_albumArtFadeTime = DEFAULT_ALBUM_ART_FADE_TIME;
     void LaunchAlbumArt();
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
-    // What the sprites are placed by, set before their init code and each frame: the canvas's
-    // width / height (`aspect`) and the album art settings (`artx`, `arty`, `artsize`), so that a
-    // change of those moves the art at the next frame.
-    SpritePlacement SpritePlacementInputs() const
+    // What the sprites' code is given, set before their init code and each frame: the canvas's
+    // width / height (`aspect`) and the album art settings (`artx`, `arty`, `artsize`, `arthide`,
+    // `artfade`), so that a change of those reaches the art at the next frame.
+    SpriteInputs CurrentSpriteInputs() const
     {
-        return {GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0, PlaceAlbumArt(m_albumArtPosition, m_albumArtSize)};
+        return {GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0,
+                MakeAlbumArtInputs(m_albumArtPosition, m_albumArtSize, m_albumArtFadeOut, m_albumArtShowFor, m_albumArtFadeTime)};
     }
 
     // Stuff for the menu system.

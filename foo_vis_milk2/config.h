@@ -19,6 +19,9 @@ static constexpr GUID guid_milk2 = {
 static constexpr GUID guid_milk2_preferences = {
     0x5feadec6, 0x37f3, 0x4ebf, {0xb3, 0xfd, 0x57, 0x11, 0xfa, 0xe3, 0xa3, 0xe8}
 }; // {5FEADEC6-37F3-4EBF-B3FD-5711FAE3A3E8}
+static constexpr GUID guid_milk2_album_art_preferences = {
+    0x3bf07b04, 0x37ce, 0x46d0, {0x9c, 0x63, 0x18, 0x7c, 0xc5, 0xeb, 0x5b, 0x8}
+}; // {3BF07B04-37CE-46D0-9C63-187CC5EB5B08}
 
 //static constexpr GUID VisMilk2LangGUID = {
 //    0xc5d175f1, 0xe4e4, 0x47ee, {0xb8, 0x5c, 0x4e, 0xdc, 0x6b, 0x2, 0x6a, 0x35}
@@ -170,6 +173,15 @@ static constexpr GUID guid_cfg_nAlbumArtPosition = {
 static constexpr GUID guid_cfg_nAlbumArtSize = {
     0x71de6599, 0x5b30, 0x4a15, {0x8e, 0x9d, 0xa7, 0x2f, 0x39, 0x38, 0x9d, 0xd4}
 }; // {71DE6599-5B30-4A15-8E9D-A72F39389DD4}
+static constexpr GUID guid_cfg_bAlbumArtFadeOut = {
+    0x69b05c8c, 0xae7d, 0x4665, {0x85, 0xa2, 0xa, 0xec, 0x4b, 0xac, 0x16, 0xcd}
+}; // {69B05C8C-AE7D-4665-85A2-0AEC4BAC16CD}
+static constexpr GUID guid_cfg_fAlbumArtShowFor = {
+    0x66a3a9c8, 0x3e25, 0x43ac, {0xbe, 0xbb, 0x2a, 0x56, 0x10, 0xff, 0x0, 0x26}
+}; // {66A3A9C8-3E25-43AC-BEBB-2A5610FF0026}
+static constexpr GUID guid_cfg_fAlbumArtFadeTime = {
+    0xaf42e77a, 0xdad0, 0x400d, {0xb7, 0x2c, 0x46, 0xe6, 0xe8, 0x8, 0xa3, 0xe7}
+}; // {AF42E77A-DAD0-400D-B72C-46E6E808A3E7}
 
 // Preferences derived from other settings or hidden.
 static constexpr GUID guid_cfg_bTexSizeWasAutoPow2 = {
@@ -260,6 +272,9 @@ static constexpr bool default_bEnableDownmix = false;
 static constexpr bool default_bShowAlbum = false;
 static constexpr int default_nAlbumArtPosition = ALBUM_ART_LOWER_RIGHT;
 static constexpr int default_nAlbumArtSize = DEFAULT_ALBUM_ART_SIZE;
+static constexpr bool default_bAlbumArtFadeOut = false;
+static constexpr double default_fAlbumArtShowFor = DEFAULT_ALBUM_ART_SHOW_FOR;
+static constexpr double default_fAlbumArtFadeTime = DEFAULT_ALBUM_ART_FADE_TIME;
 static constexpr bool default_bEnableHDR = false;
 static constexpr int default_nBackBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
 static constexpr int default_nDepthBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -347,10 +362,6 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
         COMMAND_HANDLER_EX(IDC_RAND_MSG, EN_CHANGE, OnEditNotification)
         COMMAND_HANDLER_EX(IDC_CB_TITLE_ANIMS, BN_CLICKED, OnButtonClick)
         COMMAND_HANDLER_EX(IDC_TITLE_FORMAT, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_ARTWORK_FORMAT, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_CB_SHOW_ALBUM, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_ALBUM_ART_POSITION, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_ALBUM_ART_SIZE, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(ID_SPRITE, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_MSG, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_FONTS, BN_CLICKED, OnButtonPushed)
@@ -370,7 +381,6 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
     void OnButtonClick(UINT uNotifyCode, int nID, CWindow wndCtl);
     void OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl);
     void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScrollBar);
-    void AutoEnableAlbumArt();
     bool HasChanged() const;
     void OnChanged();
 
@@ -390,18 +400,78 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
     const preferences_page_callback::ptr m_callback;
     bool m_resetpage;
 
+    CToolTipCtrl m_tooltips;
+
+    fb2k::CDarkModeHooks m_dark;
+};
+
+// The MilkDrop > Album Art preferences page: whether the playing track's album art is shown, which
+// image, where, how large, and whether, when and how fast it fades out.
+class milk2_album_art_page : public preferences_page_instance, public CDialogImpl<milk2_album_art_page>
+{
   public:
+    milk2_album_art_page(preferences_page_callback::ptr callback) : m_callback(callback), m_bMsgHandled(TRUE) {}
+
+    enum album_art_dialog_id
+    {
+        IDD = IDD_PREFS_ALBUM_ART
+    };
+
+    uint32_t get_state();
+    HWND get_wnd() { return *this; }
+    void apply();
+    void reset();
+
+    // clang-format off
+    BEGIN_MSG_MAP_EX(milk2_album_art_page)
+        MSG_WM_INITDIALOG(OnInitDialog)
+        MSG_WM_DESTROY(OnDestroy)
+        COMMAND_HANDLER_EX(IDC_CB_SHOW_ALBUM, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ARTWORK_FORMAT, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_POSITION, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_SIZE, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_ALBUM_ART_FADE_OUT, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_SHOW_FOR, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_FADE_TIME, EN_CHANGE, OnControlChange)
+    END_MSG_MAP()
+    // clang-format on
+
     // Shows the Show album art setting the context menu has just saved (milk2_config::
     // save_menu_toggles) in the page, if it is open, so that the page shows, compares and applies
     // the setting as it now is. Main thread.
     static void OnMenuTogglesSaved();
 
   private:
-    inline static milk2_preferences_page* s_openPage = nullptr; // the page on screen, if any; main thread
+    BOOL OnInitDialog(CWindow, LPARAM);
+    void OnDestroy();
+    void OnControlChange(UINT uNotifyCode, int nID, CWindow wndCtl);
+    // Shows these settings in the page's controls: `format` is the artwork format, `position` an
+    // AlbumArtPosition, `size` in percent, `showFor` and `fadeTime` in seconds.
+    void ShowSettings(bool showAlbum, const char* format, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime);
+    // Greys out what does not apply: everything while album art is off, and the seconds before
+    // it fades out while it does not.
+    void EnableControls();
+    bool HasChanged() const;
+    double ReadSeconds(int id) const; // the number in edit control `id`; 0 if there is none
 
+    const preferences_page_callback::ptr m_callback;
+    inline static milk2_album_art_page* s_openPage = nullptr; // the page on screen, if any; main thread
     CToolTipCtrl m_tooltips;
-
     fb2k::CDarkModeHooks m_dark;
+};
+
+class preferences_page_milk2_album_art : public preferences_page_impl<milk2_album_art_page>
+{
+  public:
+    const char* get_name() { return "Album Art"; }
+    GUID get_guid() { return guid_milk2_album_art_preferences; }
+    GUID get_parent_guid() { return guid_milk2_preferences; }
+    bool get_help_url(pfc::string_base& p_out)
+    {
+        p_out.reset();
+        p_out << APPLICATION_DOCUMENTATION_URL;
+        return true;
+    }
 };
 
 class preferences_page_milk2 : public preferences_page_impl<milk2_preferences_page>

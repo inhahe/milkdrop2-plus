@@ -924,6 +924,9 @@ bool CPlugin::PanelSettings(plugin_config* settings)
     m_show_album = static_cast<int>(settings->m_bShowAlbum);
     m_albumArtPosition = settings->m_nAlbumArtPosition;
     m_albumArtSize = settings->m_nAlbumArtSize;
+    m_albumArtFadeOut = settings->m_bAlbumArtFadeOut;
+    m_albumArtShowFor = settings->m_fAlbumArtShowFor;
+    m_albumArtFadeTime = settings->m_fAlbumArtFadeTime;
     m_enable_hdr = static_cast<int>(settings->m_bEnableHDR);
     m_back_buffer_format = settings->m_nBackBufferFormat;
     m_depth_buffer_format = settings->m_nDepthBufferFormat;
@@ -1857,9 +1860,11 @@ void CPlugin::SetAlbumArt(std::vector<uint8_t> image)
 }
 
 // The album art's code when the image list has no [img100] section: the image in a corner, or the
-// centre, as the settings say (the inputs `artx`, `arty` and `artsize`: SpritePlacementInputs),
-// with a margin of a fortieth of the canvas's shorter side, fading in. Not burned in: a burned
-// sprite is also drawn into the preset's own image every frame, which the preset then smears.
+// centre, with a margin of a fortieth of the canvas's shorter side; fading in, and out after a
+// while if the settings say so (all from the inputs `artx`, `arty`, `artsize`, `arthide` and
+// `artfade`: CurrentSpriteInputs). Faded out, it stays, invisible, so that turning the fade off
+// brings it back. Not burned in: a burned sprite is also drawn into the preset's own image every
+// frame, which the preset then smears.
 // A sprite's x and y run from 0 to 1 across the canvas's longer side, centred on the canvas, and
 // sx and sy give the image's longer side as a fraction of it; a non-square image is shrunk about
 // its middle. Hence `aspect` (the canvas's width / height) and `imgaspect` (the image's). An image
@@ -1874,7 +1879,9 @@ static const char* const kAlbumArtCode =
     "sx = artsize * side; sy = sx;"
     "x = 0.5 + artx * max(ex - side * (0.025 + hw), 0);"
     "y = 0.5 + arty * max(ey - side * (0.025 + hh), 0);"
-    "a = min(time * 2, 1);";
+    "fadein = if(above(artfade, 0), min(time / artfade, 1), 1);"
+    "fadeout = if(above(arthide, 0), if(above(artfade, 0), min(max((arthide + artfade - time) / artfade, 0), 1), below(time, arthide)), 1);"
+    "a = min(fadein, fadeout);";
 
 // Launches the album art sprite from what SetAlbumArt kept, if anything.
 void CPlugin::LaunchAlbumArt()
@@ -7254,11 +7261,11 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
     int ret = -1;
     if ((nSpriteNum >= 0 && nSpriteNum < 100) || !filename.empty())
     {
-        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck, SpritePlacementInputs());
+        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck, CurrentSpriteInputs());
     }
     else if (!data.empty())
     {
-        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck, SpritePlacementInputs());
+        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck, CurrentSpriteInputs());
     }
     else
         return false;

@@ -422,7 +422,10 @@
 #define IDS_SHOW_ALBUM_HELP             657
 #define IDS_ALBUM_ART_POSITION_HELP     658
 #define IDS_ALBUM_ART_SIZE_HELP         659
+#define IDS_ALBUM_ART_FADE_OUT_HELP     660
+#define IDS_ALBUM_ART_FADE_TIME_HELP    661
 #define IDD_PREFS                       700
+#define IDD_PREFS_ALBUM_ART             701
 #define IDC_CB_PRESS_F1_MSG             1001
 #define IDC_ARTWORK_FORMAT_LABEL        1002
 #define IDC_STRETCH2                    1003
@@ -538,6 +541,12 @@
 #define IDC_ALBUM_ART_POSITION          1096
 #define IDC_ALBUM_ART_SIZE_CAPTION      1097
 #define IDC_ALBUM_ART_SIZE              1098
+#define IDC_CB_ALBUM_ART_FADE_OUT       1099
+#define IDC_ALBUM_ART_SHOW_FOR          1100
+#define IDC_ALBUM_ART_SHOW_FOR_UNIT     1101
+#define IDC_ALBUM_ART_FADE_TIME_CAPTION 1102
+#define IDC_ALBUM_ART_FADE_TIME         1103
+#define IDC_ALBUM_ART_FADE_TIME_UNIT    1104
 #define ID_SHOWHELP                     40007
 #define ID_SHOWPLAYLIST                 40008
 #define ID_QUIT                         40009
@@ -549,7 +558,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        103
 #define _APS_NEXT_COMMAND_VALUE         40011
-#define _APS_NEXT_CONTROL_VALUE         1099
+#define _APS_NEXT_CONTROL_VALUE         1105
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

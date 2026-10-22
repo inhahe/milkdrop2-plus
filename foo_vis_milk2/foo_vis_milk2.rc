@@ -93,16 +93,10 @@ BEGIN
     CONTROL         "Disable hard cuts",IDC_CB_HARDCUTS,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,11,213,72,13
     LTEXT           "Title display format:",IDC_TITLE_FORMAT_LABEL,183,2,79,10
     EDITTEXT        IDC_TITLE_FORMAT,182,12,122,13,ES_AUTOHSCROLL
-    LTEXT           "Artwork display format:",IDC_ARTWORK_FORMAT_LABEL,183,28,79,10
-    EDITTEXT        IDC_ARTWORK_FORMAT,182,38,122,13,ES_AUTOHSCROLL
-    CONTROL         "Show album art",IDC_CB_SHOW_ALBUM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,183,56,110,10
-    RTEXT           "Position:",IDC_ALBUM_ART_POSITION_CAPTION,175,70,36,10
-    COMBOBOX        IDC_ALBUM_ART_POSITION,213,68,91,87,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    RTEXT           "Size:",IDC_ALBUM_ART_SIZE_CAPTION,175,85,36,10
-    COMBOBOX        IDC_ALBUM_ART_SIZE,213,83,91,123,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    PUSHBUTTON      "&Sprites...",ID_SPRITE,168,101,43,14
-    PUSHBUTTON      "&Messages...",ID_MSG,215,101,43,14
-    PUSHBUTTON      "&Fonts...",ID_FONTS,262,101,43,14
+    PUSHBUTTON      "Edit &Sprites",ID_SPRITE,195,34,82,15
+    PUSHBUTTON      "Edit Custom &Messages",ID_MSG,195,53,82,15
+    PUSHBUTTON      "Select &Fonts",ID_FONTS,195,72,82,15
+    LTEXT           "Album art: see the Album Art page, under MilkDrop.",IDC_STATIC,172,96,132,18
     GROUPBOX        "Song Title Animations and Messages",IDC_STATIC,168,121,137,71
     RTEXT           "Duration of song title animations:",IDC_SONGTITLEANIM_DURATION_LABEL,171,131,103,10
     EDITTEXT        IDC_SONGTITLEANIM_DURATION,275,130,28,13,ES_CENTER | ES_AUTOHSCROLL
@@ -126,6 +120,26 @@ BEGIN
     COMBOBOX        IDC_SHADERS,56,245,99,87,CBS_DROPDOWNLIST | WS_DISABLED | WS_VSCROLL | WS_TABSTOP
     RTEXT           "Canvas size:",IDC_TEXSIZECOMBO_CAPTION,163,246,39,10,WS_DISABLED
     COMBOBOX        IDC_TEXSIZECOMBO,204,245,99,87,CBS_DROPDOWNLIST | WS_DISABLED | WS_VSCROLL | WS_TABSTOP
+END
+
+IDD_PREFS_ALBUM_ART DIALOGEX 0, 0, 332, 288
+STYLE DS_SETFONT | WS_CHILD
+FONT 8, "Segoe UI", 400, 0, 0x1
+BEGIN
+    CONTROL         "Show the playing track's album art",IDC_CB_SHOW_ALBUM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,2,2,200,10
+    LTEXT           "Artwork display format:",IDC_ARTWORK_FORMAT_LABEL,14,18,120,10
+    EDITTEXT        IDC_ARTWORK_FORMAT,14,28,290,13,ES_AUTOHSCROLL
+    LTEXT           "Position:",IDC_ALBUM_ART_POSITION_CAPTION,14,50,30,10
+    COMBOBOX        IDC_ALBUM_ART_POSITION,46,48,80,87,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Size:",IDC_ALBUM_ART_SIZE_CAPTION,140,50,18,10
+    COMBOBOX        IDC_ALBUM_ART_SIZE,160,48,50,123,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Fade out after",IDC_CB_ALBUM_ART_FADE_OUT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,70,60,10
+    EDITTEXT        IDC_ALBUM_ART_SHOW_FOR,76,68,30,13,ES_CENTER | ES_AUTOHSCROLL
+    LTEXT           "seconds",IDC_ALBUM_ART_SHOW_FOR_UNIT,110,70,60,10
+    LTEXT           "Each fade takes",IDC_ALBUM_ART_FADE_TIME_CAPTION,14,88,60,10
+    EDITTEXT        IDC_ALBUM_ART_FADE_TIME,76,86,30,13,ES_CENTER | ES_AUTOHSCROLL
+    LTEXT           "seconds, in and out",IDC_ALBUM_ART_FADE_TIME_UNIT,110,88,100,10
+    LTEXT           "The art fades in when a track starts. An [img100] section in the sprite list (Edit Sprites, on the MilkDrop page) draws it its own way instead; its code can use artx, arty, artsize, arthide and artfade.",IDC_STATIC,2,110,302,28
 END
 
 
@@ -216,6 +230,14 @@ BEGIN
         TOPMARGIN, 2
         BOTTOMMARGIN, 286
         HORZGUIDE, 137
+    END
+
+    IDD_PREFS_ALBUM_ART, DIALOG
+    BEGIN
+        LEFTMARGIN, 2
+        RIGHTMARGIN, 330
+        TOPMARGIN, 2
+        BOTTOMMARGIN, 286
     END
 
 
@@ -951,7 +973,9 @@ BEGIN
     IDS_TITLE_FORMAT_HELP   "Set a song title format string using foobar2000 script."
     IDS_ARTWORK_FORMAT_HELP "The album art to show: a full path, taken as written, or a foobar2000 script with %fields% or $functions that returns one. If unset, or no such file exists: the cover embedded in the track, or else what foobar2000's album art settings find."
     IDS_SHOW_ALBUM_HELP     "Shows the playing track's album art over the visualization. Also on the right-click menu of the Default UI element (the Columns UI panel has none)."
-    IDS_ALBUM_ART_POSITION_HELP "Where the album art goes. An [img100] section in the sprite list (the Sprites button) overrides this and the size."
+    IDS_ALBUM_ART_POSITION_HELP "Where the album art goes. An [img100] section in the sprite list (Edit Sprites, on the MilkDrop page) overrides this, the size and the fades."
+    IDS_ALBUM_ART_FADE_OUT_HELP "Fades the album art out this many seconds after it appears, when a track starts. Unchecked, it stays."
+    IDS_ALBUM_ART_FADE_TIME_HELP "How many seconds the album art takes to fade in, and to fade out. 0: it appears and goes at once."
     IDS_ALBUM_ART_SIZE_HELP "The album art's longer side, as a share of the visualization's shorter side (its height, when it is wider than tall)."
     IDS_HOW_TO_SET_PRESET_LIBRARY "Right-click > Set Preset Library Folder..."
     IDS_LOOKED_IN           "Looked in: "

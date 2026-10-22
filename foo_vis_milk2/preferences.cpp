@@ -40,6 +40,9 @@ static cfg_bool cfg_bEnableDownmix(guid_cfg_bEnableDownmix, default_bEnableDownm
 static cfg_bool cfg_bShowAlbum(guid_cfg_bShowAlbum, default_bShowAlbum);
 static cfg_int cfg_nAlbumArtPosition(guid_cfg_nAlbumArtPosition, static_cast<int64_t>(default_nAlbumArtPosition));
 static cfg_int cfg_nAlbumArtSize(guid_cfg_nAlbumArtSize, static_cast<int64_t>(default_nAlbumArtSize));
+static cfg_bool cfg_bAlbumArtFadeOut(guid_cfg_bAlbumArtFadeOut, default_bAlbumArtFadeOut);
+static cfg_float cfg_fAlbumArtShowFor(guid_cfg_fAlbumArtShowFor, default_fAlbumArtShowFor);
+static cfg_float cfg_fAlbumArtFadeTime(guid_cfg_fAlbumArtFadeTime, default_fAlbumArtFadeTime);
 static cfg_bool cfg_bEnableHDR(guid_cfg_bEnableHDR, default_bEnableHDR);
 static cfg_int cfg_max_fps_fs(guid_cfg_max_fps_fs, static_cast<int64_t>(default_max_fps_fs));
 static cfg_int cfg_nMaxBytes(guid_cfg_nMaxBytes, static_cast<int64_t>(default_nMaxBytes));
@@ -283,33 +286,8 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     SetDlgItemText(IDC_RAND_MSG, buf);
     CheckDlgButton(IDC_CB_TITLE_ANIMS, static_cast<UINT>(cfg_bSongTitleAnims));
 
-    // Title and artwork format.
-    swprintf_s(buf, L"%hs", cfg_szTitleFormat.get().c_str());
-    SetDlgItemText(IDC_TITLE_FORMAT, buf);
-    swprintf_s(buf, L"%hs", cfg_szArtworkFormat.get().c_str());
-    SetDlgItemText(IDC_ARTWORK_FORMAT, buf);
-
-    // Album art.
-    ctrl = GetDlgItem(IDC_ALBUM_ART_POSITION);
-    AddItem(ctrl, L"Lower right", ALBUM_ART_LOWER_RIGHT);
-    AddItem(ctrl, L"Lower left", ALBUM_ART_LOWER_LEFT);
-    AddItem(ctrl, L"Upper right", ALBUM_ART_UPPER_RIGHT);
-    AddItem(ctrl, L"Upper left", ALBUM_ART_UPPER_LEFT);
-    AddItem(ctrl, L"Center", ALBUM_ART_CENTER);
-    if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtPosition)) < 0)
-        SelectItemByValue(ctrl, default_nAlbumArtPosition);
-    ctrl = GetDlgItem(IDC_ALBUM_ART_SIZE);
-    static_assert(MIN_ALBUM_ART_SIZE <= 10 && MAX_ALBUM_ART_SIZE >= 100, "the list below offers 10% to 100%");
-    for (const int percent : {10, 15, 20, 25, 30, 40, 50, 60, 75, 100})
-    {
-        swprintf_s(buf, L"%d%%", percent);
-        AddItem(ctrl, buf, percent);
-    }
-    if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtSize)) < 0)
-        SelectItemByValue(ctrl, default_nAlbumArtSize); // a size the list does not offer
-    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
-    AutoEnableAlbumArt();
-    s_openPage = this;
+    // Title format.
+    SetDlgItemText(IDC_TITLE_FORMAT, pfc::wideFromUTF8(cfg_szTitleFormat.get()));
 
     // Push buttons.
     milk2_config::initialize_paths();
@@ -327,10 +305,6 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
         {(UINT16)IDC_FS_MAXFPS2, (UINT16)IDS_MAX_FRAMERATE_HELP},
         {(UINT16)IDC_CB_FSPT, (UINT16)IDS_PAGE_TEARING_HELP},
         {(UINT16)IDC_TITLE_FORMAT, (UINT16)IDS_TITLE_FORMAT_HELP},
-        {(UINT16)IDC_ARTWORK_FORMAT, (UINT16)IDS_ARTWORK_FORMAT_HELP},
-        {(UINT16)IDC_CB_SHOW_ALBUM, (UINT16)IDS_SHOW_ALBUM_HELP},
-        {(UINT16)IDC_ALBUM_ART_POSITION, (UINT16)IDS_ALBUM_ART_POSITION_HELP},
-        {(UINT16)IDC_ALBUM_ART_SIZE, (UINT16)IDS_ALBUM_ART_SIZE_HELP},
         {(UINT16)IDC_BETWEEN_TIME, (UINT16)IDS_BETWEEN_TIME_HELP},
         {(UINT16)IDC_BETWEEN_TIME_RANDOM, (UINT16)IDS_BETWEEN_TIME_RANDOM_HELP},
         {(UINT16)IDC_BLEND_AUTO, (UINT16)IDS_BLEND_AUTO_HELP},
@@ -384,8 +358,6 @@ void milk2_preferences_page::OnClose()
 void milk2_preferences_page::OnDestroy()
 {
     PREFS_CONSOLE_LOG("OnDestroy")
-    if (s_openPage == this)
-        s_openPage = nullptr;
     //if (m_tooltips.IsWindow())
     //    m_tooltips.DestroyWindow();
 }
@@ -428,7 +400,6 @@ void milk2_preferences_page::OnButtonClick(UINT uNotifyCode, int nID, CWindow wn
     UNREFERENCED_PARAMETER(wndCtl);
 
     OnChanged();
-    AutoEnableAlbumArt();
 }
 
 void milk2_preferences_page::OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl)
@@ -464,22 +435,6 @@ void milk2_preferences_page::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScro
     }
 }
 
-void milk2_preferences_page::OnMenuTogglesSaved()
-{
-    if (!s_openPage)
-        return;
-    s_openPage->CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
-    s_openPage->AutoEnableAlbumArt();
-    s_openPage->OnChanged();
-}
-
-// Greys the album art's position and size out while album art is off.
-void milk2_preferences_page::AutoEnableAlbumArt()
-{
-    const BOOL bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED;
-    for (const int id : {IDC_ALBUM_ART_POSITION_CAPTION, IDC_ALBUM_ART_POSITION, IDC_ALBUM_ART_SIZE_CAPTION, IDC_ALBUM_ART_SIZE})
-        ::EnableWindow(GetDlgItem(id), bShowAlbum);
-}
 
 uint32_t milk2_preferences_page::get_state()
 {
@@ -546,15 +501,7 @@ void milk2_preferences_page::reset()
     SetDlgItemText(IDC_RAND_MSG, buf);
     CheckDlgButton(IDC_CB_TITLE_ANIMS, static_cast<UINT>(default_bSongTitleAnims));
 
-    swprintf_s(buf, L"%hs", default_szTitleFormat);
-    SetDlgItemText(IDC_TITLE_FORMAT, buf);
-    swprintf_s(buf, L"%hs", default_szArtworkFormat);
-    SetDlgItemText(IDC_ARTWORK_FORMAT, buf);
-
-    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(default_bShowAlbum));
-    SelectItemByValue(GetDlgItem(IDC_ALBUM_ART_POSITION), default_nAlbumArtPosition);
-    SelectItemByValue(GetDlgItem(IDC_ALBUM_ART_SIZE), default_nAlbumArtSize);
-    AutoEnableAlbumArt();
+    SetDlgItemText(IDC_TITLE_FORMAT, pfc::wideFromUTF8(default_szTitleFormat));
 
     m_resetpage = true; // fonts
 
@@ -630,20 +577,6 @@ void milk2_preferences_page::apply()
     {
         SetDlgItemText(IDC_TITLE_FORMAT, L"<ERROR>");
     }
-    GetDlgItemText(IDC_ARTWORK_FORMAT, buf, 256);
-    pattern = pfc::utf8FromWide(buf);
-    if (static_api_ptr_t<titleformat_compiler>()->compile(script, pattern))
-    {
-        cfg_szArtworkFormat = pfc::utf8FromWide(buf);
-    }
-    else
-    {
-        SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
-    }
-
-    cfg_bShowAlbum = static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM));
-    cfg_nAlbumArtPosition = ReadCBValue(IDC_ALBUM_ART_POSITION); // both always have a selection (OnInitDialog)
-    cfg_nAlbumArtSize = ReadCBValue(IDC_ALBUM_ART_SIZE);
 
     if (m_resetpage)
     {
@@ -669,8 +602,7 @@ bool milk2_preferences_page::HasChanged() const
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_NOCOMPSHADER)) != cfg_bSkipCompShader) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_FSPT)) != cfg_allow_page_tearing_fs) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_HARDCUTS)) != cfg_bHardCutsDisabled) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != cfg_bShowAlbum);
+                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims);
 
     bool combobox_changes = false;
     LRESULT n = SendMessage(GetDlgItem(IDC_FS_MAXFPS2), CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
@@ -687,9 +619,7 @@ bool milk2_preferences_page::HasChanged() const
                        IsComboDiff(IDC_STRETCH2, cfg_nCanvasStretch) ||
                        IsComboDiff(IDC_TEXSIZECOMBO, cfg_nTexSizeX) ||
                        IsComboDiff(IDC_MAX_BYTES2, cfg_nMaxBytes) ||
-                       IsComboDiff(IDC_MAX_IMAGES2, cfg_nMaxImages) ||
-                       IsComboDiff(IDC_ALBUM_ART_POSITION, cfg_nAlbumArtPosition) ||
-                       IsComboDiff(IDC_ALBUM_ART_SIZE, cfg_nAlbumArtSize);
+                       IsComboDiff(IDC_MAX_IMAGES2, cfg_nMaxImages);
 
     WCHAR buf[256] = {0}, *stop;
     pfc::string8 current;
@@ -715,9 +645,6 @@ bool milk2_preferences_page::HasChanged() const
     GetDlgItemText(IDC_TITLE_FORMAT, buf, 256);
     current = pfc::utf8FromWide(buf);
     editcontrol_changes = editcontrol_changes || !current.equals(cfg_szTitleFormat);
-    GetDlgItemText(IDC_ARTWORK_FORMAT, buf, 256);
-    current = pfc::utf8FromWide(buf);
-    editcontrol_changes = editcontrol_changes || !current.equals(cfg_szArtworkFormat);
 
     LRESULT t;
     bool slider_changes = false;
@@ -748,10 +675,43 @@ inline void milk2_preferences_page::AddItem(HWND ctrl, LPWSTR buffer, UINT id, D
     AddItem(ctrl, buffer, itemdata);
 }
 
+// Combo box items carry a value (CB_SETITEMDATA): the setting they stand for.
+namespace
+{
+// Adds the item `text`, standing for `value`, to the combo box `ctrl`.
+void AddComboItem(HWND ctrl, LPCWSTR text, DWORD value)
+{
+    const LRESULT nPos = SendMessage(ctrl, CB_ADDSTRING, (WPARAM)0, (LPARAM)text);
+    SendMessage(ctrl, CB_SETITEMDATA, nPos, value);
+}
+
+// Selects the combo box `ctrl`'s item standing for `value`. Returns its position, or -1 if there
+// is none (the selection is then left as it was).
+int SelectComboValue(HWND ctrl, LRESULT value)
+{
+    const LRESULT count = SendMessage(ctrl, CB_GETCOUNT, (WPARAM)0, (LPARAM)0);
+    for (int i = 0; i < count; ++i)
+    {
+        if (SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)i, (LPARAM)0) == value)
+        {
+            SendMessage(ctrl, CB_SETCURSEL, (WPARAM)i, (LPARAM)0);
+            return i;
+        }
+    }
+    return -1;
+}
+
+// The value of the combo box `ctrl`'s selected item, or -1 with none selected.
+int64_t ComboValue(HWND ctrl)
+{
+    const LRESULT t = SendMessage(ctrl, CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+    return t != CB_ERR ? static_cast<int64_t>(SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)t, (LPARAM)0)) : -1;
+}
+} // namespace
+
 inline void milk2_preferences_page::AddItem(HWND ctrl, LPCWSTR text, DWORD itemdata)
 {
-    LRESULT nPos = SendMessage(ctrl, CB_ADDSTRING, (WPARAM)0, (LPARAM)text);
-    SendMessage(ctrl, CB_SETITEMDATA, nPos, itemdata);
+    AddComboItem(ctrl, text, itemdata);
 }
 
 inline void milk2_preferences_page::SelectItemByPos(HWND ctrl, int pos)
@@ -761,27 +721,12 @@ inline void milk2_preferences_page::SelectItemByPos(HWND ctrl, int pos)
 
 int milk2_preferences_page::SelectItemByValue(HWND ctrl, LRESULT value)
 {
-    LRESULT count = SendMessage(ctrl, CB_GETCOUNT, (WPARAM)0, (LPARAM)0);
-    for (int i = 0; i < count; ++i)
-    {
-        LRESULT value_i = SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)i, (LPARAM)0);
-        if (value_i == static_cast<LRESULT>(value))
-        {
-            SendMessage(ctrl, CB_SETCURSEL, (WPARAM)i, (LPARAM)0);
-            return i;
-        }
-    }
-    return -1;
+    return SelectComboValue(ctrl, value);
 }
 
 int64_t milk2_preferences_page::ReadCBValue(DWORD ctrl_id) const
 {
-    HWND ctrl = GetDlgItem(ctrl_id);
-    LRESULT t = SendMessage(ctrl, CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-    if (t != CB_ERR)
-        return static_cast<int64_t>(SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)t, (LPARAM)0));
-    else
-        return -1;
+    return ComboValue(GetDlgItem(ctrl_id));
 }
 
 bool milk2_preferences_page::IsComboDiff(DWORD ctrl_id, int64_t previous) const
@@ -906,6 +851,176 @@ void milk2_preferences_page::OpenToEdit(LPWSTR szDefault, LPCWSTR szFilename)
 }
 
 static preferences_page_factory_t<preferences_page_milk2> g_preferences_page_milk2_factory;
+#pragma endregion
+
+#pragma region Album Art Page
+namespace
+{
+// Shows `seconds` in the edit control `id` of `dialog`, as briefly as it can (10, 0.5).
+void ShowSeconds(CWindow dialog, int id, double seconds)
+{
+    WCHAR buf[32];
+    swprintf_s(buf, L"%g", seconds);
+    dialog.SetDlgItemText(id, buf);
+}
+
+// Whether `format`, an artwork format, is a script rather than a path as written (see
+// AlbumArtFile in ui_element.cpp).
+bool IsArtworkFormatScript(const char* format)
+{
+    return strchr(format, '%') || strchr(format, '$');
+}
+} // namespace
+
+BOOL milk2_album_art_page::OnInitDialog(CWindow, LPARAM)
+{
+    m_dark.AddDialogWithControls(*this);
+
+    HWND ctrl = GetDlgItem(IDC_ALBUM_ART_POSITION);
+    AddComboItem(ctrl, L"Lower right", ALBUM_ART_LOWER_RIGHT);
+    AddComboItem(ctrl, L"Lower left", ALBUM_ART_LOWER_LEFT);
+    AddComboItem(ctrl, L"Upper right", ALBUM_ART_UPPER_RIGHT);
+    AddComboItem(ctrl, L"Upper left", ALBUM_ART_UPPER_LEFT);
+    AddComboItem(ctrl, L"Center", ALBUM_ART_CENTER);
+    ctrl = GetDlgItem(IDC_ALBUM_ART_SIZE);
+    static_assert(MIN_ALBUM_ART_SIZE <= 10 && MAX_ALBUM_ART_SIZE >= 100, "the list below offers 10% to 100%");
+    for (const int percent : {10, 15, 20, 25, 30, 40, 50, 60, 75, 100})
+    {
+        WCHAR buf[16];
+        swprintf_s(buf, L"%d%%", percent);
+        AddComboItem(ctrl, buf, percent);
+    }
+    ShowSettings(cfg_bShowAlbum, cfg_szArtworkFormat.get().c_str(), cfg_nAlbumArtPosition, cfg_nAlbumArtSize, cfg_bAlbumArtFadeOut, cfg_fAlbumArtShowFor,
+                 cfg_fAlbumArtFadeTime);
+
+    // clang-format off
+    const std::pair<int, UINT> tips[] = {
+        {IDC_CB_SHOW_ALBUM, IDS_SHOW_ALBUM_HELP},
+        {IDC_ARTWORK_FORMAT, IDS_ARTWORK_FORMAT_HELP},
+        {IDC_ALBUM_ART_POSITION, IDS_ALBUM_ART_POSITION_HELP},
+        {IDC_ALBUM_ART_SIZE, IDS_ALBUM_ART_SIZE_HELP},
+        {IDC_CB_ALBUM_ART_FADE_OUT, IDS_ALBUM_ART_FADE_OUT_HELP},
+        {IDC_ALBUM_ART_SHOW_FOR, IDS_ALBUM_ART_FADE_OUT_HELP},
+        {IDC_ALBUM_ART_FADE_TIME, IDS_ALBUM_ART_FADE_TIME_HELP},
+    };
+    // clang-format on
+    m_tooltips.Create(get_wnd(), nullptr, nullptr, TTS_ALWAYSTIP | TTS_NOANIMATE);
+    for (const auto& [id, text] : tips)
+    {
+        WCHAR buf[256];
+        LoadString(core_api::get_my_instance(), text, buf, 256);
+        m_tooltips.AddTool(CToolInfo(TTF_IDISHWND | TTF_SUBCLASS, m_hWnd, (UINT_PTR)GetDlgItem(id).m_hWnd, nullptr, buf));
+    }
+    m_tooltips.SetMaxTipWidth(200);
+    SetWindowTheme(m_tooltips, m_dark ? L"DarkMode_Explorer" : nullptr, nullptr);
+
+    s_openPage = this;
+    return FALSE;
+}
+
+void milk2_album_art_page::OnDestroy()
+{
+    if (s_openPage == this)
+        s_openPage = nullptr;
+}
+
+void milk2_album_art_page::OnControlChange(UINT, int, CWindow)
+{
+    EnableControls();
+    m_callback->on_state_changed();
+}
+
+void milk2_album_art_page::ShowSettings(bool showAlbum, const char* format, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime)
+{
+    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(showAlbum));
+    SetDlgItemText(IDC_ARTWORK_FORMAT, pfc::wideFromUTF8(format));
+    if (SelectComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION), static_cast<LRESULT>(position)) < 0)
+        SelectComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION), default_nAlbumArtPosition); // a newer version's
+    if (SelectComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE), static_cast<LRESULT>(size)) < 0)
+        SelectComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE), default_nAlbumArtSize); // a size the list does not offer
+    CheckDlgButton(IDC_CB_ALBUM_ART_FADE_OUT, static_cast<UINT>(fadeOut));
+    ShowSeconds(*this, IDC_ALBUM_ART_SHOW_FOR, showFor);
+    ShowSeconds(*this, IDC_ALBUM_ART_FADE_TIME, fadeTime);
+    EnableControls();
+}
+
+void milk2_album_art_page::EnableControls()
+{
+    const bool bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED;
+    const bool bFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
+    for (const int id : {IDC_ARTWORK_FORMAT_LABEL, IDC_ARTWORK_FORMAT, IDC_ALBUM_ART_POSITION_CAPTION, IDC_ALBUM_ART_POSITION, IDC_ALBUM_ART_SIZE_CAPTION,
+                         IDC_ALBUM_ART_SIZE, IDC_CB_ALBUM_ART_FADE_OUT, IDC_ALBUM_ART_FADE_TIME_CAPTION, IDC_ALBUM_ART_FADE_TIME, IDC_ALBUM_ART_FADE_TIME_UNIT})
+        ::EnableWindow(GetDlgItem(id), bShowAlbum);
+    for (const int id : {IDC_ALBUM_ART_SHOW_FOR, IDC_ALBUM_ART_SHOW_FOR_UNIT})
+        ::EnableWindow(GetDlgItem(id), bShowAlbum && bFadeOut);
+}
+
+double milk2_album_art_page::ReadSeconds(int id) const
+{
+    WCHAR buf[64] = {0};
+    GetDlgItemText(id, buf, 64);
+    return wcstod(buf, nullptr);
+}
+
+uint32_t milk2_album_art_page::get_state()
+{
+    uint32_t state = preferences_state::resettable | preferences_state::dark_mode_supported;
+    if (HasChanged())
+        state |= preferences_state::changed;
+    return state;
+}
+
+bool milk2_album_art_page::HasChanged() const
+{
+    WCHAR buf[256] = {0};
+    GetDlgItemText(IDC_ARTWORK_FORMAT, buf, 256);
+    const pfc::string8 format = pfc::utf8FromWide(buf);
+    return (IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED) != cfg_bShowAlbum || !format.equals(cfg_szArtworkFormat.get()) ||
+           ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)) != cfg_nAlbumArtPosition || ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE)) != cfg_nAlbumArtSize ||
+           (IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED) != cfg_bAlbumArtFadeOut || ReadSeconds(IDC_ALBUM_ART_SHOW_FOR) != cfg_fAlbumArtShowFor ||
+           ReadSeconds(IDC_ALBUM_ART_FADE_TIME) != cfg_fAlbumArtFadeTime;
+}
+
+void milk2_album_art_page::apply()
+{
+    cfg_bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED;
+    WCHAR buf[256] = {0};
+    GetDlgItemText(IDC_ARTWORK_FORMAT, buf, 256);
+    const pfc::string8 format = pfc::utf8FromWide(buf);
+    titleformat_object::ptr script;
+    if (!IsArtworkFormatScript(format) || titleformat_compiler::get()->compile(script, format))
+        cfg_szArtworkFormat = format;
+    else
+        SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
+    cfg_nAlbumArtPosition = ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)); // both always have a selection (ShowSettings)
+    cfg_nAlbumArtSize = ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE));
+    cfg_bAlbumArtFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
+    cfg_fAlbumArtShowFor = ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_SHOW_FOR), MIN_ALBUM_ART_SHOW_FOR, MAX_ALBUM_ART_SHOW_FOR);
+    cfg_fAlbumArtFadeTime = ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_FADE_TIME), 0.0, MAX_ALBUM_ART_FADE_TIME);
+    ShowSeconds(*this, IDC_ALBUM_ART_SHOW_FOR, cfg_fAlbumArtShowFor); // as held to the ranges
+    ShowSeconds(*this, IDC_ALBUM_ART_FADE_TIME, cfg_fAlbumArtFadeTime);
+
+    m_callback->on_state_changed();
+    ApplyMilkDropPreferences();
+}
+
+void milk2_album_art_page::reset()
+{
+    ShowSettings(default_bShowAlbum, default_szArtworkFormat, default_nAlbumArtPosition, default_nAlbumArtSize, default_bAlbumArtFadeOut, default_fAlbumArtShowFor,
+                 default_fAlbumArtFadeTime);
+    m_callback->on_state_changed();
+}
+
+void milk2_album_art_page::OnMenuTogglesSaved()
+{
+    if (!s_openPage)
+        return;
+    s_openPage->CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
+    s_openPage->EnableControls();
+    s_openPage->m_callback->on_state_changed();
+}
+
+static preferences_page_factory_t<preferences_page_milk2_album_art> g_preferences_page_milk2_album_art_factory;
 #pragma endregion
 
 #pragma region Font Dialog
@@ -1242,6 +1357,9 @@ void milk2_config::reset()
     settings.m_bShowAlbum = cfg_bShowAlbum;
     settings.m_nAlbumArtPosition = static_cast<int32_t>(cfg_nAlbumArtPosition);
     settings.m_nAlbumArtSize = static_cast<int32_t>(cfg_nAlbumArtSize);
+    settings.m_bAlbumArtFadeOut = cfg_bAlbumArtFadeOut;
+    settings.m_fAlbumArtShowFor = static_cast<float>(cfg_fAlbumArtShowFor);
+    settings.m_fAlbumArtFadeTime = static_cast<float>(cfg_fAlbumArtFadeTime);
     settings.m_bEnableHDR = default_bEnableHDR;
     settings.m_bSkipCompShader = static_cast<uint32_t>(cfg_bSkipCompShader);
     settings.m_nBackBufferFormat = default_nBackBufferFormat;
@@ -1359,7 +1477,7 @@ void milk2_config::save_menu_toggles() const
 {
     cfg_bShowAlbum = settings.m_bShowAlbum;
     cfg_bEnableDownmix = settings.m_bEnableDownmix;
-    milk2_preferences_page::OnMenuTogglesSaved();
+    milk2_album_art_page::OnMenuTogglesSaved();
 }
 
 void milk2_config::update_paths()
@@ -1530,6 +1648,9 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_bShowAlbum = settings.m_bShowAlbum;
         cfg_nAlbumArtPosition = settings.m_nAlbumArtPosition;
         cfg_nAlbumArtSize = settings.m_nAlbumArtSize;
+        cfg_bAlbumArtFadeOut = settings.m_bAlbumArtFadeOut;
+        cfg_fAlbumArtShowFor = settings.m_fAlbumArtShowFor;
+        cfg_fAlbumArtFadeTime = settings.m_fAlbumArtFadeTime;
         cfg_bEnableHDR = settings.m_bEnableHDR;
 
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);
