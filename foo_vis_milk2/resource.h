@@ -424,7 +424,7 @@
 #define IDS_ALBUM_ART_SIZE_HELP         659
 #define IDS_ALBUM_ART_FADE_OUT_HELP     660
 #define IDS_ALBUM_ART_FADE_TIME_HELP    661
-#define IDS_ALBUM_ART_SEARCH_HELP       662
+#define IDS_ALBUM_ART_FILES_HELP        662
 #define IDD_PREFS                       700
 #define IDD_PREFS_ALBUM_ART             701
 #define IDC_CB_PRESS_F1_MSG             1001
@@ -548,7 +548,7 @@
 #define IDC_ALBUM_ART_FADE_TIME_CAPTION 1102
 #define IDC_ALBUM_ART_FADE_TIME         1103
 #define IDC_ALBUM_ART_FADE_TIME_UNIT    1104
-#define IDC_CB_ALBUM_ART_SEARCH         1105
+#define IDC_CB_ALBUM_ART_FILES          1105
 #define ID_SHOWHELP                     40007
 #define ID_SHOWPLAYLIST                 40008
 #define ID_QUIT                         40009

@@ -578,10 +578,11 @@ class CPlugin : public CPluginShell
     // settings do (LaunchAlbumArt).
     static constexpr int kAlbumArtSprite = 100;
     // Shows `image`, an encoded image (the bytes of a JPEG or PNG file, say), as the album art
-    // sprite in place of the last, or removes it when empty. Other sprites stay. Kept, and shown
-    // again on a new device after a device reset if it was on screen (RelaunchSprites). Render
-    // thread.
-    void SetAlbumArt(std::vector<uint8_t> image);
+    // sprite in place of the last, or removes it when empty. With `bKeepIfSame`, the same image
+    // already on screen stays as it is, its fades going on, rather than launched afresh. Other
+    // sprites stay. Kept, and shown again on a new device after a device reset if it was on screen
+    // (RelaunchSprites). Render thread.
+    void SetAlbumArt(std::vector<uint8_t> image, bool bKeepIfSame);
 
   private:
     int PixelShaderUpgradeTarget() const;

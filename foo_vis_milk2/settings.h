@@ -167,7 +167,7 @@ typedef struct
     bool m_bShowAlbum;
     int32_t m_nAlbumArtPosition; // an AlbumArtPosition (album_art.h)
     int32_t m_nAlbumArtSize;     // the image's longer side, in percent of the canvas's shorter side
-    bool m_bAlbumArtSearch;      // whether, with no other art, foobar2000's album art search (folder.jpg...) is asked
+    bool m_bAlbumArtFiles;       // whether foobar2000's album art search may use image files (folder.jpg...)
     bool m_bAlbumArtFadeOut;     // whether the art fades out m_dAlbumArtShowFor seconds after it appears
     double m_dAlbumArtShowFor;   // doubles, as saved: a float would not compare equal to the
     double m_dAlbumArtFadeTime;  // setting it was read from; seconds a fade in or out takes
