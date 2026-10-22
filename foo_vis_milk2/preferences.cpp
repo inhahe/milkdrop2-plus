@@ -39,6 +39,8 @@ static cfg_bool cfg_bShowShaderHelp(guid_cfg_bShowShaderHelp, default_bShowShade
 static cfg_bool cfg_bPresetLockedByCode(guid_cfg_bPresetLockedByCode, default_bPresetLockedByCode);
 static cfg_bool cfg_bEnableDownmix(guid_cfg_bEnableDownmix, default_bEnableDownmix);
 static cfg_bool cfg_bShowAlbum(guid_cfg_bShowAlbum, default_bShowAlbum);
+static cfg_int cfg_nAlbumArtPosition(guid_cfg_nAlbumArtPosition, static_cast<int64_t>(default_nAlbumArtPosition));
+static cfg_int cfg_nAlbumArtSize(guid_cfg_nAlbumArtSize, static_cast<int64_t>(default_nAlbumArtSize));
 static cfg_bool cfg_bEnableHDR(guid_cfg_bEnableHDR, default_bEnableHDR);
 static cfg_int cfg_max_fps_fs(guid_cfg_max_fps_fs, static_cast<int64_t>(default_max_fps_fs));
 static cfg_int cfg_n16BitGamma(guid_cfg_n16BitGamma, static_cast<int64_t>(default_n16BitGamma));
@@ -194,17 +196,6 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
             SendMessage(ctrl, CB_SETCURSEL, (WPARAM)i, (LPARAM)0);
     }
 
-    // 16-bit brightness.
-    ctrl = GetDlgItem(IDC_BRIGHT_SLIDER2);
-    SendMessage(ctrl, TBM_SETRANGEMIN, (WPARAM)FALSE, (LPARAM)0);
-    SendMessage(ctrl, TBM_SETRANGEMAX, (WPARAM)FALSE, (LPARAM)4);
-    SendMessage(ctrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)cfg_n16BitGamma);
-    for (int i = 0; i < 5; ++i)
-        SendMessage(ctrl, TBM_SETTIC, (WPARAM)0, (LPARAM)i);
-
-    CheckDlgButton(IDC_CB_AUTOGAMMA2, static_cast<UINT>(cfg_bAutoGamma));
-    AutoHideGamma16();
-
     // Image cache maximum bytes.
     ctrl = GetDlgItem(IDC_MAX_BYTES2);
     LoadString(core_api::get_my_instance(), IDS_AUTO, buf, 256);
@@ -300,6 +291,27 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     swprintf_s(buf, L"%hs", cfg_szArtworkFormat.get().c_str());
     SetDlgItemText(IDC_ARTWORK_FORMAT, buf);
 
+    // Album art.
+    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
+    ctrl = GetDlgItem(IDC_ALBUM_ART_POSITION);
+    AddItem(ctrl, L"Lower right", ALBUM_ART_LOWER_RIGHT);
+    AddItem(ctrl, L"Lower left", ALBUM_ART_LOWER_LEFT);
+    AddItem(ctrl, L"Upper right", ALBUM_ART_UPPER_RIGHT);
+    AddItem(ctrl, L"Upper left", ALBUM_ART_UPPER_LEFT);
+    AddItem(ctrl, L"Center", ALBUM_ART_CENTER);
+    if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtPosition)) < 0)
+        SelectItemByValue(ctrl, default_nAlbumArtPosition);
+    ctrl = GetDlgItem(IDC_ALBUM_ART_SIZE);
+    static_assert(MIN_ALBUM_ART_SIZE <= 10 && MAX_ALBUM_ART_SIZE >= 100, "the list below offers 10% to 100%");
+    for (const int percent : {10, 15, 20, 25, 30, 40, 50, 60, 75, 100})
+    {
+        swprintf_s(buf, L"%d%%", percent);
+        AddItem(ctrl, buf, percent);
+    }
+    if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtSize)) < 0)
+        SelectItemByValue(ctrl, default_nAlbumArtSize); // a size the list does not offer
+    AutoEnableAlbumArt();
+
     // Push buttons.
     milk2_config::initialize_paths();
     ::EnableWindow(GetDlgItem(ID_SPRITE), static_cast<BOOL>(std::filesystem::exists(default_szImgIniFile)));
@@ -317,6 +329,9 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
         {(UINT16)IDC_CB_FSPT, (UINT16)IDS_PAGE_TEARING_HELP},
         {(UINT16)IDC_TITLE_FORMAT, (UINT16)IDS_TITLE_FORMAT_HELP},
         {(UINT16)IDC_ARTWORK_FORMAT, (UINT16)IDS_ARTWORK_FORMAT_HELP},
+        {(UINT16)IDC_CB_SHOW_ALBUM, (UINT16)IDS_SHOW_ALBUM_HELP},
+        {(UINT16)IDC_ALBUM_ART_POSITION, (UINT16)IDS_ALBUM_ART_POSITION_HELP},
+        {(UINT16)IDC_ALBUM_ART_SIZE, (UINT16)IDS_ALBUM_ART_SIZE_HELP},
         {(UINT16)IDC_BETWEEN_TIME, (UINT16)IDS_BETWEEN_TIME_HELP},
         {(UINT16)IDC_BETWEEN_TIME_RANDOM, (UINT16)IDS_BETWEEN_TIME_RANDOM_HELP},
         {(UINT16)IDC_BLEND_AUTO, (UINT16)IDS_BLEND_AUTO_HELP},
@@ -324,8 +339,6 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
         {(UINT16)IDC_HARDCUT_BETWEEN_TIME, (UINT16)IDS_HARDCUT_BETWEEN_TIME_HELP},
         {(UINT16)IDC_HARDCUT_LOUDNESS, (UINT16)IDS_HARDCUT_LOUDNESS_HELP},
         {(UINT16)IDC_CB_HARDCUTS, (UINT16)IDS_HARDCUTS_HELP},
-        {(UINT16)IDC_BRIGHT_SLIDER2, (UINT16)IDS_BRIGHT_SLIDER_HELP},
-        {(UINT16)IDC_CB_AUTOGAMMA2, (UINT16)IDS_CB_AUTOGAMMA_HELP},
         {(UINT16)IDC_SONGTITLEANIM_DURATION, (UINT16)IDS_SONGTITLEANIM_DURATION_HELP},
         {(UINT16)IDC_RAND_TITLE, (UINT16)IDS_RAND_TITLE_HELP},
         {(UINT16)IDC_RAND_MSG, (UINT16)IDS_RAND_MSG_HELP},
@@ -414,7 +427,7 @@ void milk2_preferences_page::OnButtonClick(UINT uNotifyCode, int nID, CWindow wn
     UNREFERENCED_PARAMETER(wndCtl);
 
     OnChanged();
-    AutoHideGamma16();
+    AutoEnableAlbumArt();
 }
 
 void milk2_preferences_page::OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl)
@@ -434,7 +447,6 @@ void milk2_preferences_page::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScro
     switch (pScrollBar.GetDlgCtrlID())
     {
         case IDC_HARDCUT_LOUDNESS:
-        case IDC_BRIGHT_SLIDER2:
             switch (nSBCode)
             {
                 //case TB_BOTTOM:
@@ -451,16 +463,12 @@ void milk2_preferences_page::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScro
     }
 }
 
-void milk2_preferences_page::AutoHideGamma16()
+// Greys the album art's position and size out while album art is off.
+void milk2_preferences_page::AutoEnableAlbumArt()
 {
-    bool bAutoGamma = static_cast<bool>(IsDlgButtonChecked(IDC_CB_AUTOGAMMA2));
-    ::ShowWindow(GetDlgItem(IDC_BRIGHT_SLIDER_BOX), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_BRIGHT_SLIDER2), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_GAMMA16_0), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_GAMMA16_1), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_GAMMA16_2), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_GAMMA16_3), static_cast<UINT>(!bAutoGamma));
-    ::ShowWindow(GetDlgItem(IDC_GAMMA16_4), static_cast<UINT>(!bAutoGamma));
+    const BOOL bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED;
+    for (const int id : {IDC_ALBUM_ART_POSITION_CAPTION, IDC_ALBUM_ART_POSITION, IDC_ALBUM_ART_SIZE_CAPTION, IDC_ALBUM_ART_SIZE})
+        ::EnableWindow(GetDlgItem(id), bShowAlbum);
 }
 
 uint32_t milk2_preferences_page::get_state()
@@ -516,10 +524,6 @@ void milk2_preferences_page::reset()
 
     SelectItemByValue(GetDlgItem(IDC_TEXSIZECOMBO), static_cast<LRESULT>(default_nTexSizeX));
 
-    SendMessage(GetDlgItem(IDC_BRIGHT_SLIDER2), TBM_SETPOS, (WPARAM)TRUE, (LPARAM)default_n16BitGamma);
-    CheckDlgButton(IDC_CB_AUTOGAMMA2, static_cast<UINT>(default_bAutoGamma));
-    AutoHideGamma16();
-
     SelectItemByValue(GetDlgItem(IDC_MAX_BYTES2), static_cast<DWORD>(default_nMaxBytes));
 
     SelectItemByValue(GetDlgItem(IDC_MAX_IMAGES2), static_cast<DWORD>(default_nMaxImages));
@@ -536,6 +540,11 @@ void milk2_preferences_page::reset()
     SetDlgItemText(IDC_TITLE_FORMAT, buf);
     swprintf_s(buf, L"%hs", default_szArtworkFormat);
     SetDlgItemText(IDC_ARTWORK_FORMAT, buf);
+
+    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(default_bShowAlbum));
+    SelectItemByValue(GetDlgItem(IDC_ALBUM_ART_POSITION), default_nAlbumArtPosition);
+    SelectItemByValue(GetDlgItem(IDC_ALBUM_ART_SIZE), default_nAlbumArtSize);
+    AutoEnableAlbumArt();
 
     m_resetpage = true; // fonts
 
@@ -587,11 +596,6 @@ void milk2_preferences_page::apply()
 
     cfg_nTexSizeX = ReadCBValue(IDC_TEXSIZECOMBO);
 
-    t = SendMessage(GetDlgItem(IDC_BRIGHT_SLIDER2), TBM_GETPOS, (WPARAM)0, (LPARAM)0);
-    if (t != CB_ERR)
-        cfg_n16BitGamma = static_cast<int64_t>(t);
-    cfg_bAutoGamma = static_cast<bool>(IsDlgButtonChecked(IDC_CB_AUTOGAMMA2));
-
     cfg_nMaxBytes = ReadCBValue(IDC_MAX_BYTES2);
 
     cfg_nMaxImages = ReadCBValue(IDC_MAX_IMAGES2);
@@ -627,6 +631,10 @@ void milk2_preferences_page::apply()
         SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
     }
 
+    cfg_bShowAlbum = static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM));
+    cfg_nAlbumArtPosition = ReadCBValue(IDC_ALBUM_ART_POSITION); // both always have a selection (OnInitDialog)
+    cfg_nAlbumArtSize = ReadCBValue(IDC_ALBUM_ART_SIZE);
+
     if (m_resetpage)
     {
         cfg_stFontInfo.set(default_stFontInfo, sizeof(td_fontinfo) * (NUM_BASIC_FONTS + NUM_EXTRA_FONTS));
@@ -651,8 +659,8 @@ bool milk2_preferences_page::HasChanged() const
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_NOCOMPSHADER)) != cfg_bSkipCompShader) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_FSPT)) != cfg_allow_page_tearing_fs) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_HARDCUTS)) != cfg_bHardCutsDisabled) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_AUTOGAMMA2)) != cfg_bAutoGamma) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims);
+                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims) ||
+                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != cfg_bShowAlbum);
 
     bool combobox_changes = false;
     LRESULT n = SendMessage(GetDlgItem(IDC_FS_MAXFPS2), CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
@@ -669,7 +677,9 @@ bool milk2_preferences_page::HasChanged() const
                        IsComboDiff(IDC_STRETCH2, cfg_nCanvasStretch) ||
                        IsComboDiff(IDC_TEXSIZECOMBO, cfg_nTexSizeX) ||
                        IsComboDiff(IDC_MAX_BYTES2, cfg_nMaxBytes) ||
-                       IsComboDiff(IDC_MAX_IMAGES2, cfg_nMaxImages);
+                       IsComboDiff(IDC_MAX_IMAGES2, cfg_nMaxImages) ||
+                       IsComboDiff(IDC_ALBUM_ART_POSITION, cfg_nAlbumArtPosition) ||
+                       IsComboDiff(IDC_ALBUM_ART_SIZE, cfg_nAlbumArtSize);
 
     WCHAR buf[256] = {0}, *stop;
     pfc::string8 current;
@@ -711,9 +721,6 @@ bool milk2_preferences_page::HasChanged() const
         int prev_slider_position = static_cast<int>((static_cast<float>(cfg_fHardCutLoudnessThresh) - 1.25f) * 20.0f);
         slider_changes = slider_changes || (static_cast<int>(t) != prev_slider_position);
     }
-    t = SendMessage(GetDlgItem(IDC_BRIGHT_SLIDER2), TBM_GETPOS, (WPARAM)0, (LPARAM)0);
-    if (t != CB_ERR)
-        slider_changes = slider_changes || (static_cast<UINT>(t) != static_cast<UINT>(cfg_n16BitGamma));
 
     return checkbox_changes || combobox_changes || editcontrol_changes || slider_changes;
 }
@@ -1226,6 +1233,8 @@ void milk2_config::reset()
     //--- Extras
     settings.m_bEnableDownmix = cfg_bEnableDownmix;
     settings.m_bShowAlbum = cfg_bShowAlbum;
+    settings.m_nAlbumArtPosition = static_cast<int32_t>(cfg_nAlbumArtPosition);
+    settings.m_nAlbumArtSize = static_cast<int32_t>(cfg_nAlbumArtSize);
     settings.m_bEnableHDR = default_bEnableHDR;
     settings.m_bSkipCompShader = static_cast<uint32_t>(cfg_bSkipCompShader);
     settings.m_nBackBufferFormat = default_nBackBufferFormat;
@@ -1514,6 +1523,8 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_nMinFeatureLevel = settings.m_nMinFeatureLevel;
         cfg_bEnableDownmix = settings.m_bEnableDownmix;
         cfg_bShowAlbum = settings.m_bShowAlbum;
+        cfg_nAlbumArtPosition = settings.m_nAlbumArtPosition;
+        cfg_nAlbumArtSize = settings.m_nAlbumArtSize;
         cfg_bEnableHDR = settings.m_bEnableHDR;
 
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);

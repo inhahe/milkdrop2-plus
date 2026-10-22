@@ -170,6 +170,12 @@ static constexpr GUID guid_cfg_bEnableDownmix = {
 static constexpr GUID guid_cfg_bShowAlbum = {
     0x2caa50c, 0x6910, 0x42c6, {0x9a, 0xff, 0xa5, 0xa5, 0x52, 0xb5, 0xd2, 0x6b}
 }; // {02CAA50C-6910-42C6-9AFF-A5A552B5D26B}
+static constexpr GUID guid_cfg_nAlbumArtPosition = {
+    0xed252208, 0xfefa, 0x42e2, {0x9e, 0x20, 0x1b, 0x7a, 0x47, 0xcd, 0x51, 0x9a}
+}; // {ED252208-FEFA-42E2-9E20-1B7A47CD519A}
+static constexpr GUID guid_cfg_nAlbumArtSize = {
+    0x71de6599, 0x5b30, 0x4a15, {0x8e, 0x9d, 0xa7, 0x2f, 0x39, 0x38, 0x9d, 0xd4}
+}; // {71DE6599-5B30-4A15-8E9D-A72F39389DD4}
 
 // Preferences derived from other settings or hidden.
 static constexpr GUID guid_cfg_bTexSizeWasAutoPow2 = {
@@ -261,6 +267,8 @@ static constexpr float default_fTimeBetweenRandomSongTitles = -1.0f;
 static constexpr float default_fTimeBetweenRandomCustomMsgs = -1.0f;
 static constexpr bool default_bEnableDownmix = false;
 static constexpr bool default_bShowAlbum = false;
+static constexpr int default_nAlbumArtPosition = ALBUM_ART_LOWER_RIGHT;
+static constexpr int default_nAlbumArtSize = DEFAULT_ALBUM_ART_SIZE;
 static constexpr bool default_bEnableHDR = false;
 static constexpr int default_nBackBufferFormat = DXGI_FORMAT_B8G8R8A8_UNORM;
 static constexpr int default_nDepthBufferFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -340,7 +348,6 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
         COMMAND_HANDLER_EX(IDC_MESHSIZECOMBO, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(IDC_STRETCH2, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(IDC_TEXSIZECOMBO, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_CB_AUTOGAMMA2, BN_CLICKED, OnButtonClick)
         COMMAND_HANDLER_EX(IDC_MAX_BYTES2, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(IDC_MAX_IMAGES2, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(IDC_BETWEEN_TIME, EN_CHANGE, OnEditNotification)
@@ -350,6 +357,9 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
         COMMAND_HANDLER_EX(IDC_CB_TITLE_ANIMS, BN_CLICKED, OnButtonClick)
         COMMAND_HANDLER_EX(IDC_TITLE_FORMAT, EN_CHANGE, OnEditNotification)
         COMMAND_HANDLER_EX(IDC_ARTWORK_FORMAT, EN_CHANGE, OnEditNotification)
+        COMMAND_HANDLER_EX(IDC_CB_SHOW_ALBUM, BN_CLICKED, OnButtonClick)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_POSITION, CBN_SELCHANGE, OnComboChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_SIZE, CBN_SELCHANGE, OnComboChange)
         COMMAND_HANDLER_EX(ID_SPRITE, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_MSG, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_FONTS, BN_CLICKED, OnButtonPushed)
@@ -369,7 +379,7 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
     void OnButtonClick(UINT uNotifyCode, int nID, CWindow wndCtl);
     void OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl);
     void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScrollBar);
-    void AutoHideGamma16();
+    void AutoEnableAlbumArt();
     bool HasChanged() const;
     void OnChanged();
 

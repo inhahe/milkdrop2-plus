@@ -629,6 +629,9 @@
 #define IDS_PRESETS_MAY_NEED_NEWER_SHADERS 654
 #define IDS_MISSING_TEXTURES            655
 #define IDS_HOW_TO_SET_TEXTURE_FOLDER   656
+#define IDS_SHOW_ALBUM_HELP             657
+#define IDS_ALBUM_ART_POSITION_HELP     658
+#define IDS_ALBUM_ART_SIZE_HELP         659
 #define IDD_PREFS                       700
 //#define IDC_CB_FOG                      1000
 //#define IDC_CB_SUPERTEX                 1001
@@ -891,6 +894,11 @@
 #define IDC_FONTAA9                     1092
 //#define IDC_FONT1b                      1093
 #define IDC_FONT1                       1093
+#define IDC_CB_SHOW_ALBUM               1094
+#define IDC_ALBUM_ART_POSITION_CAPTION  1095
+#define IDC_ALBUM_ART_POSITION          1096
+#define IDC_ALBUM_ART_SIZE_CAPTION      1097
+#define IDC_ALBUM_ART_SIZE              1098
 #define ID_SHOWHELP                     40007
 #define ID_SHOWPLAYLIST                 40008
 #define ID_QUIT                         40009
@@ -903,7 +911,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        103
 #define _APS_NEXT_COMMAND_VALUE         40011
-#define _APS_NEXT_CONTROL_VALUE         1094
+#define _APS_NEXT_CONTROL_VALUE         1099
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

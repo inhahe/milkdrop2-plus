@@ -506,7 +506,12 @@ class CPlugin : public CPluginShell
 
     std::wstring m_albumArtFile; // what SetAlbumArt shows
     std::vector<uint8_t> m_albumArtImage;
+    // Where and how large the album art is drawn when the image list does not say: an
+    // AlbumArtPosition, and its longer side in percent of the canvas's shorter side.
+    int m_albumArtPosition = ALBUM_ART_LOWER_RIGHT;
+    int m_albumArtSize = DEFAULT_ALBUM_ART_SIZE;
     void LaunchAlbumArt();
+    void RelaunchAlbumArt();
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
     // The canvas's width / height, as the sprites are placed by (their `aspect`).
@@ -561,8 +566,8 @@ class CPlugin : public CPluginShell
     // recompiles them ('y' at the upgrade prompt). Render thread.
     void UpgradePixelShaders();
     // The sprite number album art is launched as: past the numbers sprites from the image list
-    // take (0-99). A section [img100] there says how it is drawn; without one, it is a thumbnail
-    // in the lower right corner (LaunchAlbumArt).
+    // take (0-99). A section [img100] there says how it is drawn; without one, the album art
+    // settings do (LaunchAlbumArt).
     static constexpr int kAlbumArtSprite = 100;
     // Shows the image file `file`, or else the encoded image `image`, as the album art sprite in
     // place of the last, or removes it when both are empty. Other sprites stay. Kept, and shown

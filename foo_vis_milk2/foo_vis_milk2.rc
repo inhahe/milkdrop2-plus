@@ -113,17 +113,14 @@ BEGIN
     EDITTEXT        IDC_TITLE_FORMAT,182,12,122,13,ES_AUTOHSCROLL
     LTEXT           "Artwork display format:",IDC_ARTWORK_FORMAT_LABEL,183,28,79,10
     EDITTEXT        IDC_ARTWORK_FORMAT,182,38,122,13,ES_AUTOHSCROLL
-    GROUPBOX        "Brightness for 16-bit Color Video Modes",IDC_BRIGHT_SLIDER_BOX,168,63,137,58,NOT WS_VISIBLE | WS_DISABLED
-    CONTROL         "Brightness Slider",IDC_BRIGHT_SLIDER2,"msctls_trackbar32",NOT WS_VISIBLE | WS_DISABLED | WS_TABSTOP,191,73,92,13
-    CTEXT           "0\n(bright)",IDC_GAMMA16_0,187,87,25,16,NOT WS_VISIBLE | WS_DISABLED
-    CTEXT           "1",IDC_GAMMA16_1,213,87,8,10,NOT WS_VISIBLE | WS_DISABLED
-    CTEXT           "2\n(normal)",IDC_GAMMA16_2,222,87,28,17,NOT WS_VISIBLE | WS_DISABLED
-    CTEXT           "3",IDC_GAMMA16_3,251,87,8,10,NOT WS_VISIBLE | WS_DISABLED
-    CTEXT           "4\n(dark)",IDC_GAMMA16_4,260,87,30,17,NOT WS_VISIBLE | WS_DISABLED
-    PUSHBUTTON      "Edit &Sprites",ID_SPRITE,195,57,82,15
-    PUSHBUTTON      "Edit Custom &Messages",ID_MSG,195,75,82,15
-    PUSHBUTTON      "Select &Fonts",ID_FONTS,195,93,82,15
-    CONTROL         "Guess 16-bit color brightness",IDC_CB_AUTOGAMMA2,"Button",BS_AUTOCHECKBOX | WS_DISABLED | WS_TABSTOP,177,108,110,10 //based on the GPU
+    CONTROL         "Show album art",IDC_CB_SHOW_ALBUM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,183,56,110,10
+    RTEXT           "Position:",IDC_ALBUM_ART_POSITION_CAPTION,175,70,36,10
+    COMBOBOX        IDC_ALBUM_ART_POSITION,213,68,91,87,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    RTEXT           "Size:",IDC_ALBUM_ART_SIZE_CAPTION,175,85,36,10
+    COMBOBOX        IDC_ALBUM_ART_SIZE,213,83,91,123,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Sprites...",ID_SPRITE,168,101,43,14
+    PUSHBUTTON      "&Messages...",ID_MSG,215,101,43,14
+    PUSHBUTTON      "&Fonts...",ID_FONTS,262,101,43,14
     GROUPBOX        "Song Title Animations and Messages",IDC_STATIC,168,121,137,71
     RTEXT           "Duration of song title animations:",IDC_SONGTITLEANIM_DURATION_LABEL,171,131,103,10
     EDITTEXT        IDC_SONGTITLEANIM_DURATION,275,130,28,13,ES_CENTER | ES_AUTOHSCROLL
@@ -1543,7 +1540,10 @@ BEGIN
     IDS_SCROLL_CTRL_HELP    "Check this box to prevent MilkDrop from controlling the Scroll Lock key state."
     IDS_NOCOMPSHADER_HELP   "Check this box to skip composite shader blending to minimize the strobing effect on the bottom and right edges of the screen."
     IDS_TITLE_FORMAT_HELP   "Set a song title format string using foobar2000 script."
-    IDS_ARTWORK_FORMAT_HELP "If nothing is set, then foobar2000 will use the album metadata. To override, set either a fully-qualified path or a foobar2000 script that returns the file path of the artwork to display."
+    IDS_ARTWORK_FORMAT_HELP "The album art to show: a fully-qualified path, or a foobar2000 script that returns the file path. If nothing is set, or no such file exists, the cover embedded in the track is shown, or else what foobar2000's album art settings find."
+    IDS_SHOW_ALBUM_HELP     "Shows the playing track's album art over the visualization. Also on the visualization's right-click menu."
+    IDS_ALBUM_ART_POSITION_HELP "Where the album art goes. An [img100] section in the sprite list (the Sprites button) overrides this and the size."
+    IDS_ALBUM_ART_SIZE_HELP "The album art's longer side, as a share of the visualization's shorter side (its height, when it is wider than tall)."
     IDS_HOW_TO_SET_PRESET_LIBRARY "Right-click > Set Preset Library Folder..."
     IDS_LOOKED_IN           "Looked in: "
     IDS_NO_PRESETS_MATCH_SHUFFLE_MODE "No presets match the shuffle mode."

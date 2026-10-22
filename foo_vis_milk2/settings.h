@@ -91,6 +91,20 @@ struct F
     td_fontinfo fontinfo[N];
 };
 
+// Where the album art goes when the image list (milk2_img.ini) has no [img100] section saying
+// (m_nAlbumArtPosition). The values are saved: add new ones at the end.
+enum AlbumArtPosition : int
+{
+    ALBUM_ART_LOWER_RIGHT,
+    ALBUM_ART_LOWER_LEFT,
+    ALBUM_ART_UPPER_RIGHT,
+    ALBUM_ART_UPPER_LEFT,
+    ALBUM_ART_CENTER,
+};
+static constexpr int MIN_ALBUM_ART_SIZE = 5; // m_nAlbumArtSize's range and default, in percent
+static constexpr int MAX_ALBUM_ART_SIZE = 100;
+static constexpr int DEFAULT_ALBUM_ART_SIZE = 20;
+
 typedef struct
 {
     //--- CPluginShell::ReadConfig()
@@ -166,6 +180,8 @@ typedef struct
     //--- Extras
     bool m_bEnableDownmix;
     bool m_bShowAlbum;
+    int32_t m_nAlbumArtPosition; // an AlbumArtPosition
+    int32_t m_nAlbumArtSize;     // the image's longer side, in percent of the canvas's shorter side
     bool m_bEnableHDR;
     bool m_bSkipCompShader;
     uint32_t m_nBackBufferFormat;

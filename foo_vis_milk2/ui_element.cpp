@@ -3193,8 +3193,12 @@ void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
 // draws in, the Default UI element's or the Columns UI panel's.
 void ApplyMilkDropPreferences()
 {
+    const bool showAlbum = s_config.settings.m_bShowAlbum;
+    const std::wstring artworkFormat = s_config.settings.m_szArtworkFormat;
     s_config.reset();
     PublishPlayback(); // the title format may have changed
+    if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat)
+        ShowNowPlayingAlbumArt(); // the engine moves art already shown itself (PanelSettings)
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
