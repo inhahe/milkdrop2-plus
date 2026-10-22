@@ -37,14 +37,15 @@ git.exe apply --ignore-whitespace --whitespace=nowarn --verbose "$(Get-Location)
 ```
 
 4. Then just select your desired build configuration and platform in Visual Studio, for example "_Debug x64_" and do **Build > Build Solution** (**Ctrl+Shift+B**).
-5. For quick debugging here is a suggestion for `foo_vis_milk2/foo_vis_milk2.vcxproj.user` (x64 only; set `Fb2kDir` to your installation). It runs foobar2000 under the debugger, and copies each build, with the shader files the engine reads at start, into the installation's components folder. It copies only if `Fb2kDir` holds `foobar2000.exe`, so that a wrong path does not make a folder that is not an installation. Point it at a foobar2000 kept for testing, not the one you listen with: a Debug build makes foobar2000 ask at every start whether to load it, and the copy fails while foobar2000 runs.
+5. For quick debugging here is a suggestion for `foo_vis_milk2/foo_vis_milk2.vcxproj.user` (x64 only). It runs foobar2000 under the debugger, and copies each build, with the shader files the engine reads at start, into that foobar2000's components folder. Set `Fb2kDir` to the folder of `foobar2000.exe`, and `Fb2kProfileDir` to its profile: `$(Fb2kDir)\profile` for a portable foobar2000, `$(AppData)\foobar2000-v2` for an installed one. It copies only if both exist, so that a wrong path does not make a folder foobar2000 does not read. Point it at a portable foobar2000 kept for testing, not the one you listen with: a Debug build makes foobar2000 ask at every start whether to load it, and the copy fails while foobar2000 runs.
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Fb2kDir>$(LocalAppData)\Programs\foobar2000_x64</Fb2kDir>
-    <Fb2kComponentDir>$(Fb2kDir)\profile\user-components-x64\foo_milkdrop2_plus</Fb2kComponentDir>
+    <Fb2kProfileDir>$(Fb2kDir)\profile</Fb2kProfileDir>
+    <Fb2kComponentDir>$(Fb2kProfileDir)\user-components-x64\foo_milkdrop2_plus</Fb2kComponentDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Platform)'=='x64'">
     <LocalDebuggerCommand>$(Fb2kDir)\foobar2000.exe</LocalDebuggerCommand>
@@ -53,11 +54,12 @@ git.exe apply --ignore-whitespace --whitespace=nowarn --verbose "$(Get-Location)
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
     <PostBuildEvent>
-      <Command>if exist "$(Fb2kDir)\foobar2000.exe" if not exist "$(Fb2kComponentDir)\data" mkdir "$(Fb2kComponentDir)\data"
-if exist "$(Fb2kDir)\foobar2000.exe" copy /y "$(TargetPath)" "$(Fb2kComponentDir)\"
-if exist "$(Fb2kDir)\foobar2000.exe" copy /y "$(SolutionDir)external\winamp\data\*.fx" "$(Fb2kComponentDir)\data\"
-if not exist "$(Fb2kDir)\foobar2000.exe" echo No foobar2000.exe in $(Fb2kDir): the component was not copied.</Command>
-      <Message>Copying "$(TargetFileName)" to the foobar2000 installation in $(Fb2kDir), if there is one...</Message>
+      <Command>if exist "$(Fb2kDir)\foobar2000.exe" if exist "$(Fb2kProfileDir)\" if not exist "$(Fb2kComponentDir)\data" mkdir "$(Fb2kComponentDir)\data"
+if exist "$(Fb2kDir)\foobar2000.exe" if exist "$(Fb2kProfileDir)\" copy /y "$(TargetPath)" "$(Fb2kComponentDir)\"
+if exist "$(Fb2kDir)\foobar2000.exe" if exist "$(Fb2kProfileDir)\" copy /y "$(SolutionDir)external\winamp\data\*.fx" "$(Fb2kComponentDir)\data\"
+if not exist "$(Fb2kDir)\foobar2000.exe" echo No foobar2000.exe in $(Fb2kDir): the component was not copied.
+if exist "$(Fb2kDir)\foobar2000.exe" if not exist "$(Fb2kProfileDir)\" echo No foobar2000 profile in $(Fb2kProfileDir): the component was not copied.</Command>
+      <Message>Copying "$(TargetFileName)" to the foobar2000 in $(Fb2kDir), if there is one...</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
 </Project>
