@@ -361,8 +361,7 @@ void milk2_ui_element::OnMove(CPoint ptPos)
     if (m_milk2)
     {
 #ifdef TIMER_TP
-        if (TryEnterCriticalSection(&s_cs) == 0)
-            return;
+        EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
         g_plugin.OnWindowMoved();
 #ifdef TIMER_TP
@@ -404,8 +403,7 @@ void milk2_ui_element::OnSize(UINT nType, CSize size)
             height = 128;
         MILK2_CONSOLE_LOG("OnSize1 ", nType, ", ", size.cx, ", ", size.cy, ", ", GetWnd())
 #ifdef TIMER_TP
-        if (TryEnterCriticalSection(&s_cs) == 0)
-            return;
+        EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
         g_plugin.OnWindowSizeChanged(size.cx, size.cy);
 #ifdef TIMER_TP
@@ -427,8 +425,7 @@ void milk2_ui_element::OnExitSizeMove()
     if (m_milk2)
     {
 #ifdef TIMER_TP
-        if (TryEnterCriticalSection(&s_cs) == 0)
-            return;
+        EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
         RECT rc;
         WIN32_OP_D(GetClientRect(&rc));
@@ -462,7 +459,13 @@ void milk2_ui_element::OnDisplayChange(UINT uBitsPerPixel, CSize sizeScreen)
     MILK2_CONSOLE_LOG("OnDisplayChange ", GetWnd())
     if (m_milk2)
     {
+#ifdef TIMER_TP
+        EnterCriticalSection(&s_cs); // it changes the swap chain the frames are presented to
+#endif
         g_plugin.OnDisplayChange();
+#ifdef TIMER_TP
+        LeaveCriticalSection(&s_cs);
+#endif
     }
 }
 

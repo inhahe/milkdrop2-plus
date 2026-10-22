@@ -169,7 +169,7 @@ class milk2_cui_panel : public uie::window,
         if (s_milk2)
         {
 #ifdef TIMER_TP
-            if (TryEnterCriticalSection(&s_cs) == 0) return;
+            EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
             g_plugin.OnWindowSizeChanged(size.cx, size.cy);
 #ifdef TIMER_TP

@@ -26,6 +26,14 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **Fix:** share the Default UI element's menu with the Columns UI panel, or leave the element out of the build until it is supported.
 
+## A second Columns UI panel resets the running engine
+
+**Where:** `OnDeferredInit` in `foo_vis_milk2/cui_element.cpp`.
+
+**What happens:** every panel runs `CPluginShell::PluginPreInitialize` and `PanelSettings` before it looks at `s_milk2`, so a second MilkDrop panel in a Columns UI layout re-initializes an engine the first is drawing with: among much else, `PluginPreInitialize` sets `m_lpDX` to null, destroying the device context while the first panel's timer renders with it, and the two panels' timers then both render.
+
+**Fix:** as the Default UI element's `Initialize` does, pre-initialize only when `s_milk2` is false and otherwise swap the engine to the new window under `s_cs`; and let only one panel's timer render (or refuse a second panel, with a message in it).
+
 ## The scan cache records default ratings for filtered-out presets
 
 **Where:** `__UpdatePresetList` in `vis_milk2/plugin.cpp`, step 4.
