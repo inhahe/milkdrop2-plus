@@ -91,6 +91,52 @@ void ShowScriptError(HWND edit)
     ::GetWindowText(edit, text, 256);
     FB2K_console_print(core_api::get_my_file_name(), ": this script in the preferences does not compile, so it was not saved: ", pfc::utf8FromWide(text).c_str());
 }
+
+// The pages' combo box items carry a value (CB_SETITEMDATA): the setting they stand for.
+
+// Adds the item `text`, standing for `value`, to the combo box `ctrl`.
+void AddComboItem(HWND ctrl, LPCWSTR text, DWORD value)
+{
+    const LRESULT nPos = SendMessage(ctrl, CB_ADDSTRING, (WPARAM)0, (LPARAM)text);
+    SendMessage(ctrl, CB_SETITEMDATA, nPos, value);
+}
+
+// Adds the item string `id` of the string table, standing for `value`, to the combo box `ctrl`.
+void AddComboItem(HWND ctrl, UINT id, DWORD value)
+{
+    WCHAR text[256] = {0};
+    LoadString(core_api::get_my_instance(), id, text, 256);
+    AddComboItem(ctrl, text, value);
+}
+
+// Selects the combo box `ctrl`'s item at `pos`.
+void SelectComboPosition(HWND ctrl, int pos)
+{
+    SendMessage(ctrl, CB_SETCURSEL, (WPARAM)pos, (LPARAM)0);
+}
+
+// Selects the combo box `ctrl`'s item standing for `value`. Returns its position, or -1 if there
+// is none (the selection is then left as it was).
+int SelectComboValue(HWND ctrl, LRESULT value)
+{
+    const LRESULT count = SendMessage(ctrl, CB_GETCOUNT, (WPARAM)0, (LPARAM)0);
+    for (int i = 0; i < count; ++i)
+    {
+        if (SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)i, (LPARAM)0) == value)
+        {
+            SendMessage(ctrl, CB_SETCURSEL, (WPARAM)i, (LPARAM)0);
+            return i;
+        }
+    }
+    return -1;
+}
+
+// The value of the combo box `ctrl`'s selected item, or -1 with none selected.
+int64_t ComboValue(HWND ctrl)
+{
+    const LRESULT t = SendMessage(ctrl, CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+    return t != CB_ERR ? static_cast<int64_t>(SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)t, (LPARAM)0)) : -1;
+}
 } // namespace
 
 #pragma region Preferences Page
@@ -143,52 +189,52 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
 
     // Pixel shaders.
     ctrl = GetDlgItem(IDC_SHADERS);
-    AddItem(ctrl, buf, IDS_PS_AUTO_RECOMMENDED, unsigned(-1));
-    AddItem(ctrl, buf, IDS_PS_DISABLED, MD2_PS_NONE);
-    AddItem(ctrl, buf, IDS_PS_SHADER_MODEL_2, MD2_PS_2_0);
-    AddItem(ctrl, buf, IDS_PS_SHADER_MODEL_4, MD2_PS_4_0);
-    SelectItemByPos(ctrl, 0); // as a safe default
-    SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nMaxPSVersion));
+    AddComboItem(ctrl, IDS_PS_AUTO_RECOMMENDED, unsigned(-1));
+    AddComboItem(ctrl, IDS_PS_DISABLED, MD2_PS_NONE);
+    AddComboItem(ctrl, IDS_PS_SHADER_MODEL_2, MD2_PS_2_0);
+    AddComboItem(ctrl, IDS_PS_SHADER_MODEL_4, MD2_PS_4_0);
+    SelectComboPosition(ctrl, 0); // as a safe default
+    SelectComboValue(ctrl, static_cast<DWORD>(cfg_nMaxPSVersion));
 
     // Texture format.
     //ctrl = GetDlgItem(IDC_TEXFORMAT);
-    //AddItem(ctrl, buf, IDS_TX_8_BITS_PER_CHANNEL, 8);
-    ////AddItem(ctrl, " 10 bits per channel", 10);
-    //AddItem(ctrl, buf, IDS_TX_16_BITS_PER_CHANNEL, 16);
-    //AddItem(ctrl, buf, IDS_TX_32_BITS_PER_CHANNEL, 32);
-    //SelectItemByPos(ctrl, 0); // as a safe default
-    //SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nTexBitsPerCh));
+    //AddComboItem(ctrl, IDS_TX_8_BITS_PER_CHANNEL, 8);
+    ////AddComboItem(ctrl, " 10 bits per channel", 10);
+    //AddComboItem(ctrl, IDS_TX_16_BITS_PER_CHANNEL, 16);
+    //AddComboItem(ctrl, IDS_TX_32_BITS_PER_CHANNEL, 32);
+    //SelectComboPosition(ctrl, 0); // as a safe default
+    //SelectComboValue(ctrl, static_cast<DWORD>(cfg_nTexBitsPerCh));
 
     // Mesh size.
     ctrl = GetDlgItem(IDC_MESHSIZECOMBO);
-    AddItem(ctrl, buf, IDS_8X6_FAST, 8);
-    AddItem(ctrl, buf, IDS_16X12_FAST, 16);
-    AddItem(ctrl, buf, IDS_24X18, 24);
-    AddItem(ctrl, buf, IDS_32X24, 32);
-    AddItem(ctrl, buf, IDS_40X30, 40);
-    AddItem(ctrl, buf, IDS_48X36_DEFAULT, 48);
-    AddItem(ctrl, buf, IDS_64X48_SLOW, 64);
-    AddItem(ctrl, buf, IDS_80X60_SLOW, 80);
-    AddItem(ctrl, buf, IDS_96X72_SLOW, 96);
-    AddItem(ctrl, buf, IDS_128X96_SLOW, 128);
-    AddItem(ctrl, buf, IDS_160X120_SLOW, 160);
-    AddItem(ctrl, buf, IDS_192X144_SLOW, 192);
-    SelectItemByPos(ctrl, 0); // as a safe default
-    SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nGridX));
+    AddComboItem(ctrl, IDS_8X6_FAST, 8);
+    AddComboItem(ctrl, IDS_16X12_FAST, 16);
+    AddComboItem(ctrl, IDS_24X18, 24);
+    AddComboItem(ctrl, IDS_32X24, 32);
+    AddComboItem(ctrl, IDS_40X30, 40);
+    AddComboItem(ctrl, IDS_48X36_DEFAULT, 48);
+    AddComboItem(ctrl, IDS_64X48_SLOW, 64);
+    AddComboItem(ctrl, IDS_80X60_SLOW, 80);
+    AddComboItem(ctrl, IDS_96X72_SLOW, 96);
+    AddComboItem(ctrl, IDS_128X96_SLOW, 128);
+    AddComboItem(ctrl, IDS_160X120_SLOW, 160);
+    AddComboItem(ctrl, IDS_192X144_SLOW, 192);
+    SelectComboPosition(ctrl, 0); // as a safe default
+    SelectComboValue(ctrl, static_cast<DWORD>(cfg_nGridX));
 
     // Canvas stretch.
     ctrl = GetDlgItem(IDC_STRETCH2);
-    AddItem(ctrl, buf, IDS_AUTO, 0);
-    AddItem(ctrl, buf, IDS_NONE_BEST_IMAGE_QUALITY, 100);
-    AddItem(ctrl, buf, IDS_1_25_X, 125);
-    AddItem(ctrl, buf, IDS_1_33_X, 133);
-    AddItem(ctrl, buf, IDS_1_5_X, 150);
-    AddItem(ctrl, buf, IDS_1_67_X, 167);
-    AddItem(ctrl, buf, IDS_2_X, 200);
-    AddItem(ctrl, buf, IDS_3_X, 300);
-    AddItem(ctrl, buf, IDS_4_X, 400);
-    SelectItemByPos(ctrl, 0); // as a safe default
-    SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nCanvasStretch));
+    AddComboItem(ctrl, IDS_AUTO, 0);
+    AddComboItem(ctrl, IDS_NONE_BEST_IMAGE_QUALITY, 100);
+    AddComboItem(ctrl, IDS_1_25_X, 125);
+    AddComboItem(ctrl, IDS_1_33_X, 133);
+    AddComboItem(ctrl, IDS_1_5_X, 150);
+    AddComboItem(ctrl, IDS_1_67_X, 167);
+    AddComboItem(ctrl, IDS_2_X, 200);
+    AddComboItem(ctrl, IDS_3_X, 300);
+    AddComboItem(ctrl, IDS_4_X, 400);
+    SelectComboPosition(ctrl, 0); // as a safe default
+    SelectComboValue(ctrl, static_cast<DWORD>(cfg_nCanvasStretch));
 
     // Texture size.
     ctrl = GetDlgItem(IDC_TEXSIZECOMBO);
@@ -216,82 +262,82 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     // Image cache maximum bytes.
     ctrl = GetDlgItem(IDC_MAX_BYTES2);
     LoadString(core_api::get_my_instance(), IDS_AUTO, buf, 256);
-    AddItem(ctrl, buf, unsigned(-1));
-    AddItem(ctrl, FormImageCacheSizeString(L"   0", IDS_MB), 0);
-    AddItem(ctrl, FormImageCacheSizeString(L"   1", IDS_MB), 1000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"   2", IDS_MB), 2000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"   3", IDS_MB), 3000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"   4", IDS_MB), 4000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"   6", IDS_MB), 6000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"   9", IDS_MB), 8000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  10", IDS_MB), 10000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  12", IDS_MB), 12000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  14", IDS_MB), 14000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  16", IDS_MB), 16000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  20", IDS_MB), 20000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  24", IDS_MB), 24000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  28", IDS_MB), 28000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  32", IDS_MB), 32000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  40", IDS_MB), 40000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  48", IDS_MB), 48000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  56", IDS_MB), 56000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  64", IDS_MB), 64000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  80", IDS_MB), 80000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  96", IDS_MB), 96000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 128", IDS_MB), 128000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 160", IDS_MB), 160000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 192", IDS_MB), 192000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 224", IDS_MB), 224000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 256", IDS_MB), 256000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 384", IDS_MB), 384000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 512", IDS_MB), 512000000);
-    AddItem(ctrl, FormImageCacheSizeString(L" 768", IDS_MB), 768000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"     1", IDS_GB), 1000000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"1.25", IDS_GB), 1250000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"  1.5", IDS_GB), 1500000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"1.75", IDS_GB), 1750000000);
-    AddItem(ctrl, FormImageCacheSizeString(L"      2", IDS_GB), 2000000000);
-    SelectItemByPos(ctrl, 0); // as a safe default
-    SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nMaxBytes));
+    AddComboItem(ctrl, buf, unsigned(-1));
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   0", IDS_MB), 0);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   1", IDS_MB), 1000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   2", IDS_MB), 2000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   3", IDS_MB), 3000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   4", IDS_MB), 4000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   6", IDS_MB), 6000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"   9", IDS_MB), 8000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  10", IDS_MB), 10000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  12", IDS_MB), 12000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  14", IDS_MB), 14000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  16", IDS_MB), 16000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  20", IDS_MB), 20000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  24", IDS_MB), 24000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  28", IDS_MB), 28000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  32", IDS_MB), 32000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  40", IDS_MB), 40000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  48", IDS_MB), 48000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  56", IDS_MB), 56000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  64", IDS_MB), 64000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  80", IDS_MB), 80000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  96", IDS_MB), 96000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 128", IDS_MB), 128000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 160", IDS_MB), 160000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 192", IDS_MB), 192000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 224", IDS_MB), 224000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 256", IDS_MB), 256000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 384", IDS_MB), 384000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 512", IDS_MB), 512000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L" 768", IDS_MB), 768000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"     1", IDS_GB), 1000000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"1.25", IDS_GB), 1250000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"  1.5", IDS_GB), 1500000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"1.75", IDS_GB), 1750000000);
+    AddComboItem(ctrl, FormImageCacheSizeString(L"      2", IDS_GB), 2000000000);
+    SelectComboPosition(ctrl, 0); // as a safe default
+    SelectComboValue(ctrl, static_cast<DWORD>(cfg_nMaxBytes));
 
     // Image cache maximum number of images.
     ctrl = GetDlgItem(IDC_MAX_IMAGES2);
     LoadString(core_api::get_my_instance(), IDS_AUTO, buf, 256);
-    AddItem(ctrl, buf, unsigned(-1));
-    AddItem(ctrl, L"    0 ", 0);
-    AddItem(ctrl, L"    1 ", 1);
-    AddItem(ctrl, L"    2 ", 2);
-    AddItem(ctrl, L"    3 ", 3);
-    AddItem(ctrl, L"    4 ", 4);
-    AddItem(ctrl, L"    6 ", 6);
-    AddItem(ctrl, L"    8 ", 8);
-    AddItem(ctrl, L"   10 ", 10);
-    AddItem(ctrl, L"   12 ", 12);
-    AddItem(ctrl, L"   14 ", 14);
-    AddItem(ctrl, L"   16 ", 16);
-    AddItem(ctrl, L"   20 ", 20);
-    AddItem(ctrl, L"   24 ", 24);
-    AddItem(ctrl, L"   28 ", 28);
-    AddItem(ctrl, L"   32 ", 32);
-    AddItem(ctrl, L"   40 ", 40);
-    AddItem(ctrl, L"   48 ", 48);
-    AddItem(ctrl, L"   56 ", 56);
-    AddItem(ctrl, L"   64 ", 64);
-    AddItem(ctrl, L"   80 ", 80);
-    AddItem(ctrl, L"   96 ", 96);
-    AddItem(ctrl, L"  128 ", 128);
-    AddItem(ctrl, L"  160 ", 160);
-    AddItem(ctrl, L"  192 ", 192);
-    AddItem(ctrl, L"  224 ", 224);
-    AddItem(ctrl, L"  256 ", 256);
-    AddItem(ctrl, L"  384 ", 384);
-    AddItem(ctrl, L"  512 ", 512);
-    AddItem(ctrl, L"  768 ", 768);
-    AddItem(ctrl, L" 1024 ", 1024);
-    AddItem(ctrl, L" 1536 ", 1536);
-    AddItem(ctrl, L" 2048 ", 2048);
-    SelectItemByPos(ctrl, 0); // as a safe default
-    SelectItemByValue(ctrl, static_cast<DWORD>(cfg_nMaxImages));
+    AddComboItem(ctrl, buf, unsigned(-1));
+    AddComboItem(ctrl, L"    0 ", 0);
+    AddComboItem(ctrl, L"    1 ", 1);
+    AddComboItem(ctrl, L"    2 ", 2);
+    AddComboItem(ctrl, L"    3 ", 3);
+    AddComboItem(ctrl, L"    4 ", 4);
+    AddComboItem(ctrl, L"    6 ", 6);
+    AddComboItem(ctrl, L"    8 ", 8);
+    AddComboItem(ctrl, L"   10 ", 10);
+    AddComboItem(ctrl, L"   12 ", 12);
+    AddComboItem(ctrl, L"   14 ", 14);
+    AddComboItem(ctrl, L"   16 ", 16);
+    AddComboItem(ctrl, L"   20 ", 20);
+    AddComboItem(ctrl, L"   24 ", 24);
+    AddComboItem(ctrl, L"   28 ", 28);
+    AddComboItem(ctrl, L"   32 ", 32);
+    AddComboItem(ctrl, L"   40 ", 40);
+    AddComboItem(ctrl, L"   48 ", 48);
+    AddComboItem(ctrl, L"   56 ", 56);
+    AddComboItem(ctrl, L"   64 ", 64);
+    AddComboItem(ctrl, L"   80 ", 80);
+    AddComboItem(ctrl, L"   96 ", 96);
+    AddComboItem(ctrl, L"  128 ", 128);
+    AddComboItem(ctrl, L"  160 ", 160);
+    AddComboItem(ctrl, L"  192 ", 192);
+    AddComboItem(ctrl, L"  224 ", 224);
+    AddComboItem(ctrl, L"  256 ", 256);
+    AddComboItem(ctrl, L"  384 ", 384);
+    AddComboItem(ctrl, L"  512 ", 512);
+    AddComboItem(ctrl, L"  768 ", 768);
+    AddComboItem(ctrl, L" 1024 ", 1024);
+    AddComboItem(ctrl, L" 1536 ", 1536);
+    AddComboItem(ctrl, L" 2048 ", 2048);
+    SelectComboPosition(ctrl, 0); // as a safe default
+    SelectComboValue(ctrl, static_cast<DWORD>(cfg_nMaxImages));
 
     // Song title and custom animations.
     swprintf_s(buf, L"%2.1f", static_cast<float>(cfg_fSongTitleAnimDuration));
@@ -400,30 +446,9 @@ void milk2_preferences_page::OnButtonPushed(UINT uNotifyCode, int nID, CWindow w
     }
 }
 
-void milk2_preferences_page::OnEditNotification(UINT uNotifyCode, int nID, CWindow wndCtl)
+// A check box, edit control or combo box changed.
+void milk2_preferences_page::OnControlChange(UINT, int, CWindow)
 {
-    UNREFERENCED_PARAMETER(uNotifyCode);
-    UNREFERENCED_PARAMETER(nID);
-    UNREFERENCED_PARAMETER(wndCtl);
-
-    OnChanged();
-}
-
-void milk2_preferences_page::OnButtonClick(UINT uNotifyCode, int nID, CWindow wndCtl)
-{
-    UNREFERENCED_PARAMETER(uNotifyCode);
-    UNREFERENCED_PARAMETER(nID);
-    UNREFERENCED_PARAMETER(wndCtl);
-
-    OnChanged();
-}
-
-void milk2_preferences_page::OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl)
-{
-    UNREFERENCED_PARAMETER(uNotifyCode);
-    UNREFERENCED_PARAMETER(nID);
-    UNREFERENCED_PARAMETER(wndCtl);
-
     OnChanged();
 }
 
@@ -495,19 +520,19 @@ void milk2_preferences_page::reset()
     SendMessage(GetDlgItem(IDC_HARDCUT_LOUDNESS), TBM_SETPOS, (WPARAM)TRUE, (LPARAM)n);
     CheckDlgButton(IDC_CB_HARDCUTS, static_cast<UINT>(default_bHardCutsDisabled));
 
-    SelectItemByValue(GetDlgItem(IDC_SHADERS), static_cast<DWORD>(default_nMaxPSVersion));
+    SelectComboValue(GetDlgItem(IDC_SHADERS), static_cast<DWORD>(default_nMaxPSVersion));
 
-    //SelectItemByValue(GetDlgItem(IDC_TEXFORMAT), static_cast<DWORD>(default_nTexBitsPerCh));
+    //SelectComboValue(GetDlgItem(IDC_TEXFORMAT), static_cast<DWORD>(default_nTexBitsPerCh));
 
-    SelectItemByValue(GetDlgItem(IDC_MESHSIZECOMBO), static_cast<DWORD>(default_nGridX));
+    SelectComboValue(GetDlgItem(IDC_MESHSIZECOMBO), static_cast<DWORD>(default_nGridX));
 
-    SelectItemByValue(GetDlgItem(IDC_STRETCH2), static_cast<DWORD>(default_nCanvasStretch));
+    SelectComboValue(GetDlgItem(IDC_STRETCH2), static_cast<DWORD>(default_nCanvasStretch));
 
-    SelectItemByValue(GetDlgItem(IDC_TEXSIZECOMBO), static_cast<LRESULT>(default_nTexSizeX));
+    SelectComboValue(GetDlgItem(IDC_TEXSIZECOMBO), static_cast<LRESULT>(default_nTexSizeX));
 
-    SelectItemByValue(GetDlgItem(IDC_MAX_BYTES2), static_cast<DWORD>(default_nMaxBytes));
+    SelectComboValue(GetDlgItem(IDC_MAX_BYTES2), static_cast<DWORD>(default_nMaxBytes));
 
-    SelectItemByValue(GetDlgItem(IDC_MAX_IMAGES2), static_cast<DWORD>(default_nMaxImages));
+    SelectComboValue(GetDlgItem(IDC_MAX_IMAGES2), static_cast<DWORD>(default_nMaxImages));
 
     swprintf_s(buf, L"%2.1f", static_cast<float>(default_fSongTitleAnimDuration));
     SetDlgItemText(IDC_SONGTITLEANIM_DURATION, buf);
@@ -559,19 +584,19 @@ void milk2_preferences_page::apply()
         cfg_fHardCutLoudnessThresh = static_cast<double>(1.25f + t / 20.0f);
     cfg_bHardCutsDisabled = static_cast<bool>(IsDlgButtonChecked(IDC_CB_HARDCUTS));
 
-    cfg_nMaxPSVersion = ReadCBValue(IDC_SHADERS);
+    cfg_nMaxPSVersion = ComboValue(GetDlgItem(IDC_SHADERS));
 
-    //cfg_nTexBitsPerCh = ReadCBValue(IDC_TEXFORMAT);
+    //cfg_nTexBitsPerCh = ComboValue(GetDlgItem(IDC_TEXFORMAT));
 
-    cfg_nGridX = ReadCBValue(IDC_MESHSIZECOMBO);
+    cfg_nGridX = ComboValue(GetDlgItem(IDC_MESHSIZECOMBO));
 
-    cfg_nCanvasStretch = ReadCBValue(IDC_STRETCH2);
+    cfg_nCanvasStretch = ComboValue(GetDlgItem(IDC_STRETCH2));
 
-    cfg_nTexSizeX = ReadCBValue(IDC_TEXSIZECOMBO);
+    cfg_nTexSizeX = ComboValue(GetDlgItem(IDC_TEXSIZECOMBO));
 
-    cfg_nMaxBytes = ReadCBValue(IDC_MAX_BYTES2);
+    cfg_nMaxBytes = ComboValue(GetDlgItem(IDC_MAX_BYTES2));
 
-    cfg_nMaxImages = ReadCBValue(IDC_MAX_IMAGES2);
+    cfg_nMaxImages = ComboValue(GetDlgItem(IDC_MAX_IMAGES2));
 
     GetDlgItemText(IDC_SONGTITLEANIM_DURATION, buf, 256);
     cfg_fSongTitleAnimDuration = wcstof(buf, &stop);
@@ -680,79 +705,11 @@ void milk2_preferences_page::OnChanged()
     m_callback->on_state_changed();
 }
 
-inline void milk2_preferences_page::AddItem(HWND ctrl, LPWSTR buffer, UINT id, DWORD itemdata)
-{
-    LoadString(core_api::get_my_instance(), id, buffer, 256);
-    AddItem(ctrl, buffer, itemdata);
-}
-
-// Combo box items carry a value (CB_SETITEMDATA): the setting they stand for.
-namespace
-{
-// Adds the item `text`, standing for `value`, to the combo box `ctrl`.
-void AddComboItem(HWND ctrl, LPCWSTR text, DWORD value)
-{
-    const LRESULT nPos = SendMessage(ctrl, CB_ADDSTRING, (WPARAM)0, (LPARAM)text);
-    SendMessage(ctrl, CB_SETITEMDATA, nPos, value);
-}
-
-// Selects the combo box `ctrl`'s item standing for `value`. Returns its position, or -1 if there
-// is none (the selection is then left as it was).
-int SelectComboValue(HWND ctrl, LRESULT value)
-{
-    const LRESULT count = SendMessage(ctrl, CB_GETCOUNT, (WPARAM)0, (LPARAM)0);
-    for (int i = 0; i < count; ++i)
-    {
-        if (SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)i, (LPARAM)0) == value)
-        {
-            SendMessage(ctrl, CB_SETCURSEL, (WPARAM)i, (LPARAM)0);
-            return i;
-        }
-    }
-    return -1;
-}
-
-// The value of the combo box `ctrl`'s selected item, or -1 with none selected.
-int64_t ComboValue(HWND ctrl)
-{
-    const LRESULT t = SendMessage(ctrl, CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-    return t != CB_ERR ? static_cast<int64_t>(SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)t, (LPARAM)0)) : -1;
-}
-} // namespace
-
-inline void milk2_preferences_page::AddItem(HWND ctrl, LPCWSTR text, DWORD itemdata)
-{
-    AddComboItem(ctrl, text, itemdata);
-}
-
-inline void milk2_preferences_page::SelectItemByPos(HWND ctrl, int pos)
-{
-    SendMessage(ctrl, CB_SETCURSEL, (WPARAM)pos, (LPARAM)0);
-}
-
-int milk2_preferences_page::SelectItemByValue(HWND ctrl, LRESULT value)
-{
-    return SelectComboValue(ctrl, value);
-}
-
-int64_t milk2_preferences_page::ReadCBValue(DWORD ctrl_id) const
-{
-    return ComboValue(GetDlgItem(ctrl_id));
-}
 
 bool milk2_preferences_page::IsComboDiff(DWORD ctrl_id, int64_t previous) const
 {
-    HWND ctrl = GetDlgItem(ctrl_id);
-    LRESULT n = SendMessage(ctrl, CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-    if (n != CB_ERR)
-    {
-        n = SendMessage(ctrl, CB_GETITEMDATA, (WPARAM)n, (LPARAM)0);
-        return static_cast<UINT>(n) != static_cast<UINT>(previous);
-    }
-    else
-    {
-        return false;
-    }
+    const int64_t value = ComboValue(GetDlgItem(ctrl_id));
+    return value != -1 && static_cast<UINT>(value) != static_cast<UINT>(previous); // none selected: no change
 }
 
 wchar_t* milk2_preferences_page::FormImageCacheSizeString(const wchar_t* itemStr, const UINT sizeID)

@@ -341,35 +341,35 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
         MSG_WM_HSCROLL(OnHScroll)
         MSG_WM_CLOSE(OnClose)
         MSG_WM_DESTROY(OnDestroy)
-        COMMAND_HANDLER_EX(IDC_CB_SCROLLON3, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_SCROLLON4, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_NOWARN3, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_NORATING2, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_PRESS_F1_MSG, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_NOCOMPSHADER, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_W_MAXFPS2, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_FS_MAXFPS2, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_CB_WPT, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_CB_FSPT, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME_RANDOM, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_BLEND_AUTO, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_BLEND_USER, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_HARDCUT_BETWEEN_TIME, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_CB_HARDCUTS, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_SHADERS, CBN_SELCHANGE, OnComboChange)
-        //COMMAND_HANDLER_EX(IDC_TEXFORMAT, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_MESHSIZECOMBO, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_STRETCH2, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_TEXSIZECOMBO, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_MAX_BYTES2, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_MAX_IMAGES2, CBN_SELCHANGE, OnComboChange)
-        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_SONGTITLEANIM_DURATION, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_RAND_TITLE, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_RAND_MSG, EN_CHANGE, OnEditNotification)
-        COMMAND_HANDLER_EX(IDC_CB_TITLE_ANIMS, BN_CLICKED, OnButtonClick)
-        COMMAND_HANDLER_EX(IDC_TITLE_FORMAT, EN_CHANGE, OnEditNotification)
+        COMMAND_HANDLER_EX(IDC_CB_SCROLLON3, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_SCROLLON4, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_NOWARN3, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_NORATING2, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_PRESS_F1_MSG, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_NOCOMPSHADER, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_W_MAXFPS2, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_FS_MAXFPS2, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_WPT, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_FSPT, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME_RANDOM, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_BLEND_AUTO, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_BLEND_USER, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_HARDCUT_BETWEEN_TIME, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_HARDCUTS, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_SHADERS, CBN_SELCHANGE, OnControlChange)
+        //COMMAND_HANDLER_EX(IDC_TEXFORMAT, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_MESHSIZECOMBO, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_STRETCH2, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_TEXSIZECOMBO, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_MAX_BYTES2, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_MAX_IMAGES2, CBN_SELCHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_BETWEEN_TIME, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_SONGTITLEANIM_DURATION, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_RAND_TITLE, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_RAND_MSG, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_TITLE_ANIMS, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_TITLE_FORMAT, EN_CHANGE, OnControlChange)
         COMMAND_HANDLER_EX(ID_SPRITE, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_MSG, BN_CLICKED, OnButtonPushed)
         COMMAND_HANDLER_EX(ID_FONTS, BN_CLICKED, OnButtonPushed)
@@ -385,18 +385,11 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
     void OnClose();
     void OnDestroy();
     void OnButtonPushed(UINT uNotifyCode, int nID, CWindow wndCtl);
-    void OnEditNotification(UINT uNotifyCode, int nID, CWindow wndCtl);
-    void OnButtonClick(UINT uNotifyCode, int nID, CWindow wndCtl);
-    void OnComboChange(UINT uNotifyCode, int nID, CWindow wndCtl);
+    void OnControlChange(UINT uNotifyCode, int nID, CWindow wndCtl);
     void OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScrollBar);
     bool HasChanged() const;
     void OnChanged();
 
-    inline void AddItem(HWND ctrl, LPWSTR buffer, UINT id, DWORD itemdata);
-    inline void AddItem(HWND ctrl, LPCWSTR text, DWORD itemdata);
-    inline void SelectItemByPos(HWND ctrl, int pos);
-    int SelectItemByValue(HWND ctrl, LRESULT value);
-    int64_t ReadCBValue(DWORD ctrl_id) const;
     bool IsComboDiff(DWORD ctrl_id, int64_t previous) const;
     wchar_t* FormImageCacheSizeString(LPCWSTR itemStr, const UINT sizeID);
     void UpdateMaxFps(int screenmode) const;
