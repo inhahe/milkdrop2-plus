@@ -11,7 +11,7 @@
 #include "config.h"
 #include "stored_path.h"
 
-void ApplyMilkDropPreferences(); // ui_element.cpp
+void ApplyMilkDropPreferences(bool bRemakeResources); // ui_element.cpp
 
 namespace
 {
@@ -623,7 +623,7 @@ void milk2_preferences_page::apply()
     OnChanged(); // The dialog content has not changed but the flags have;
                  // the currently shown values now match the settings so the
                  // apply button can be disabled.
-    ApplyMilkDropPreferences();
+    ApplyMilkDropPreferences(true);
 }
 
 // Returns whether the dialog content is different from the current configuration;
@@ -824,14 +824,28 @@ static preferences_page_factory_t<preferences_page_milk2> g_preferences_page_mil
 #pragma region Album Art Page
 namespace
 {
-// Shows `seconds` in the edit control `id` of `dialog`, as briefly as it can (10, 0.5).
+// `seconds` as the page shows them: as briefly as can be (10, 0.5), to 6 digits.
+void FormatSeconds(double seconds, WCHAR (&buf)[32])
+{
+    swprintf_s(buf, L"%g", seconds);
+}
+
+// Shows `seconds` in the edit control `id` of `dialog`.
 void ShowSeconds(CWindow dialog, int id, double seconds)
 {
     WCHAR buf[32];
-    swprintf_s(buf, L"%g", seconds);
+    FormatSeconds(seconds, buf);
     dialog.SetDlgItemText(id, buf);
 }
 
+// `seconds` rounded as the page shows them, so that the setting saved is the number on the page
+// and the page, reading it back, does not see a change.
+double AsShownSeconds(double seconds)
+{
+    WCHAR buf[32];
+    FormatSeconds(seconds, buf);
+    return wcstod(buf, nullptr);
+}
 } // namespace
 
 BOOL milk2_album_art_page::OnInitDialog(CWindow, LPARAM)
@@ -866,12 +880,19 @@ BOOL milk2_album_art_page::OnInitDialog(CWindow, LPARAM)
         {IDC_ALBUM_ART_FADE_TIME, IDS_ALBUM_ART_FADE_TIME_HELP},
     };
     // clang-format on
+    // Each tip is shown over the control itself, which takes the mouse while enabled, and over its
+    // place in the page, which takes it while the control is greyed out (EnableControls).
     m_tooltips.Create(get_wnd(), nullptr, nullptr, TTS_ALWAYSTIP | TTS_NOANIMATE);
     for (const auto& [id, text] : tips)
     {
         WCHAR buf[256];
         LoadString(core_api::get_my_instance(), text, buf, 256);
-        m_tooltips.AddTool(CToolInfo(TTF_IDISHWND | TTF_SUBCLASS, m_hWnd, (UINT_PTR)GetDlgItem(id).m_hWnd, nullptr, buf));
+        CWindow control = GetDlgItem(id);
+        m_tooltips.AddTool(CToolInfo(TTF_IDISHWND | TTF_SUBCLASS, m_hWnd, (UINT_PTR)control.m_hWnd, nullptr, buf));
+        CRect place;
+        control.GetWindowRect(&place);
+        ScreenToClient(&place);
+        m_tooltips.AddTool(CToolInfo(TTF_SUBCLASS, m_hWnd, static_cast<UINT_PTR>(id), &place, buf));
     }
     m_tooltips.SetMaxTipWidth(200);
     SetWindowTheme(m_tooltips, m_dark ? L"DarkMode_Explorer" : nullptr, nullptr);
@@ -957,13 +978,13 @@ void milk2_album_art_page::apply()
     cfg_nAlbumArtPosition = ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)); // both always have a selection (ShowSettings)
     cfg_nAlbumArtSize = ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE));
     cfg_bAlbumArtFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
-    cfg_fAlbumArtShowFor = ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_SHOW_FOR), MIN_ALBUM_ART_SHOW_FOR, MAX_ALBUM_ART_SHOW_FOR);
-    cfg_fAlbumArtFadeTime = ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_FADE_TIME), 0.0, MAX_ALBUM_ART_FADE_TIME);
-    ShowSeconds(*this, IDC_ALBUM_ART_SHOW_FOR, cfg_fAlbumArtShowFor); // as held to the ranges
+    cfg_fAlbumArtShowFor = AsShownSeconds(ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_SHOW_FOR), MIN_ALBUM_ART_SHOW_FOR, MAX_ALBUM_ART_SHOW_FOR));
+    cfg_fAlbumArtFadeTime = AsShownSeconds(ClampAlbumArtSeconds(ReadSeconds(IDC_ALBUM_ART_FADE_TIME), 0.0, MAX_ALBUM_ART_FADE_TIME));
+    ShowSeconds(*this, IDC_ALBUM_ART_SHOW_FOR, cfg_fAlbumArtShowFor); // as held to the ranges, and rounded
     ShowSeconds(*this, IDC_ALBUM_ART_FADE_TIME, cfg_fAlbumArtFadeTime);
 
     m_callback->on_state_changed();
-    ApplyMilkDropPreferences();
+    ApplyMilkDropPreferences(false); // the engine takes these each frame: nothing to remake
 }
 
 void milk2_album_art_page::reset()
@@ -973,7 +994,7 @@ void milk2_album_art_page::reset()
     m_callback->on_state_changed();
 }
 
-void milk2_album_art_page::OnMenuTogglesSaved()
+void milk2_album_art_page::OnShowAlbumSaved()
 {
     if (!s_openPage)
         return;
@@ -1320,8 +1341,8 @@ void milk2_config::reset()
     settings.m_nAlbumArtPosition = static_cast<int32_t>(cfg_nAlbumArtPosition);
     settings.m_nAlbumArtSize = static_cast<int32_t>(cfg_nAlbumArtSize);
     settings.m_bAlbumArtFadeOut = cfg_bAlbumArtFadeOut;
-    settings.m_fAlbumArtShowFor = static_cast<float>(cfg_fAlbumArtShowFor);
-    settings.m_fAlbumArtFadeTime = static_cast<float>(cfg_fAlbumArtFadeTime);
+    settings.m_dAlbumArtShowFor = cfg_fAlbumArtShowFor;
+    settings.m_dAlbumArtFadeTime = cfg_fAlbumArtFadeTime;
     settings.m_bEnableHDR = default_bEnableHDR;
     settings.m_bSkipCompShader = static_cast<uint32_t>(cfg_bSkipCompShader);
     settings.m_nBackBufferFormat = default_nBackBufferFormat;
@@ -1437,9 +1458,11 @@ void milk2_config::save_texture_dir(const std::wstring& dir)
 
 void milk2_config::save_menu_toggles() const
 {
+    const bool bShowAlbumChanged = cfg_bShowAlbum != settings.m_bShowAlbum;
     cfg_bShowAlbum = settings.m_bShowAlbum;
     cfg_bEnableDownmix = settings.m_bEnableDownmix;
-    milk2_album_art_page::OnMenuTogglesSaved();
+    if (bShowAlbumChanged) // not Downmix Channels, which the page does not show: its own edits stay
+        milk2_album_art_page::OnShowAlbumSaved();
 }
 
 void milk2_config::update_paths()
@@ -1611,8 +1634,8 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_nAlbumArtPosition = settings.m_nAlbumArtPosition;
         cfg_nAlbumArtSize = settings.m_nAlbumArtSize;
         cfg_bAlbumArtFadeOut = settings.m_bAlbumArtFadeOut;
-        cfg_fAlbumArtShowFor = settings.m_fAlbumArtShowFor;
-        cfg_fAlbumArtFadeTime = settings.m_fAlbumArtFadeTime;
+        cfg_fAlbumArtShowFor = settings.m_dAlbumArtShowFor;
+        cfg_fAlbumArtFadeTime = settings.m_dAlbumArtFadeTime;
         cfg_bEnableHDR = settings.m_bEnableHDR;
 
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);

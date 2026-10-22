@@ -437,10 +437,10 @@ class milk2_album_art_page : public preferences_page_instance, public CDialogImp
     END_MSG_MAP()
     // clang-format on
 
-    // Shows the Show album art setting the context menu has just saved (milk2_config::
+    // Shows the Show album art setting the context menu has just changed and saved (milk2_config::
     // save_menu_toggles) in the page, if it is open, so that the page shows, compares and applies
     // the setting as it now is. Main thread.
-    static void OnMenuTogglesSaved();
+    static void OnShowAlbumSaved();
 
   private:
     BOOL OnInitDialog(CWindow, LPARAM);

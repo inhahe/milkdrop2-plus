@@ -3225,22 +3225,25 @@ void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
 
 } // namespace
 
-// Applies the settings the preferences page has just saved (it calls this, on the main thread):
-// reads them back, and remakes the running engine's resources with them, in whichever window it
-// draws in, the Default UI element's or the Columns UI panel's.
-void ApplyMilkDropPreferences()
+// Applies the settings a preferences page has just saved (it calls this, on the main thread):
+// reads them back, hands them to the running engine and, if `bRemakeResources`, remakes its
+// resources with them, in whichever window it draws in, the Default UI element's or the Columns
+// UI panel's. The MilkDrop page's settings need that (canvas, mesh, fonts...); the Album Art
+// page's reach the sprites each frame, and a remake would only stall the frames and clear the
+// canvas.
+void ApplyMilkDropPreferences(bool bRemakeResources)
 {
     const bool showAlbum = s_config.settings.m_bShowAlbum;
     const std::wstring artworkFormat = s_config.settings.m_szArtworkFormat;
     s_config.reset();
     PublishPlayback(); // the title format may have changed
     if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat)
-        ShowNowPlayingAlbumArt(); // the position and size reach the art on screen each frame (PanelSettings)
+        ShowNowPlayingAlbumArt(); // the other album art settings reach the art on screen each frame (PanelSettings)
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
     g_plugin.PanelSettings(&s_config.settings);
-    if (s_milk2)
+    if (s_milk2 && bRemakeResources)
     {
         RECT rect{};
         ::GetClientRect(g_plugin.GetWinampWindow(), &rect);

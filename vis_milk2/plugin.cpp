@@ -925,8 +925,8 @@ bool CPlugin::PanelSettings(plugin_config* settings)
     m_albumArtPosition = settings->m_nAlbumArtPosition;
     m_albumArtSize = settings->m_nAlbumArtSize;
     m_albumArtFadeOut = settings->m_bAlbumArtFadeOut;
-    m_albumArtShowFor = settings->m_fAlbumArtShowFor;
-    m_albumArtFadeTime = settings->m_fAlbumArtFadeTime;
+    m_albumArtShowFor = settings->m_dAlbumArtShowFor;
+    m_albumArtFadeTime = settings->m_dAlbumArtFadeTime;
     m_enable_hdr = static_cast<int>(settings->m_bEnableHDR);
     m_back_buffer_format = settings->m_nBackBufferFormat;
     m_depth_buffer_format = settings->m_nDepthBufferFormat;

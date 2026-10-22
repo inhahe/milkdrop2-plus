@@ -167,9 +167,9 @@ typedef struct
     bool m_bShowAlbum;
     int32_t m_nAlbumArtPosition; // an AlbumArtPosition (album_art.h)
     int32_t m_nAlbumArtSize;     // the image's longer side, in percent of the canvas's shorter side
-    bool m_bAlbumArtFadeOut;     // whether the art fades out m_fAlbumArtShowFor seconds after it appears
-    float m_fAlbumArtShowFor;
-    float m_fAlbumArtFadeTime; // seconds a fade in or out takes
+    bool m_bAlbumArtFadeOut;     // whether the art fades out m_dAlbumArtShowFor seconds after it appears
+    double m_dAlbumArtShowFor;   // doubles, as saved: a float would not compare equal to the
+    double m_dAlbumArtFadeTime;  // setting it was read from; seconds a fade in or out takes
     bool m_bEnableHDR;
     bool m_bSkipCompShader;
     uint32_t m_nBackBufferFormat;
