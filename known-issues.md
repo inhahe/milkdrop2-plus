@@ -20,7 +20,7 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 ## The Columns UI element has no context menu
 
-**Where:** `foo_vis_milk2/cui_element.cpp`, compiled into the release build because `external/columns_ui-sdk` is present.
+**Where:** `foo_vis_milk2/cui_element.cpp`, compiled in whenever the `external/columns_ui-sdk` submodule is checked out, as in the release build and any recursive clone.
 
 **What happens:** Set Preset Library Folder, the shuffle modes and favorites exist only in the Default UI element's context menu, which the no-presets notice also points to.
 

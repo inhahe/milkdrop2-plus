@@ -79,7 +79,7 @@ To undo an install, run the script again and type R when it asks, or run it with
    ```
    git clone --recursive https://github.com/inhahe/milkdrop2-plus.git
    ```
-   The `--recursive` flag downloads the [Cream of the Crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) preset collection (~10,000 presets) as a submodule. If you clone without `--recursive`, you can fetch the presets later with `git submodule update --init`, or `install.bat` will offer to download them for you.
+   The `--recursive` flag downloads two submodules: the [Cream of the Crop](https://github.com/projectM-visualizer/presets-cream-of-the-crop) preset collection (~10,000 presets), and the [Columns UI SDK](https://github.com/reupen/columns_ui-sdk), with which the build includes a Columns UI panel as well as the Default UI element. If you clone without `--recursive`, you can fetch them later with `git submodule update --init`, or `install.bat` will offer to download the presets for you.
 3. Build it (Release x64; see [BUILDING.md](BUILDING.md)).
 4. Run `install.bat` to install the plugin and presets into foobar2000.
 
