@@ -101,12 +101,12 @@ class texmgr
     // Readies the empty sprite slots for textures made on `lpDD`, and returns true; or, while they
     // belong to it already (until Finish, which the device's end calls for), keeps the sprites as
     // they are and returns false, so that they outlive a reallocation of the engine's other
-    // resources (a resize, a change of settings, a window swap). Sprites of another device, gone
-    // without Finish, are dropped.
+    // resources (a resize, a change of settings, a window swap).
     bool Init(D3D11Shim* lpDD);
-    // Sets slot `iSlot`'s `aspect` and `imgaspect` inputs, from m_canvasAspect and its image's size.
+    // The canvas's size in pixels, for the sprites' `aspect` (the engine keeps it current).
+    void SetCanvasSize(int width, int height) { m_canvasAspect = height > 0 ? width / static_cast<double>(height) : 1.0; }
+    // Sets slot `iSlot`'s `aspect` and `imgaspect` inputs, from the canvas's and its image's size.
     void SetPlacementInputs(int iSlot);
-    double m_canvasAspect = 1.0; // the canvas's width / height (the engine keeps it current)
     int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
     int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck);
     void KillTex(int iSlot);
@@ -123,10 +123,8 @@ class texmgr
     bool RecompileExpressions(int iSlot);
     void StripLinefeedCharsAndComments(char* src, char* dest);
 
-    void Abandon();
-
     D3D11Shim* m_lpDD;
-    unsigned m_deviceSerial = 0; // D3D11Shim::Serial of m_lpDD: a new shim may reuse a freed one's address
+    double m_canvasAspect = 1.0;
 };
 
 #endif

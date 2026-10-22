@@ -73,12 +73,14 @@ void texmgr::Finish()
 
 bool texmgr::Init(D3D11Shim* lpDD)
 {
-    if (m_lpDD && m_deviceSerial == lpDD->Serial())
-        return false;
     if (m_lpDD)
-        Abandon(); // a device that went without Finish (a start that failed partway): its sprites go
+    {
+        // The device that goes calls Finish first (CleanUpDX11 with final_cleanup), and so does a
+        // start that fails (PluginInitialize).
+        assert(m_lpDD == lpDD);
+        return false;
+    }
     m_lpDD = lpDD;
-    m_deviceSerial = lpDD->Serial();
 
     for (int i = 0; i < NUM_TEX; i++)
     {
@@ -90,30 +92,6 @@ bool texmgr::Init(D3D11Shim* lpDD)
             m_tex[i].tex_eel_ctx = NSEEL_VM_alloc();
     }
     return true;
-}
-
-// Empties the slots of a device that is gone, without asking it to forget their views (its shim,
-// with their views, went with it).
-void texmgr::Abandon()
-{
-    for (int i = 0; i < NUM_TEX; i++)
-    {
-        if (m_tex[i].pSurface)
-        {
-            bool bReleasedAlready = false; // an instance of a texture an earlier slot holds
-            for (int j = 0; j < i; j++)
-                bReleasedAlready |= m_tex[j].pSurface == m_tex[i].pSurface;
-            if (!bReleasedAlready)
-                m_tex[i].pSurface->Release();
-        }
-        FreeCode(i);
-    }
-    for (int i = 0; i < NUM_TEX; i++)
-    {
-        m_tex[i].pSurface = NULL;
-        m_tex[i].szFileName[0] = L'\0';
-    }
-    m_lpDD = nullptr;
 }
 
 /*
@@ -216,11 +194,14 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
     if (iSlot < 0) return TEXMGR_ERR_BAD_INDEX;
     if (iSlot >= NUM_TEX) return TEXMGR_ERR_BAD_INDEX;
 
-    // First, if this texture is already loaded, just add another instance.
+    // Free what the slot holds.
+    KillTex(iSlot);
+
+    // If this texture is already loaded, just add another instance.
     bool bTextureInstanced = false;
     {
         for (int x = 0; x < NUM_TEX; x++)
-            if (m_tex[x].pSurface && _wcsicmp(m_tex[x].szFileName, szFilename) == 0)
+            if (x != iSlot && m_tex[x].pSurface && _wcsicmp(m_tex[x].szFileName, szFilename) == 0)
             {
                 // The texture is shared (KillTex counts its users); the code and its variables
                 // are the slot's own, in its own VM (RunInitCode registers them there below).
@@ -237,15 +218,6 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
 
     if (!bTextureInstanced)
     {
-        // Free old resources.
-        /*
-        if (m_tex[iSlot].pSurface)
-        {
-            m_tex[iSlot].pSurface->Release();
-            m_tex[iSlot].pSurface = NULL;
-        }*/
-        KillTex(iSlot);
-
         wcscpy_s(m_tex[iSlot].szFileName, szFilename);
 
         HRESULT hr = m_lpDD->CreateTextureFromFile(szFilename, &m_tex[iSlot].pSurface);

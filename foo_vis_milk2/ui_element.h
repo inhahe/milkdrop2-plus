@@ -28,7 +28,15 @@ static constexpr ULONGLONG s_debug_limit = 1ull;
 static milk2_config s_config;
 static std::wstring s_pwd;
 #ifdef TIMER_TP
+// The render lock, which the render thread holds for a whole frame. It lives as long as the
+// component (made when the DLL loads, deleted when it unloads), not as long as the engine, so that
+// no UI element or panel has to decide when to make or delete it.
 CRITICAL_SECTION s_cs;
+const struct RenderLockLife
+{
+    RenderLockLife() { InitializeCriticalSection(&s_cs); }
+    ~RenderLockLife() { DeleteCriticalSection(&s_cs); }
+} s_csLife;
 #endif
 
 // Hands the engine what is playing and the active playlist now (see milk2_playback_feed in

@@ -1878,16 +1878,17 @@ void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
 // which the preset then smears. A sprite's x and y run from 0 to 1 across the canvas's longer
 // side, centred on the canvas, and sx and sy give the image's longer side as a fraction of it; a
 // non-square image is shrunk about its middle. Hence `aspect` (the canvas's width / height) and
-// `imgaspect` (the image's).
+// `imgaspect` (the image's). Its own variables must not take the names of the sprite's inputs and
+// outputs (r is its red, for one).
 static const char* const kAlbumArtInitCode = "burn = 0;";
 static const char* const kAlbumArtCode =
     "wide = above(aspect, 1);"
-    "r = if(wide, 1 / aspect, 1); q = if(wide, 1, aspect);" // the shorter side / the width, / the height
-    "hw = 0.1 * if(above(imgaspect, 1), 1, imgaspect);"     // the image's half width, and half height,
-    "hh = 0.1 * if(above(imgaspect, 1), 1 / imgaspect, 1);" // / the shorter side
+    "kw = if(wide, 1 / aspect, 1); kh = if(wide, 1, aspect);" // the shorter side / the width, / the height
+    "hw = 0.1 * if(above(imgaspect, 1), 1, imgaspect);"       // the image's half width, and half height,
+    "hh = 0.1 * if(above(imgaspect, 1), 1 / imgaspect, 1);"   // / the shorter side
     "sx = 0.2 * min(aspect, 1 / aspect); sy = sx;"
-    "x = 0.5 + 0.5 * (1 - 2 * r * (0.025 + hw)) * if(wide, 1, aspect);"
-    "y = 0.5 + 0.5 * (1 - 2 * q * (0.025 + hh)) / if(wide, aspect, 1);"
+    "x = 0.5 + 0.5 * (1 - 2 * kw * (0.025 + hw)) * if(wide, 1, aspect);"
+    "y = 0.5 + 0.5 * (1 - 2 * kh * (0.025 + hh)) / if(wide, aspect, 1);"
     "a = min(time * 2, 1);";
 
 // Launches the album art sprite from what SetAlbumArt kept, if anything.
@@ -7240,7 +7241,7 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
         if (szDefaultCode)
             strcpy_s(code, szDefaultCode);
     }
-    m_texmgr.m_canvasAspect = GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0; // for its init code
+    m_texmgr.SetCanvasSize(GetWidth(), GetHeight()); // for its init code
 
     if (nSlot == -1)
     {

@@ -319,6 +319,9 @@ class CPluginShell : public DX::IDeviceNotify
     void AnalyzeNewSound(float* pWaveL, float* pWaveR);
 #endif
     void AlignWaves();
+    // How far PluginInitialize got (a stage reached, or attempted, needs its cleanup): what
+    // PluginQuit undoes.
+    enum InitStage { INIT_NONE, INIT_DIRECTX, INIT_NON_DX11, INIT_DX11 } m_initStage = INIT_NONE;
     int InitDirectX();
     void CleanUpDirectX();
     int AllocateDX11();

@@ -3331,7 +3331,7 @@ void CPlugin::DrawUserSprites()
     //lpDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTFN_LINEAR);
     //lpDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTFP_LINEAR);
 
-    m_texmgr.m_canvasAspect = GetWidth() / static_cast<double>(GetHeight()); // as the placement below uses it
+    m_texmgr.SetCanvasSize(GetWidth(), GetHeight()); // as the placement below uses it
     for (int iSlot = 0; iSlot < NUM_TEX; iSlot++)
     {
         if (m_texmgr.m_tex[iSlot].pSurface)

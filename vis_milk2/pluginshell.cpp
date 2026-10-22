@@ -69,7 +69,7 @@ wchar_t* CPluginShell::GetConfigIniFile() { return m_szConfigIniFile; }
 TextStyle* CPluginShell::GetFont(eFontIndex idx) { if (idx >= eFontIndex::SIMPLE_FONT && idx < eFontIndex::EXTRA_5 && idx < NUM_BASIC_FONTS + NUM_EXTRA_FONTS) { return m_dwrite_font[idx].get(); } else { return NULL; } }
 int CPluginShell::GetFontHeight(eFontIndex idx) const { if (idx >= eFontIndex::SIMPLE_FONT  && idx < eFontIndex::EXTRA_5 && idx < NUM_BASIC_FONTS + NUM_EXTRA_FONTS) return m_fontinfo[idx].nSize; else return 0; }
 int CPluginShell::GetBitDepth() const { return m_lpDX->GetBitDepth(); };
-D3D11Shim* CPluginShell::GetDevice() const { return m_lpDX->m_lpDevice.get(); };
+D3D11Shim* CPluginShell::GetDevice() const { return m_lpDX ? m_lpDX->m_lpDevice.get() : nullptr; };
 
 int CPluginShell::InitNonDX11()
 {
@@ -338,6 +338,8 @@ void CPluginShell::CleanUpDirectX()
 
 int CPluginShell::PluginPreInitialize(HWND hWinampWnd, HINSTANCE hWinampInstance)
 {
+    assert(m_initStage == INIT_NONE); // it resets what a running engine uses (m_lpDX, among much else)
+
     // PROTECTED CONFIG PANEL SETTINGS (also see 'private' settings, below)
     m_start_fullscreen = 0;
     m_max_fps_fs = 30;
@@ -558,14 +560,17 @@ int CPluginShell::PluginInitialize(int iWidth, int iHeight)
               iWidth, iHeight, (void*)m_hWndWinamp, (unsigned)GetWindowLong(m_hWndWinamp, GWL_STYLE));
     LogInit(buf);
 
+    // A start that fails undoes what it did (PluginQuit), so that the engine is either running or
+    // not started at all, and a later start begins afresh.
     try
     {
         LogInit("PluginInit: calling InitDirectX...");
         if (!InitDirectX()) { LogInit("PluginInit: InitDirectX returned FALSE"); return FALSE; }
         LogInit("PluginInit: InitDirectX OK");
     }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitDirectX exception: %s", e.what()); LogInit(buf); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitDirectX std exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitDirectX exception: %s", e.what()); LogInit(buf); m_lpDX.reset(); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitDirectX std exception: %s", e.what()); LogInit(buf); m_lpDX.reset(); return FALSE; }
+    m_initStage = INIT_DIRECTX;
 
     m_lpDX->m_client_width = iWidth;
     m_lpDX->m_client_height = iHeight;
@@ -573,30 +578,37 @@ int CPluginShell::PluginInitialize(int iWidth, int iHeight)
     try
     {
         LogInit("PluginInit: calling InitNonDX11...");
-        if (!InitNonDX11()) { LogInit("PluginInit: InitNonDX11 returned FALSE"); return FALSE; }
+        m_initStage = INIT_NON_DX11; // what it did before it failed is undone too
+        if (!InitNonDX11()) { LogInit("PluginInit: InitNonDX11 returned FALSE"); PluginQuit(); return FALSE; }
         LogInit("PluginInit: InitNonDX11 OK");
     }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 exception: %s", e.what()); LogInit(buf); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 std exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: InitNonDX11 std exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
 
     try
     {
         LogInit("PluginInit: calling AllocateDX11...");
-        if (!AllocateDX11()) { LogInit("PluginInit: AllocateDX11 returned FALSE"); return FALSE; }
+        m_initStage = INIT_DX11;
+        if (!AllocateDX11()) { LogInit("PluginInit: AllocateDX11 returned FALSE"); PluginQuit(); return FALSE; }
         LogInit("PluginInit: AllocateDX11 OK");
     }
-    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 exception: %s", e.what()); LogInit(buf); return FALSE; }
-    catch (std::exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 std exception: %s", e.what()); LogInit(buf); return FALSE; }
+    catch (DX::com_exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
+    catch (std::exception& e) { sprintf_s(buf, "PluginInit: AllocateDX11 std exception: %s", e.what()); LogInit(buf); PluginQuit(); return FALSE; }
 
     LogInit("PluginInit: SUCCESS");
     return TRUE;
 }
 
+// Undoes as much of PluginInitialize as was done, if any.
 void CPluginShell::PluginQuit()
 {
-    CleanUpDX11(1);
-    CleanUpNonDX11();
-    CleanUpDirectX();
+    if (m_initStage >= INIT_DX11)
+        CleanUpDX11(1);
+    if (m_initStage >= INIT_NON_DX11)
+        CleanUpNonDX11();
+    if (m_initStage >= INIT_DIRECTX)
+        CleanUpDirectX();
+    m_initStage = INIT_NONE;
 }
 
 wchar_t* BuildSettingName(const wchar_t* name, const int number)

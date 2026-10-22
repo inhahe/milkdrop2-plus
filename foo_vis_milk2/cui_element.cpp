@@ -98,10 +98,6 @@ class milk2_cui_panel : public uie::window,
                 milk2_ui_element::ResolvePwd();
                 s_config.init();
                 PublishPlayback(); // in the title format just read
-#ifdef TIMER_TP
-                InitializeCriticalSection(&s_cs);
-                m_csInitialized = true;
-#endif
             }
 
             // Load preset library path from saved config.
@@ -151,18 +147,13 @@ class milk2_cui_panel : public uie::window,
             s_milk2 = false;
             m_dxInitialized = false;
         }
-#ifdef TIMER_TP
-        if (m_csInitialized) // whether or not the engine started: OnCreate makes it anew
-        {
-            DeleteCriticalSection(&s_cs);
-            m_csInitialized = false;
-        }
-#endif
 
         // This object outlives its window (one for the component): a window made later, after a
         // change of layout, starts the engine again.
         m_initPosted = false;
         m_last_time = 0.0;
+        if (g_hWindow == m_hWnd)
+            g_hWindow = NULL;
     }
 
     // Phase 2: Deferred DX init — posted from WM_SIZE so it runs after UI is fully initialized.
@@ -230,8 +221,6 @@ class milk2_cui_panel : public uie::window,
                 {
                     g_plugin.PluginPreInitialize(m_hWnd, core_api::get_my_instance());
                     g_plugin.PanelSettings(&s_config.settings);
-                    if (!s_pwd.empty())
-                        swprintf_s(g_plugin.m_szComponentDirPath, L"%ls", s_pwd.c_str());
                 }
                 g_plugin.SetWinampWindow(m_hWnd);
 
@@ -357,7 +346,6 @@ class milk2_cui_panel : public uie::window,
     double m_last_time = 0.0;
     bool m_dxInitialized = false;
     bool m_initPosted = false;
-    bool m_csInitialized = false; // s_cs, which OnCreate made
 #ifdef TIMER_TP
     PTP_TIMER m_tpTimer = nullptr;
 #endif

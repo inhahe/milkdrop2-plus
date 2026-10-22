@@ -144,9 +144,6 @@ int milk2_ui_element::OnCreate(LPCREATESTRUCT cs)
         ResolvePwd();
         s_config.init();
         PublishPlayback(); // in the title format just read
-#ifdef TIMER_TP
-        InitializeCriticalSection(&s_cs);
-#endif
     }
 
     if (!m_milk2)
@@ -226,13 +223,14 @@ void milk2_ui_element::OnDestroy()
     if (m_vis_stream.is_valid())
         m_vis_stream.release();
     //DestroyMenu();
+    if (g_hWindow == get_wnd())
+        g_hWindow = NULL; // the preferences tell it of changes: not a window gone, or another with its handle
 
     if (m_milk2)
         m_milk2 = false;
     s_count = 0ull;
 
-    const bool bQuit = !s_in_toggle; // not the swap to or from full screen: the engine ends
-    if (bQuit)
+    if (!s_in_toggle) // not the swap to or from full screen: the engine ends
     {
         MILK2_CONSOLE_LOG("ExitVis")
         s_fullscreen = false;
@@ -257,8 +255,6 @@ void milk2_ui_element::OnDestroy()
     }
 #ifdef TIMER_TP
     LeaveCriticalSection(&s_cs);
-    if (bQuit)
-        DeleteCriticalSection(&s_cs); // once left: the next window's OnCreate makes it anew
 #endif
 }
 

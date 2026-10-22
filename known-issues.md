@@ -26,6 +26,14 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **Fix:** share the Default UI element's menu with the Columns UI panel, or leave the element out of the build until it is supported.
 
+## Dead windowed screen mode
+
+**Where:** `m_screenmode` and the `WINDOWED` branches in `vis_milk2/pluginshell.cpp` (`StuffParams`, the frame loop) and `plugin.cpp`; the windowed settings they read (`m_multisample_w`, `m_adapter_guid_w`, `m_adapter_devicename_w`, `m_allow_page_tearing_w`, `m_skin`) and their preferences in `foo_vis_milk2/preferences.cpp`; the restart branch of `DXContext::StartOrRestartDevice` (`m_ready` already true).
+
+**What happens:** nothing changes the screen mode from its initial `FULLSCREEN` any more (the component's own full screen is foobar2000's, which swaps windows: `OnWindowSwap`), and nothing starts a device twice; the one function that did both, `CPluginShell::ToggleFullScreen`, was never called and is gone. The windowed settings are still read and offered, yet never reach the device.
+
+**Fix:** collapse `m_screenmode` to its one value and remove the windowed branches, settings and restart branch; take the windowed settings out of the preferences, or make the full-screen ones the only ones.
+
 ## The scan cache records default ratings for filtered-out presets
 
 **Where:** `__UpdatePresetList` in `vis_milk2/plugin.cpp`, step 4.
