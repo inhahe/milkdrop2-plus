@@ -178,9 +178,6 @@
       <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -207,9 +204,6 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -231,9 +225,6 @@
       <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -260,9 +251,6 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
@@ -284,9 +272,6 @@
       <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform)EC.dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -313,9 +298,6 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform)EC.dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64EC'">
     <ClCompile>
@@ -337,9 +319,6 @@
       <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64EC'">
     <ClCompile>
@@ -366,9 +345,6 @@
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
     </Link>
-    <PostBuildEvent>
-      <Command>echo F | xcopy /y /d "$(SolutionDir)data\shared\shared-$(Platform).dll" "$(OutDir)shared.dll"</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dll.cpp" />
