@@ -2641,16 +2641,9 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
 
                     if (!x.texptr)
                     {
-                        /*
-                        wchar_t buf[2048] = {0}, title[64] = {0};
-                        swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_COULD_NOT_LOAD_TEXTURE_X), szRootName, szExtsWithSlashes);
-                        DumpDebugMessage(buf);
-                        if (bHardErrors)
-                            MessageBox(g_plugin.GetPluginWindow(), buf, WASABI_API_LNGSTRINGW_BUF(IDS_MILKDROP_ERROR, title, 64), MB_OK | MB_SETFOREGROUND | MB_TOPMOST);
-                        else
-                            AddError(buf, 6.0f, ERR_PRESET, true);
-                        */
-                        return;
+                        // Not installed (or not loadable): leave this sampler unbound, so it reads
+                        // black, and go on binding the shader's other parameters.
+                        continue;
                     }
 
                     g_plugin.m_textures.push_back(x);
