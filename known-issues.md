@@ -8,7 +8,7 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **What happens:** with the statically linked runtime, a `_s` function given a result longer than its buffer calls the invalid-parameter handler, which ends foobar2000. The preset folder itself is now bounded (`MAX_PRESET_DIR_LENGTH`), but a folder near that limit plus a long relative preset name still overflows.
 
-**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` and the texture lookup (`FindTextureFiles`) now do.
+**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` and the texture lookup (`ForEachTextureCandidate`) now do.
 
 ## The UI thread reads the preset list without the lock
 

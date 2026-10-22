@@ -1355,7 +1355,10 @@ void milk2_config::update_paths()
     }
     // Only the menu command and the Advanced preferences page change this setting; an empty or
     // unusable value means the default textures folder alone.
-    const std::wstring textureDir = folder_from_stored(pfc::wideFromUTF8(cfg_szTextureDir.get()).c_str(), MAX_PATH - 1);
+    const std::wstring storedTextureDir = pfc::wideFromUTF8(cfg_szTextureDir.get()).c_str();
+    const std::wstring textureDir = folder_from_stored(storedTextureDir, MAX_PATH - 1);
+    if (textureDir.empty() && !storedTextureDir.empty())
+        FB2K_console_print(core_api::get_my_file_name(), ": the saved texture folder is too long to use here, so it is ignored: ", pfc::utf8FromWide(storedTextureDir.c_str()).c_str());
     wcscpy_s(settings.m_szTextureDir, textureDir.c_str());
     wcscpy_s(settings.m_szPluginsDirPath, default_szPluginsDirPath);
     wcscpy_s(settings.m_szConfigIniFile, default_szConfigIniFile);

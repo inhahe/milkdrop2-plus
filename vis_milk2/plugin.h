@@ -530,14 +530,21 @@ class CPlugin : public CPluginShell
     int m_nPresetFilesFound = 0;     // .milk files in it
     int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
                                      // presets loaded from them exclude those needing a newer pixel shader model
-    // The user's textures folder, ending in a backslash, or empty; change it with SetTextureDir().
-    // Its own lock, held only to copy it, rather than g_cs, which the render thread holds for a
-    // whole frame while it sends the UI thread messages: the UI thread must not wait on that.
+    // The folders textures are looked up in besides the default one, each ending in a backslash or
+    // empty: the user's (change it with SetTextureDir()) and the preset folder the last scan read.
+    // Their own lock, held only to copy them, rather than g_cs, which the render thread holds for
+    // a whole frame while it sends the UI thread messages: a thread that compiles shaders outside
+    // the frame (a shader edit, on the UI thread) must not wait on that.
     std::wstring m_textureDir;
+    std::wstring m_texturePresetDir;
     mutable std::mutex m_textureDirLock;
-    std::atomic<bool> m_bTextureDirChanged{false}; // the render thread has yet to reload the textures for it
-    std::wstring m_missingTexturesShown;    // the last missing-texture message, empty for none
-    std::wstring m_missingTexturesShownFor; // the preset file it was about
+    std::atomic<bool> m_bTextureDirChanged{false};     // the render thread has yet to reload the textures for it
+    std::atomic<unsigned> m_nTextureDirGeneration{0}; // counts those changes, and requests to list the folders again
+    int m_nAutoMaxTextureBytes = 64000000;             // the cache's byte limit when MaxBytes is Auto; set from the adapter
+    // What ReportMissingTextures() last showed, render thread only: the names, and the preset.
+    std::vector<std::wstring> m_missingTexturesShown;
+    std::wstring m_missingTexturesShownFor;
+    std::atomic<bool> m_bMissingTexturesReportDue{false}; // show the message at the next frame even if it is unchanged
 
     float m_fRandStart[4];
 
@@ -628,7 +635,7 @@ class CPlugin : public CPluginShell
     std::vector<std::wstring> GetTextureDirs(bool bWithPresetFolder) const;
     std::wstring GetDefaultTextureDir() const;
     static size_t CountTextureFiles(const std::wstring& dir);
-    void ReportMissingTextures(bool bAlways);
+    void ReportMissingTextures();
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);
