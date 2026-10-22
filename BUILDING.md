@@ -37,22 +37,27 @@ git.exe apply --ignore-whitespace --whitespace=nowarn --verbose "$(Get-Location)
 ```
 
 4. Then just select your desired build configuration and platform in Visual Studio, for example "_Debug x64_" and do **Build > Build Solution** (**Ctrl+Shift+B**).
-5. For quick debugging here is a suggestion for `foo_vis_milk2/foo_vis_milk2.vcxproj.user` (only showing Debug x64 for brevity and your install locations may be different). It includes how to attach foobar2000 to the debugger and update the version of the component DLL with the most recent build:
+5. For quick debugging here is a suggestion for `foo_vis_milk2/foo_vis_milk2.vcxproj.user` (x64 only; set `Fb2kDir` to your installation). It runs foobar2000 under the debugger, and copies each build, with the shader files the engine reads at start, into the installation's components folder. It copies only if `Fb2kDir` holds `foobar2000.exe`, so that a wrong path does not make a folder that is not an installation. Point it at a foobar2000 kept for testing, not the one you listen with: a Debug build makes foobar2000 ask at every start whether to load it, and the copy fails while foobar2000 runs.
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommand>$(LocalAppData)\Programs\foobar2000_x64\foobar2000.exe</LocalDebuggerCommand>
+  <PropertyGroup>
+    <Fb2kDir>$(LocalAppData)\Programs\foobar2000_x64</Fb2kDir>
+    <Fb2kComponentDir>$(Fb2kDir)\profile\user-components-x64\foo_milkdrop2_plus</Fb2kComponentDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='x64'">
+    <LocalDebuggerCommand>$(Fb2kDir)\foobar2000.exe</LocalDebuggerCommand>
     <LocalDebuggerDebuggerType>NativeOnly</LocalDebuggerDebuggerType>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
     <PostBuildEvent>
-      <Command>copy /y "$(TargetPath)" "$(LocalAppData)\Programs\foobar2000_x64\profile\user-components-x64\foo_vis_milk2"</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Copying "$(TargetFileName)" to components directory...</Message>
+      <Command>if exist "$(Fb2kDir)\foobar2000.exe" if not exist "$(Fb2kComponentDir)\data" mkdir "$(Fb2kComponentDir)\data"
+if exist "$(Fb2kDir)\foobar2000.exe" copy /y "$(TargetPath)" "$(Fb2kComponentDir)\"
+if exist "$(Fb2kDir)\foobar2000.exe" copy /y "$(SolutionDir)external\winamp\data\*.fx" "$(Fb2kComponentDir)\data\"
+if not exist "$(Fb2kDir)\foobar2000.exe" echo No foobar2000.exe in $(Fb2kDir): the component was not copied.</Command>
+      <Message>Copying "$(TargetFileName)" to the foobar2000 installation in $(Fb2kDir), if there is one...</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
 </Project>
