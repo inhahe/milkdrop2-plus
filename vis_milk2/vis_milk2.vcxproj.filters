@@ -26,6 +26,9 @@
     <ClInclude Include="utf8_file.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="album_art.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="texture_cache.h">
       <Filter>Header Files</Filter>
     </ClInclude>

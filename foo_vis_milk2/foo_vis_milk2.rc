@@ -1541,7 +1541,7 @@ BEGIN
     IDS_NOCOMPSHADER_HELP   "Check this box to skip composite shader blending to minimize the strobing effect on the bottom and right edges of the screen."
     IDS_TITLE_FORMAT_HELP   "Set a song title format string using foobar2000 script."
     IDS_ARTWORK_FORMAT_HELP "The album art to show: a fully-qualified path, or a foobar2000 script that returns the file path. If nothing is set, or no such file exists, the cover embedded in the track is shown, or else what foobar2000's album art settings find."
-    IDS_SHOW_ALBUM_HELP     "Shows the playing track's album art over the visualization. Also on the visualization's right-click menu."
+    IDS_SHOW_ALBUM_HELP     "Shows the playing track's album art over the visualization. Also on the right-click menu of the Default UI element (the Columns UI panel has none)."
     IDS_ALBUM_ART_POSITION_HELP "Where the album art goes. An [img100] section in the sprite list (the Sprites button) overrides this and the size."
     IDS_ALBUM_ART_SIZE_HELP "The album art's longer side, as a share of the visualization's shorter side (its height, when it is wider than tall)."
     IDS_HOW_TO_SET_PRESET_LIBRARY "Right-click > Set Preset Library Folder..."

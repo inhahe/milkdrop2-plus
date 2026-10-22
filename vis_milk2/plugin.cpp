@@ -938,12 +938,8 @@ bool CPlugin::PanelSettings(plugin_config* settings)
 
     m_enable_downmix = static_cast<int>(settings->m_bEnableDownmix);
     m_show_album = static_cast<int>(settings->m_bShowAlbum);
-    if (settings->m_nAlbumArtPosition != m_albumArtPosition || settings->m_nAlbumArtSize != m_albumArtSize)
-    {
-        m_albumArtPosition = settings->m_nAlbumArtPosition;
-        m_albumArtSize = settings->m_nAlbumArtSize;
-        RunOnRenderThread([this] { RelaunchAlbumArt(); }); // moved to where the settings now put it
-    }
+    m_albumArtPosition = settings->m_nAlbumArtPosition;
+    m_albumArtSize = settings->m_nAlbumArtSize;
     m_enable_hdr = static_cast<int>(settings->m_bEnableHDR);
     m_back_buffer_format = settings->m_nBackBufferFormat;
     m_depth_buffer_format = settings->m_nDepthBufferFormat;
@@ -1872,28 +1868,31 @@ void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
 {
     m_albumArtFile = std::move(file);
     m_albumArtImage = std::move(image);
-    RelaunchAlbumArt();
-}
-
-// Replaces the album art sprite, if on screen, with what SetAlbumArt kept, launched afresh: as the
-// settings now place it. Render thread.
-void CPlugin::RelaunchAlbumArt()
-{
     for (int x = 0; x < NUM_TEX; x++)
         if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
             KillSprite(x);
     LaunchAlbumArt();
 }
 
-// The album art's per-frame code when the image list has no [img100] section: the image in a
-// corner, or the centre, with a margin of a fortieth of the canvas's shorter side, fading in. Its
-// init code sets `artx` and `arty`, -1, 0 or 1 for left or top, centre, right or bottom, and
-// `artsize`, the image's longer side as a fraction of the canvas's shorter side.
+void CPlugin::SetAlbumArtInputs(int iSlot)
+{
+    const AlbumArtPlacement placement = PlaceAlbumArt(m_albumArtPosition, m_albumArtSize);
+    const NSEEL_VMCTX vm = m_texmgr.m_tex[iSlot].tex_eel_ctx;
+    *NSEEL_VM_regvar(vm, "artx") = placement.x;
+    *NSEEL_VM_regvar(vm, "arty") = placement.y;
+    *NSEEL_VM_regvar(vm, "artsize") = placement.size;
+}
+
+// The album art's code when the image list has no [img100] section: the image in a corner, or the
+// centre, as the settings say (the inputs `artx`, `arty` and `artsize`: SetAlbumArtInputs), with a
+// margin of a fortieth of the canvas's shorter side, fading in. Not burned in: a burned sprite is
+// also drawn into the preset's own image every frame, which the preset then smears.
 // A sprite's x and y run from 0 to 1 across the canvas's longer side, centred on the canvas, and
 // sx and sy give the image's longer side as a fraction of it; a non-square image is shrunk about
 // its middle. Hence `aspect` (the canvas's width / height) and `imgaspect` (the image's). An image
 // too large for the margins on one axis is centred on it. The code's own variables must not take
 // the names of the sprite's inputs and outputs (r is its red, for one).
+static const char* const kAlbumArtInitCode = "burn = 0;";
 static const char* const kAlbumArtCode =
     "side = min(aspect, 1 / aspect);"                         // the shorter side / the longer
     "ex = 0.5 * min(aspect, 1); ey = 0.5 * min(1 / aspect, 1);" // the half width and half height shown
@@ -1904,29 +1903,13 @@ static const char* const kAlbumArtCode =
     "y = 0.5 + arty * max(ey - side * (0.025 + hh), 0);"
     "a = min(time * 2, 1);";
 
-// Launches the album art sprite from what SetAlbumArt kept, if anything, where the settings say
-// (m_albumArtPosition, m_albumArtSize). Not burned in: a burned sprite is also drawn into the
-// preset's own image every frame, which the preset then smears.
+// Launches the album art sprite from what SetAlbumArt kept, if anything.
 void CPlugin::LaunchAlbumArt()
 {
-    if (m_albumArtFile.empty() && m_albumArtImage.empty())
-        return;
-    int artx = 1, arty = 1; // lower right
-    switch (m_albumArtPosition)
-    {
-        case ALBUM_ART_LOWER_LEFT: artx = -1; break;
-        case ALBUM_ART_UPPER_RIGHT: arty = -1; break;
-        case ALBUM_ART_UPPER_LEFT: artx = arty = -1; break;
-        case ALBUM_ART_CENTER: artx = arty = 0; break;
-        default: break; // ALBUM_ART_LOWER_RIGHT, or a value from a newer version
-    }
-    const int size = std::clamp(m_albumArtSize, MIN_ALBUM_ART_SIZE, MAX_ALBUM_ART_SIZE);
-    char initCode[128];
-    sprintf_s(initCode, "burn = 0; artx = %d; arty = %d; artsize = %d / 100;", artx, arty, size); // integers: no locale's decimal comma
     if (!m_albumArtFile.empty())
-        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile, {}, initCode, kAlbumArtCode);
-    else
-        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, initCode, kAlbumArtCode);
+        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile, {}, kAlbumArtInitCode, kAlbumArtCode);
+    else if (!m_albumArtImage.empty())
+        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, kAlbumArtInitCode, kAlbumArtCode);
 }
 
 static float fCubicInterpolate(float y0, float y1, float y2, float y3, float t)

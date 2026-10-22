@@ -418,6 +418,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="utf8_file.h" />
+    <ClInclude Include="album_art.h" />
     <ClInclude Include="texture_cache.h" />
     <ClInclude Include="api.h" />
     <ClInclude Include="constanttable.h" />

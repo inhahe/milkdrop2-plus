@@ -42,10 +42,11 @@ const struct RenderLockLife
 // Hands the engine what is playing and the active playlist now (see milk2_playback_feed in
 // ui_element.cpp). Main thread.
 void PublishPlayback();
-// Shows the playing track's album art in the running engine, or removes it if that option is off
-// or nothing plays; does nothing with no engine running. The playback feed calls it at each new
-// track; a host calls it when it starts the engine, as a track already playing gets no callback.
-// Main thread.
+// Shows the playing track's album art in the running engine, or removes it if that option is off;
+// with the option on and nothing playing, leaves the last track's, as a stop does. Does nothing
+// with no engine running. For when the engine starts during a track (which gets no new-track
+// callback; the playback feed shows each new track's) and when the option or the artwork format
+// changes. Main thread.
 void ShowNowPlayingAlbumArt();
 
 #pragma region UI Element

@@ -3348,6 +3348,8 @@ void CPlugin::DrawUserSprites()
             *(m_texmgr.m_tex[iSlot].var_mid_att) = (double)mdsound.avg_rel[1];
             *(m_texmgr.m_tex[iSlot].var_treb_att) = (double)mdsound.avg_rel[2];
             m_texmgr.SetPlacementInputs(iSlot, canvasAspect);
+            if (m_texmgr.m_tex[iSlot].nUserData == kAlbumArtSprite)
+                SetAlbumArtInputs(iSlot);
 
 #ifndef _NO_EXPR_
             // Evaluate expressions.

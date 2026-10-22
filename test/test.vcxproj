@@ -350,6 +350,7 @@
     <ClCompile Include="dll.cpp" />
     <ClCompile Include="fft.cpp" />
     <ClCompile Include="stored_path_test.cpp" />
+    <ClCompile Include="album_art_test.cpp" />
     <ClCompile Include="texture_cache_test.cpp" />
     <ClCompile Include="utf8_file_test.cpp" />
     <ClCompile Include="..\foo_vis_milk2\stored_path.cpp">

@@ -292,7 +292,6 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     SetDlgItemText(IDC_ARTWORK_FORMAT, buf);
 
     // Album art.
-    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
     ctrl = GetDlgItem(IDC_ALBUM_ART_POSITION);
     AddItem(ctrl, L"Lower right", ALBUM_ART_LOWER_RIGHT);
     AddItem(ctrl, L"Lower left", ALBUM_ART_LOWER_LEFT);
@@ -310,7 +309,7 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     }
     if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtSize)) < 0)
         SelectItemByValue(ctrl, default_nAlbumArtSize); // a size the list does not offer
-    AutoEnableAlbumArt();
+    ShowAlbumSetting(cfg_bShowAlbum);
 
     // Push buttons.
     milk2_config::initialize_paths();
@@ -461,6 +460,14 @@ void milk2_preferences_page::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScro
                     OnChanged();
             }
     }
+}
+
+// Shows `bShowAlbum`, the Show album art setting, in its check box.
+void milk2_preferences_page::ShowAlbumSetting(bool bShowAlbum)
+{
+    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(bShowAlbum));
+    m_bShowAlbumShown = bShowAlbum;
+    AutoEnableAlbumArt();
 }
 
 // Greys the album art's position and size out while album art is off.
@@ -631,7 +638,9 @@ void milk2_preferences_page::apply()
         SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
     }
 
-    cfg_bShowAlbum = static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM));
+    if (const bool bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED; bShowAlbum != m_bShowAlbumShown)
+        cfg_bShowAlbum = bShowAlbum; // changed here; otherwise what the context menu last saved stands
+    ShowAlbumSetting(cfg_bShowAlbum);
     cfg_nAlbumArtPosition = ReadCBValue(IDC_ALBUM_ART_POSITION); // both always have a selection (OnInitDialog)
     cfg_nAlbumArtSize = ReadCBValue(IDC_ALBUM_ART_SIZE);
 
@@ -660,7 +669,7 @@ bool milk2_preferences_page::HasChanged() const
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_FSPT)) != cfg_allow_page_tearing_fs) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_HARDCUTS)) != cfg_bHardCutsDisabled) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != cfg_bShowAlbum);
+                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != m_bShowAlbumShown);
 
     bool combobox_changes = false;
     LRESULT n = SendMessage(GetDlgItem(IDC_FS_MAXFPS2), CB_GETCURSEL, (WPARAM)0, (LPARAM)0);

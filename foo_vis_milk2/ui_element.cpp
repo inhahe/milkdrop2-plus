@@ -1356,23 +1356,29 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-// The image file the artwork format names for `track`, if the format is set and the file exists;
-// or else empty.
-static std::wstring AlbumArtFile(const metadb_handle_ptr& track)
+// Raised when foobar2000 quits (milk2_initquit), so that a worker still reading album art gives up
+// rather than use the core as it shuts down.
+static abort_callback_impl s_albumArtAbort;
+// Counts the album art reads ShowAlbumArt has started. A read's art is shown only if no later read
+// has started, so that a slow read cannot replace a newer track's art. Main thread.
+static unsigned s_albumArtReads = 0;
+
+// The image file `format` (the artwork format setting) names for `track`, if the format is set and
+// the file exists; or else empty. Any thread.
+static std::wstring AlbumArtFile(const metadb_handle_ptr& track, const pfc::string8& format, abort_callback& abort)
 {
-    if (s_config.settings.m_szArtworkFormat[0] == L'\0')
+    if (format.is_empty())
         return {};
     titleformat_object::ptr script;
     pfc::string8 path;
-    if (!titleformat_compiler::get()->compile(script, pfc::utf8FromWide(s_config.settings.m_szArtworkFormat)) ||
-        !track->format_title(nullptr, path, script, nullptr) || path.is_empty())
+    if (!titleformat_compiler::get()->compile(script, format) || !track->format_title(nullptr, path, script, nullptr) || path.is_empty())
         return {};
     try
     {
-        if (filesystem::g_exists(path, fb2k::noAbort))
+        if (filesystem::g_exists(path, abort))
             return std::wstring(pfc::wideFromUTF8(path));
     }
-    catch (const std::exception&) // not a path foobar2000 can open
+    catch (const std::exception&) // not a path foobar2000 can open, or aborted
     {
     }
     return {};
@@ -1381,8 +1387,8 @@ static std::wstring AlbumArtFile(const metadb_handle_ptr& track)
 // The front cover of `track` as an encoded image: the one embedded in its file, which is the
 // track's own, or else one foobar2000's album art settings find for it. Those may be an image
 // beside the file, which in a folder of tracks from different albums is often another album's
-// (a cover.jpg), so they come second. Empty if there is none.
-static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
+// (a cover.jpg), so they come second. Empty if there is none. Any thread.
+static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, abort_callback& abort)
 {
     const auto bytes = [](const album_art_data::ptr& aad) {
         if (!aad.is_valid() || aad->size() == 0)
@@ -1394,51 +1400,62 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
     {
         try
         {
-            auto embedded = album_art_extractor::g_open(nullptr, track->get_path(), fb2k::noAbort);
-            if (auto image = bytes(embedded->query(album_art_ids::cover_front, fb2k::noAbort)); !image.empty())
+            auto embedded = album_art_extractor::g_open(nullptr, track->get_path(), abort);
+            if (auto image = bytes(embedded->query(album_art_ids::cover_front, abort)); !image.empty())
                 return image;
         }
-        catch (const std::exception&) // none embedded, a format that embeds none, or unreadable
+        catch (const std::exception&) // none embedded, a format that embeds none, unreadable, or aborted
         {
         }
     }
     try
     {
-        auto extractor = album_art_manager_v2::get()->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), fb2k::noAbort);
-        return bytes(extractor->query(album_art_ids::cover_front, fb2k::noAbort));
+        auto extractor = album_art_manager_v2::get()->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), abort);
+        return bytes(extractor->query(album_art_ids::cover_front, abort));
     }
-    catch (const std::exception&) // exception_album_art_not_found, or the file could not be read
+    catch (const std::exception&) // exception_album_art_not_found, the file could not be read, or aborted
     {
     }
     return {};
 }
 
-// Shows `track`'s album art in place of the last, if that option is on: the file the
-// artwork format names, if that exists, or else the track's front cover. Otherwise, or with no
-// track, removes it. Other sprites stay. Nothing with no engine running.
+// Shows `track`'s album art in place of the last, if that option is on: the file the artwork
+// format names, if that exists, or else the track's front cover. Otherwise, or with no track,
+// removes it. Other sprites stay. Nothing with no engine running. The art is read on a worker
+// thread, as a file on a slow disk or a network share must not hold up foobar2000's windows.
+// Main thread.
 static void ShowAlbumArt(const metadb_handle_ptr& track)
 {
     if (!s_milk2)
         return;
-    std::wstring file;
-    std::vector<uint8_t> raster;
-    if (s_config.settings.m_bShowAlbum && track.is_valid())
+    const unsigned read = ++s_albumArtReads;
+    // Hands the engine the art read, on the render thread, which draws the sprites. Main thread.
+    const auto show = [read](std::wstring file, std::vector<uint8_t> raster) {
+        if (read != s_albumArtReads || !s_milk2) // a later read started, or the engine stopped
+            return;
+        g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)]() mutable {
+            g_plugin.SetAlbumArt(std::move(file), std::move(raster));
+        });
+    };
+    if (!s_config.settings.m_bShowAlbum || !track.is_valid())
     {
-        file = AlbumArtFile(track);
-        if (file.empty())
-            raster = AlbumArtImage(track);
+        show({}, {});
+        return;
     }
-
-    // On the render thread, which draws the sprites.
-    g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)]() mutable {
-        g_plugin.SetAlbumArt(std::move(file), std::move(raster));
+    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), show] {
+        std::wstring file = AlbumArtFile(track, format, s_albumArtAbort);
+        std::vector<uint8_t> raster = file.empty() ? AlbumArtImage(track, s_albumArtAbort) : std::vector<uint8_t>();
+        fb2k::inMainThread([show, file = std::move(file), raster = std::move(raster)]() mutable {
+            show(std::move(file), std::move(raster));
+        });
     });
 }
 
 void ShowNowPlayingAlbumArt()
 {
     metadb_handle_ptr track;
-    playback_control::get()->get_now_playing(track);
+    if (!playback_control::get()->get_now_playing(track) && s_config.settings.m_bShowAlbum)
+        return; // stopped: the last track's art stays up, as it does when playback stops
     ShowAlbumArt(track);
 }
 
@@ -1773,6 +1790,7 @@ class milk2_initquit : public initquit
     {
         MILK2_CONSOLE_LOG("on_quit")
         //NSEEL_quit();
+        s_albumArtAbort.abort();
         s_playbackFeed.reset();
         s_titleScript.release();
         if (core_api::is_quiet_mode_enabled())
@@ -3198,7 +3216,7 @@ void ApplyMilkDropPreferences()
     s_config.reset();
     PublishPlayback(); // the title format may have changed
     if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat)
-        ShowNowPlayingAlbumArt(); // the engine moves art already shown itself (PanelSettings)
+        ShowNowPlayingAlbumArt(); // the position and size reach the art on screen each frame (PanelSettings)
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif

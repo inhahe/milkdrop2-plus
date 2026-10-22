@@ -511,7 +511,10 @@ class CPlugin : public CPluginShell
     int m_albumArtPosition = ALBUM_ART_LOWER_RIGHT;
     int m_albumArtSize = DEFAULT_ALBUM_ART_SIZE;
     void LaunchAlbumArt();
-    void RelaunchAlbumArt();
+    // Sets the album art sprite's (slot `iSlot`'s) `artx`, `arty` and `artsize` inputs from the
+    // settings above (PlaceAlbumArt). Each frame, before its per-frame code: a change of the
+    // settings moves the art at the next frame, and an [img100] section's code may use them too.
+    void SetAlbumArtInputs(int iSlot);
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
     // The canvas's width / height, as the sprites are placed by (their `aspect`).
