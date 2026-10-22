@@ -1434,19 +1434,34 @@ static std::wstring AlbumArtFile(const metadb_handle_ptr& track)
     return {};
 }
 
-// The front cover of `track` as an encoded image, wherever foobar2000's album art settings look
-// for it (embedded, or a file beside the track); empty if there is none.
+// The front cover of `track` as an encoded image: the one embedded in its file, which is the
+// track's own, or else one foobar2000's album art settings find for it. Those may be an image
+// beside the file, which in a folder of tracks from different albums is often another album's
+// (a cover.jpg), so they come second. Empty if there is none.
 static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
 {
+    const auto bytes = [](const album_art_data::ptr& aad) {
+        if (!aad.is_valid() || aad->size() == 0)
+            return std::vector<uint8_t>();
+        auto data = static_cast<const uint8_t*>(aad->data());
+        return std::vector<uint8_t>(data, data + aad->size());
+    };
+    if (!filesystem::g_is_remote_or_unrecognized(track->get_path())) // not a stream to open again here
+    {
+        try
+        {
+            auto embedded = album_art_extractor::g_open(nullptr, track->get_path(), fb2k::noAbort);
+            if (auto image = bytes(embedded->query(album_art_ids::cover_front, fb2k::noAbort)); !image.empty())
+                return image;
+        }
+        catch (const std::exception&) // none embedded, a format that embeds none, or unreadable
+        {
+        }
+    }
     try
     {
         auto extractor = album_art_manager_v2::get()->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), fb2k::noAbort);
-        auto aad = extractor->query(album_art_ids::cover_front, fb2k::noAbort);
-        if (aad.is_valid() && aad->size() != 0)
-        {
-            auto data = static_cast<const uint8_t*>(aad->data());
-            return std::vector<uint8_t>(data, data + aad->size());
-        }
+        return bytes(extractor->query(album_art_ids::cover_front, fb2k::noAbort));
     }
     catch (const std::exception&) // exception_album_art_not_found, or the file could not be read
     {
