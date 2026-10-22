@@ -32,6 +32,7 @@
 #define __NULLSOFT_DX_PLUGIN_H__
 
 #include <list>
+#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -199,6 +200,7 @@ enum ErrorCategory
     ERR_NOTIFY = 4, // a simple notification - not an error at all. ("shuffle is now ON." etc.)
                     // note: each NOTIFY msg clears all the old NOTIFY messages!
     ERR_SCANNING_PRESETS = 5,
+    ERR_TEXTURES = 6, // textures the running preset could not find; each report replaces the last
 };
 
 typedef struct
@@ -487,8 +489,23 @@ class CPlugin : public CPluginShell
     //bool m_bUserMessageIsError;
 
     ErrorMsgList m_errors;
-    void AddError(wchar_t* szMsg, float fDuration, ErrorCategory category = ERR_ALL, bool bBold = true);
+    // Messages in the upper-right corner. Any thread may add or clear them: the calls queue a
+    // request, which the render thread, the only one that touches `m_errors` and their text
+    // elements, carries out before drawing (ApplyErrorRequests()).
+    void AddError(const wchar_t* szMsg, float fDuration, ErrorCategory category = ERR_ALL, bool bBold = true);
     void ClearErrors(int category = ERR_ALL);
+    struct ErrorRequest
+    {
+        bool bClear;      // clear `category` (ERR_ALL: every message) rather than add a message
+        int category;
+        std::wstring msg;
+        float duration;   // seconds
+        bool bold;
+    };
+    std::mutex m_errorRequestsLock;
+    std::vector<ErrorRequest> m_errorRequests;
+    void ApplyErrorRequests();
+    void EraseErrors(int category);
 
     wchar_t m_szSongTitle[256];
     wchar_t m_szSongTitlePrev[256];
@@ -516,7 +533,9 @@ class CPlugin : public CPluginShell
     int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
                                      // presets loaded from them exclude those needing a newer pixel shader model
     std::wstring m_textureDir; // the user's textures folder, ending in a backslash, or empty; change it with SetTextureDir()
+    bool m_bTextureDirChanged = false; // SetTextureDir() changed it, and the render thread has yet to reload the textures
     std::vector<std::wstring> m_missingTextures; // textures the shaders loaded since the last ReportMissingTextures() could not find
+    std::wstring m_missingTexturesReportedFor;   // the preset file the last report was about
 
     float m_fRandStart[4];
 
@@ -595,13 +614,16 @@ class CPlugin : public CPluginShell
     void LoadRandomPreset(float fBlendTime);
     void LoadPreset(const wchar_t* szPresetFilename, float fBlendTime);
     void LoadPresetTick();
+    void OnStartCompilingPreset();
     void SetPresetListPosition(std::wstring search);
     void FindValidPresetDir();
     wchar_t* GetPresetDir() const { return const_cast<wchar_t*>(m_szPresetDir); };
     bool SetPresetDir(const wchar_t* szDir);
     std::wstring GetPresetPath(int i) const;
     std::wstring GetScannedPresetDir() const;
-    void SetTextureDir(const wchar_t* szDir);
+    static std::wstring ResolveTextureDir(const std::wstring& dir);
+    std::wstring SetTextureDir(const wchar_t* szDir);
+    void ReloadDiskTextures();
     std::vector<std::wstring> GetTextureDirs(bool bWithPresetFolder) const;
     std::wstring GetDefaultTextureDir() const;
     static size_t CountTextureFiles(const std::wstring& dir);

@@ -8,7 +8,7 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **What happens:** with the statically linked runtime, a `_s` function given a result longer than its buffer calls the invalid-parameter handler, which ends foobar2000. The preset folder itself is now bounded (`MAX_PRESET_DIR_LENGTH`), but a folder near that limit plus a long relative preset name still overflows.
 
-**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` and the texture lookup (`FindTextureFile`) now do.
+**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` and the texture lookup (`FindTextureFiles`) now do.
 
 ## The UI thread reads the preset list without the lock
 
@@ -18,11 +18,19 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **Fix:** give `CPlugin` accessors that take `g_cs` and return copies (or run the UI's preset operations under the lock), and use them from the component.
 
+## Menu and key commands change the engine on the UI thread while the render thread draws
+
+**Where:** `foo_vis_milk2/ui_element.cpp` (Next, Previous and Random Preset, a category, a favorite, the preset browser) and `keyboard.cpp` (the same keys, and the pixel shader upgrade) call `g_plugin.LoadPreset`, `NextPreset`, `PrevPreset`, `LoadRandomPreset` and `LoadShaders` on the UI thread, holding neither `s_cs` nor `g_cs`; the render thread draws on a thread-pool timer (`TIMER_TP`) under both.
+
+**What happens:** a preset loaded from the menu or a key swaps `m_pState`, releases and replaces `m_shaders`, and, with no blend time, compiles shaders and binds textures (`m_textures`, `m_missingTextures`) while the render thread may be drawing with them or running `LoadPresetTick`: a crash or a garbled frame is possible, though rare in practice. Upper-right messages are already safe from any thread (they are queued: `AddError`), and so is a change of texture folder (`SetTextureDir` only marks it).
+
+**Fix:** run these commands on the render thread: queue them, as `AddError` does, and carry them out at the start of `MilkDropRenderFrame`, under `g_cs`. Taking `g_cs` on the UI thread instead would block it behind a frame, and the render thread sends the main window messages (`GetWinampSongTitle`, with a 100 ms timeout; `ConsoleMessage`, without one), which a blocked UI thread cannot answer.
+
 ## The Columns UI element has no context menu
 
 **Where:** `foo_vis_milk2/cui_element.cpp`, compiled in whenever the `external/columns_ui-sdk` submodule is checked out, as in the release build and any recursive clone.
 
-**What happens:** Set Preset Library Folder, the shuffle modes and favorites exist only in the Default UI element's context menu, which the no-presets notice also points to.
+**What happens:** Set Preset Library Folder, Set Texture Folder, the shuffle modes and favorites exist only in the Default UI element's context menu, which the no-presets notice and the missing-texture hint also point to. In Columns UI the texture folder can be set only as the Texture directory advanced setting, which is read when the element is created or the preferences are applied.
 
 **Fix:** share the Default UI element's menu with the Columns UI panel, or leave the element out of the build until it is supported.
 

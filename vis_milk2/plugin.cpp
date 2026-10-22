@@ -403,6 +403,7 @@ static void OnUserEditedWarpShaders(LPARAM param1, LPARAM param2)
         g_plugin.m_fallbackShaders_ps.warp.CT->AddRef();
         g_plugin.m_shaders.warp = g_plugin.m_fallbackShaders_ps.warp;
     }
+    g_plugin.ReportMissingTextures();
 }
 
 static void OnUserEditedCompShaders(LPARAM param1, LPARAM param2)
@@ -420,6 +421,7 @@ static void OnUserEditedCompShaders(LPARAM param1, LPARAM param2)
         g_plugin.m_fallbackShaders_ps.comp.CT->AddRef();
         g_plugin.m_shaders.comp = g_plugin.m_fallbackShaders_ps.comp;
     }
+    g_plugin.ReportMissingTextures();
 }
 
 // Modify the help screen text here.
@@ -1783,7 +1785,12 @@ int CPlugin::AllocateMilkDropDX11()
     else
     {
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
-        m_missingTextures.clear(); // the running preset's; reported when it loaded
+        // Report what this preset is missing, unless its own load already did: a device reset
+        // can land in the middle of a blended load, before its shaders were compiled.
+        if (m_missingTexturesReportedFor != m_szCurrentPresetFile)
+            ReportMissingTextures();
+        else
+            m_missingTextures.clear();
     }
 
     return true;
@@ -2287,13 +2294,25 @@ static bool IsTextureFileName(const std::wstring& name)
     return false;
 }
 
+// `path` (absolute) in a form Windows opens at any length: with the \\?\ prefix if it, plus the
+// "\*" a folder listing appends, would not fit in MAX_PATH; unchanged otherwise.
+static std::wstring LongPathSafe(std::wstring path)
+{
+    if (path.size() + 2 < MAX_PATH || path.rfind(L"\\\\?\\", 0) == 0)
+        return path;
+    std::replace(path.begin(), path.end(), L'/', L'\\'); // the prefix turns this normalization off
+    if (path.rfind(L"\\\\", 0) == 0)
+        return L"\\\\?\\UNC\\" + path.substr(2); // \\server\share\... becomes \\?\UNC\server\share\...
+    return L"\\\\?\\" + path;
+}
+
 // Calls `f(fileName)` for each texture image directly in `dir` (not in its subfolders); nothing if
 // the folder is missing.
 template <typename F>
 static void ForEachTextureFile(const std::wstring& dir, F f)
 {
     std::error_code ec;
-    for (auto it = std::filesystem::directory_iterator(dir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+    for (auto it = std::filesystem::directory_iterator(LongPathSafe(dir), ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
     {
         const std::wstring name = it->path().filename().wstring();
         std::error_code ec2;
@@ -2309,38 +2328,47 @@ size_t CPlugin::CountTextureFiles(const std::wstring& dir)
     return n;
 }
 
-// The image file of the texture a shader names `rootName` ("clouds"): the first that exists,
-// trying the texture folders in order and, in each, every image extension. Empty if none does.
-static std::wstring FindTextureFile(const std::wstring& rootName)
+// The image files that may hold the texture a shader names `rootName` ("clouds"), best first:
+// the texture folders in order and, in each, every image extension. Only files that exist; the
+// caller tries them in turn, since one may not load (a TGA, which WIC cannot decode).
+static std::vector<std::wstring> FindTextureFiles(const std::wstring& rootName)
 {
+    std::vector<std::wstring> files;
     for (const auto& dir : g_plugin.GetTextureDirs(true))
     {
         for (const auto& ext : texture_exts)
         {
-            std::wstring path = dir + rootName + L"." + ext;
-            if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
-                return path;
+            std::wstring path = LongPathSafe(dir + rootName + L"." + ext);
+            const DWORD attr = GetFileAttributesW(path.c_str());
+            if (attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY))
+                files.push_back(std::move(path));
         }
     }
-    return std::wstring();
+    return files;
 }
+
+struct CaseInsensitiveLess
+{
+    bool operator()(const std::wstring& a, const std::wstring& b) const { return _wcsicmp(a.c_str(), b.c_str()) < 0; }
+};
 
 static bool PickRandomTexture(const wchar_t* prefix, wchar_t* szRetTextureFilename) // should be MAX_PATH chars
 {
     static StringVec texfiles;
 
-    // Rebuilt when presets are reloaded or the textures folder changes, not on every pick.
+    // Reread at each preset load and when the textures folder changes, not on every pick.
     if (g_plugin.m_bNeedRescanTexturesDir)
     {
         g_plugin.m_bNeedRescanTexturesDir = false;
         texfiles.clear();
 
-        // Random textures come from the textures folders, not from the preset folder.
+        // Random textures come from the textures folders, not from the preset folder. A name in
+        // more than one folder is offered once.
+        std::set<std::wstring, CaseInsensitiveLess> seen;
         for (const auto& dir : g_plugin.GetTextureDirs(false))
         {
-            ForEachTextureFile(dir, [](const std::wstring& name) {
-                const bool bKnown = std::any_of(texfiles.begin(), texfiles.end(), [&name](const std::wstring& t) { return !_wcsicmp(t.c_str(), name.c_str()); });
-                if (!bKnown)
+            ForEachTextureFile(dir, [&seen](const std::wstring& name) {
+                if (seen.insert(name).second)
                     texfiles.push_back(name); // "heart.jpg", for example
             });
         }
@@ -2552,11 +2580,15 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                     {
                         if (!PickRandomTexture(prefix, szRootName))
                         {
-                            // No texture to pick from; this is also the name the warning shows.
+                            // No texture to pick from: nothing to load, only to report.
                             if (prefix[0])
                                 swprintf_s(szRootName, L"any %s* texture", prefix);
                             else
                                 wcscpy_s(szRootName, L"any texture");
+                            auto& missing = g_plugin.m_missingTextures;
+                            if (std::find(missing.begin(), missing.end(), szRootName) == missing.end())
+                                missing.push_back(szRootName);
+                            continue;
                         }
                         else
                         {
@@ -2589,10 +2621,8 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                 // If still not found, load it up / make a new texture.
                 if (!m_texture_bindings[cd.BindPoint].texptr)
                 {
-                    TexInfo x;
+                    TexInfo x{};
                     wcsncpy_s(x.texname, szRootName, 254);
-                    x.texptr = NULL;
-                    //x.texsize_param = NULL;
 
                     // Check if we need to evict anything from the cache,
                     // due to our own cache constraints...
@@ -2614,9 +2644,8 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                             break; // or if there was nothing to evict, just give up
                     }
 
-                    // Load the texture.
-                    const std::wstring file = FindTextureFile(szRootName);
-                    if (!file.empty())
+                    // Load the texture from the first candidate file that loads.
+                    for (const auto& file : FindTextureFiles(szRootName))
                     {
                         // Keep trying to load it - if it fails due to memory, evict something and try again.
                         while (1)
@@ -2631,6 +2660,9 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
 
                             if (hr == S_OK)
                             {
+                                // Loaded from disk, so it can be dropped and reloaded (the cache limits).
+                                x.bEvictable = true;
+                                x.nAge = g_plugin.m_nPresetsLoadedTotal;
                                 D3D11_RESOURCE_DIMENSION type;
                                 x.texptr->GetType(&type);
                                 if (type == D3D11_RESOURCE_DIMENSION_TEXTURE2D)
@@ -2651,8 +2683,6 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                                     x.w = texDesc.Width;
                                     x.h = texDesc.Height;
                                     x.d = texDesc.Depth;
-                                    x.bEvictable = true;
-                                    x.nAge = g_plugin.m_nPresetsLoadedTotal;
                                     int nPixels = texDesc.Width * texDesc.Height * std::max(static_cast<UINT>(1), texDesc.Depth);
                                     int BitsPerPixel = GetDX11TexFormatBitsPerPixel(texDesc.Format);
                                     x.nSizeInBytes = nPixels * BitsPerPixel / 8 + 16384; // plus some overhead
@@ -2660,13 +2690,15 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                             }
                             break;
                         }
+                        if (x.texptr)
+                            break;
                     }
 
                     if (!x.texptr)
                     {
                         // Not installed (or not loadable): leave this sampler unbound, so it reads
-                        // black, and go on binding the shader's other parameters; the preset's
-                        // load then lists what was missing (ReportMissingTextures()).
+                        // black, and go on binding the shader's other parameters; whoever compiled
+                        // the shader then lists what was missing (ReportMissingTextures()).
                         auto& missing = g_plugin.m_missingTextures;
                         if (std::find(missing.begin(), missing.end(), szRootName) == missing.end())
                             missing.push_back(szRootName);
@@ -3321,6 +3353,9 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 {
     EnterCriticalSection(&g_cs);
 
+    if (m_bTextureDirChanged && m_nLoadingPreset == 0)
+        ReloadDiskTextures();
+
     // Deferred initial preset load: once background scan completes, load first preset.
     if (!m_bInitialPresetSelected && m_bPresetListReady && m_nPresets > 0)
     {
@@ -3610,23 +3645,47 @@ void CPlugin::OnAltK()
     AddError(WASABI_API_LNGSTRINGW(IDS_PLEASE_EXIT_VIS_BEFORE_RUNNING_CONFIG_PANEL), 3.0f, ERR_NOTIFY, true);
 }
 
-void CPlugin::AddError(wchar_t* szMsg, float fDuration, ErrorCategory category, bool bBold)
+void CPlugin::AddError(const wchar_t* szMsg, float fDuration, ErrorCategory category, bool bBold)
 {
-    if (category == ERR_NOTIFY)
-        ClearErrors(category);
-
     assert(category != ERR_ALL);
-    ErrorMsg x;
-    x.msg = szMsg;
-    x.birthTime = GetTime();
-    x.expireTime = GetTime() + fDuration;
-    x.category = category;
-    x.bold = bBold;
-    x.printed = false;
-    m_errors.push_back(x);
+    std::lock_guard<std::mutex> lock(m_errorRequestsLock);
+    m_errorRequests.push_back({false, category, szMsg, fDuration, bBold});
 }
 
 void CPlugin::ClearErrors(int category) // 0 = all categories
+{
+    std::lock_guard<std::mutex> lock(m_errorRequestsLock);
+    m_errorRequests.push_back({true, category, std::wstring(), 0.0f, false});
+}
+
+// Carries out the AddError() and ClearErrors() requests made since the last call, in order.
+// Render thread only.
+void CPlugin::ApplyErrorRequests()
+{
+    std::vector<ErrorRequest> requests;
+    {
+        std::lock_guard<std::mutex> lock(m_errorRequestsLock);
+        requests.swap(m_errorRequests);
+    }
+    for (const ErrorRequest& r : requests)
+    {
+        if (r.bClear || r.category == ERR_NOTIFY) // a notification replaces the earlier ones
+            EraseErrors(r.category);
+        if (r.bClear)
+            continue;
+        ErrorMsg x;
+        x.msg = r.msg;
+        x.birthTime = GetTime();
+        x.expireTime = GetTime() + r.duration;
+        x.category = static_cast<ErrorCategory>(r.category);
+        x.bold = r.bold;
+        x.printed = false;
+        m_errors.push_back(x);
+    }
+}
+
+// Removes the messages of `category` (ERR_ALL: all of them). Render thread only.
+void CPlugin::EraseErrors(int category)
 {
     for (ErrorMsgList::iterator it = m_errors.begin(); it != m_errors.end();)
         if (category == ERR_ALL || it->category == category)
@@ -3667,6 +3726,8 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
     wchar_t buf[512] = {0};
     TextStyle* pFont = GetFont(DECORATIVE_FONT);
     int h = GetFontHeight(DECORATIVE_FONT);
+
+    ApplyErrorRequests();
 
     // 1. Render text in upper-right corner EXCEPT USER MESSAGE.
     //    The User Message goes last because it draws a box under itself
@@ -5431,9 +5492,9 @@ void CPlugin::LoadPreset(const wchar_t* szPresetFilename, float fBlendTime)
 {
     OutputDebugString(szPresetFilename);
     //OutputDebugString(L"\n");
-    // The previous preset's messages (missing textures, shader errors) no longer apply.
+    // The previous preset's messages (shader errors, missing textures) no longer apply.
     ClearErrors(ERR_PRESET);
-    m_missingTextures.clear();
+    ClearErrors(ERR_TEXTURES);
 
     // Make sure preset still exists. (might not if they are using the "back"/fwd buttons
     //  in RANDOM preset order and a file was renamed or deleted!)
@@ -5505,6 +5566,7 @@ void CPlugin::LoadPreset(const wchar_t* szPresetFilename, float fBlendTime)
         m_OldShaders = m_shaders;
         ZeroMemory(&m_shaders, sizeof(PShaderSet));
 
+        OnStartCompilingPreset();
         LoadShaders(&m_shaders, m_pState, false);
 
         OnFinishedLoadingPreset();
@@ -5540,9 +5602,19 @@ void CPlugin::OnFinishedLoadingPreset()
         m_nMashPreset[mash] = m_nCurrentPreset;
 }
 
+// Readies the texture bookkeeping for compiling a new preset's shaders. Runs on the thread that
+// compiles them, which is the one that reads and writes this state.
+void CPlugin::OnStartCompilingPreset()
+{
+    m_missingTextures.clear();       // what a load this one interrupted left behind
+    m_bNeedRescanTexturesDir = true; // so that random textures include any added since the last load
+}
+
 void CPlugin::LoadPresetTick()
 {
-    if (m_nLoadingPreset == 2 || m_nLoadingPreset == 5)
+    if (m_nLoadingPreset == 1)
+        OnStartCompilingPreset();
+    else if (m_nLoadingPreset == 2 || m_nLoadingPreset == 5)
     {
         // Just loads one shader (warp or comp) then returns.
         LoadShaders(&m_NewShaders, m_pNewState, true);
@@ -5647,16 +5719,69 @@ std::wstring CPlugin::GetPresetPath(int i) const
     return path;
 }
 
-// Sets the user's textures folder, searched before the default one. `szDir`: an absolute folder
-// path ending in a backslash, or empty for none. Takes the lock the render thread loads shaders under.
-void CPlugin::SetTextureDir(const wchar_t* szDir)
+// The folder to search for the textures in `dir` (an absolute folder path ending in a backslash):
+// `dir` itself, or its "textures" subfolder if only that holds images, as in a texture pack's
+// top folder. Empty for an empty `dir`.
+std::wstring CPlugin::ResolveTextureDir(const std::wstring& dir)
 {
+    if (dir.empty() || CountTextureFiles(dir) > 0)
+        return dir;
+    const std::wstring sub = dir + L"textures\\";
+    return CountTextureFiles(sub) > 0 ? sub : dir;
+}
+
+// Sets the user's textures folder, searched before the default one, and returns the folder that
+// will be searched (see ResolveTextureDir). `szDir`: an absolute folder path ending in a backslash,
+// or empty for none. A change applies to the preset on screen at the next frame. Takes the lock
+// the render thread loads shaders under.
+std::wstring CPlugin::SetTextureDir(const wchar_t* szDir)
+{
+    const std::wstring dir = ResolveTextureDir(szDir ? szDir : L"");
     if (g_bCsReady)
         EnterCriticalSection(&g_cs);
-    m_textureDir = szDir ? szDir : L"";
-    m_bNeedRescanTexturesDir = true; // the random-texture list comes from the textures folders
+    if (dir != m_textureDir)
+    {
+        m_textureDir = dir;
+        m_bNeedRescanTexturesDir = true; // the random-texture list comes from the textures folders
+        m_bTextureDirChanged = true;
+    }
     if (g_bCsReady)
         LeaveCriticalSection(&g_cs);
+    return dir;
+}
+
+// Drops the textures loaded from disk and binds the shaders on screen afresh, so that a new
+// textures folder shows at once rather than as cached textures age out of the cache. Render
+// thread, under g_cs, and not while a preset is loading (its shaders are half compiled).
+void CPlugin::ReloadDiskTextures()
+{
+    m_bTextureDirChanged = false;
+    for (size_t i = 0; i < m_textures.size();)
+    {
+        if (!m_textures[i].bEvictable) // not from disk: noise textures and the like
+        {
+            ++i;
+            continue;
+        }
+        for (auto const& p : global_CShaderParams_master_list)
+            p->OnTextureEvict(m_textures[i].texptr);
+        SafeRelease(m_textures[i].texptr);
+        m_textures.erase(m_textures.begin() + i);
+    }
+
+    m_bNeedRescanTexturesDir = true;
+    if (m_pState->m_bBlending) // the preset blended from is drawn too
+    {
+        for (PShaderInfo* si : {&m_OldShaders.warp, &m_OldShaders.comp})
+            if (si->CT)
+                si->params.CacheParams(si->CT, false);
+        m_missingTextures.clear(); // that preset's are not worth a message
+    }
+    ClearErrors(ERR_TEXTURES); // all is looked up again; what is still missing is reported anew
+    for (PShaderInfo* si : {&m_shaders.warp, &m_shaders.comp})
+        if (si->CT)
+            si->params.CacheParams(si->CT, false);
+    ReportMissingTextures();
 }
 
 // The textures folder in the MilkDrop data folder, ending in a backslash.
@@ -5699,9 +5824,10 @@ void CPlugin::ReportMissingTextures()
     }
     if (m_missingTextures.size() > kShown)
         msg += L" (+" + std::to_wstring(m_missingTextures.size() - kShown) + L")";
-    AddError(msg.data(), 6.0f, ERR_PRESET, true);
-    std::wstring hint = WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_TEXTURE_FOLDER);
-    AddError(hint.data(), 6.0f, ERR_PRESET, false);
+    ClearErrors(ERR_TEXTURES); // an earlier report, from a mash-up or a recompile of this preset
+    AddError(msg.c_str(), 6.0f, ERR_TEXTURES, true);
+    AddError(WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_TEXTURE_FOLDER), 6.0f, ERR_TEXTURES, false);
+    m_missingTexturesReportedFor = m_szCurrentPresetFile;
     m_missingTextures.clear();
 }
 

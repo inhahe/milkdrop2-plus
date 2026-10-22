@@ -423,6 +423,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
             g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
 
             g_plugin.LoadShaders(&g_plugin.m_shaders, g_plugin.m_pState, false);
+            g_plugin.ReportMissingTextures();
             g_plugin.SetMenusForPresetVersion(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
         }
         if (chChar != '\r')
@@ -985,7 +986,7 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                             }
                             else
                             {
-                                g_plugin.AddError(const_cast<wchar_t*>(L"Not in favorites."), 2.0f, ERR_NOTIFY, false);
+                                g_plugin.AddError(L"Not in favorites.", 2.0f, ERR_NOTIFY, false);
                             }
                         }
                         else
@@ -1001,7 +1002,7 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                             }
                             else
                             {
-                                g_plugin.AddError(const_cast<wchar_t*>(L"Already in favorites."), 2.0f, ERR_NOTIFY, false);
+                                g_plugin.AddError(L"Already in favorites.", 2.0f, ERR_NOTIFY, false);
                             }
                         }
                     }

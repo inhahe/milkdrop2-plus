@@ -22,11 +22,11 @@ Each frame (`CPlugin::RenderFrame`, `milkdropfs.cpp`) works on two textures that
 4. The composite pass draws VS1 to the back buffer; the running song title animation and user sprites go on top.
 5. VS0 and VS1 swap.
 
-When a shader is loaded, `CShaderParams::CacheParams` binds its textures and parameters. A texture it cannot find is left unbound (it samples black) and added to `m_missingTextures`; when the preset has finished loading, `ReportMissingTextures` lists them in the upper-right corner (`ERR_PRESET` messages, cleared when the next preset load starts).
+When a shader is loaded, `CShaderParams::CacheParams` binds its textures and parameters. A texture is looked up by name in every texture folder with every image extension (`FindTextureFiles`), and the first file that loads is used, so a file WIC cannot decode (a TGA) does not hide a good one further on; a path too long for `MAX_PATH` gets the `\\?\` prefix (`LongPathSafe`). Textures loaded from disk are cached in `m_textures` by name and evicted past the MaxImages and MaxBytes limits. A texture found nowhere is left unbound (it samples black) and added to `m_missingTextures`; every path that compiles a preset's shaders (a preset load, a mash-up, a shader edit, a device reset) then calls `ReportMissingTextures`, which lists them in the upper-right corner as `ERR_TEXTURES` messages, replacing its previous report, and the next preset load clears them. `SetTextureDir` (the menu, or the advanced setting through `PanelSettings`) only marks a change of folder; the render thread then, at the first frame no preset is loading in, drops the cached disk textures and binds the shaders on screen afresh (`ReloadDiskTextures`), so the change shows at once.
 
 The shim keeps one current pixel shader; a draw that needs a particular one (for instance `ShowSongTitleAnim`, which needs the textured shader 0) must select it, because the previous draw may have left an untextured one.
 
-Text (preset name, notices, menus) is retained-mode: each line is a `TextElement` registered with `CTextManager`, laid out by `MilkDropRenderUI` each frame, and hidden and unregistered when no longer shown. An upper-right box is one line high, so multi-line notices use one element per line.
+Text (preset name, notices, menus) is retained-mode: each line is a `TextElement` registered with `CTextManager`, laid out by `MilkDropRenderUI` each frame, and hidden and unregistered when no longer shown. An upper-right box is one line high, so multi-line notices use one element per line. The upper-right messages (`AddError`, `ClearErrors`) may be added or cleared from any thread: each call queues a request under `m_errorRequestsLock`, and the render thread, the only one that touches `m_errors` and their text elements, carries the queue out at the start of `MilkDropRenderUI` (`ApplyErrorRequests`).
 
 ## Presets
 
@@ -45,7 +45,7 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 | Shuffle mode, categories | `<profile>\browser_config.ini` |
 | Favorites | `<profile>\favorites.ini` |
 | Preset scan cache | `preset_cache.dat` in the preset folder |
-| Textures | The folder chosen with Set Texture Folder (`milk2.szTextureDir`, saved like the preset folder; empty for none), then `<profile>\milkdrop2\textures\`, then the top of the preset folder (`CPlugin::GetTextureDirs`). Random textures (`randNN`) are picked from the first two. |
+| Textures | The folder chosen with Set Texture Folder (`milk2.szTextureDir`, saved like the preset folder; empty for none; a folder with no images whose `textures` subfolder has some, such as a texture pack's top folder, stands for that subfolder: `CPlugin::ResolveTextureDir`), then `<profile>\milkdrop2\textures\`, then the top of the preset folder (`CPlugin::GetTextureDirs`). Random textures (`randNN`) are picked from the first two. |
 | Sprites, messages | `milk2_img.ini`, `milk2_msg.ini` in `<profile>\milkdrop2\`. |
 
 browser_config.ini, favorites.ini and preset_cache.dat are UTF-8, through `WriteUtf8TextFile`/`ReadTextFile`/`ReadKeyValueFile` (`utf8_file.h`). Writing goes through a temporary file, so a failure leaves the old file whole; reading falls back to Latin-1 line by line, so files from earlier versions still read and one bad line spoils only itself.

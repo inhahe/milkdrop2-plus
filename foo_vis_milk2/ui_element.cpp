@@ -904,7 +904,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             {
                 if (!g_plugin.m_bPresetListReady || g_plugin.m_nPresets == 0)
                 {
-                    g_plugin.AddError(const_cast<wchar_t*>(L"Presets are still loading, please wait..."), 2.0f, ERR_NOTIFY, false);
+                    g_plugin.AddError(L"Presets are still loading, please wait...", 2.0f, ERR_NOTIFY, false);
                 }
                 else
                 {
@@ -2291,7 +2291,7 @@ void milk2_ui_element::LoadRandomPresetFromBrowser()
             auto favs = m_favorites.GetAll();
             if (favs.empty())
             {
-                g_plugin.AddError(const_cast<wchar_t*>(L"No favorites set. Add presets to favorites first (Ctrl+F)."), 3.0f, ERR_NOTIFY, false);
+                g_plugin.AddError(L"No favorites set. Add presets to favorites first (Ctrl+F).", 3.0f, ERR_NOTIFY, false);
                 return;
             }
             int idx = rand() % static_cast<int>(favs.size());
@@ -2305,7 +2305,7 @@ void milk2_ui_element::LoadRandomPresetFromBrowser()
             auto favs = m_selectedFavCategories.empty() ? m_favorites.GetAll() : m_favorites.GetByCategories(m_selectedFavCategories);
             if (favs.empty())
             {
-                g_plugin.AddError(const_cast<wchar_t*>(L"No favorites in selected categories."), 3.0f, ERR_NOTIFY, false);
+                g_plugin.AddError(L"No favorites in selected categories.", 3.0f, ERR_NOTIFY, false);
                 return;
             }
             int idx = rand() % static_cast<int>(favs.size());
@@ -3297,8 +3297,7 @@ void milk2_ui_element::BrowseForPresetLibrary()
     // Update the engine's preset directory to match; it has no room for a longer path.
     if (!g_plugin.SetPresetDir(dir.c_str()))
     {
-        wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
-        g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
+        g_plugin.AddError(L"That folder's path is too long for MilkDrop.", 4.0f, ERR_MISC, true);
         return;
     }
     m_presetLibraryPath = dir;
@@ -3336,35 +3335,31 @@ void milk2_ui_element::BrowseForPresetLibrary()
 
 void milk2_ui_element::BrowseForTextureFolder()
 {
-    std::wstring dir = PickFolder(get_wnd(), L"Select Texture Folder (folder with texture images, such as a texture pack's)",
-                                  s_config.settings.m_szTextureDir[0] ? std::wstring(s_config.settings.m_szTextureDir) : g_plugin.GetDefaultTextureDir());
+    // A texture pack's top folder will do: the engine looks in its "textures" subfolder.
+    const std::wstring dir = PickFolder(get_wnd(), L"Select Texture Folder (folder with texture images, or a texture pack's folder)",
+                                        s_config.settings.m_szTextureDir[0] ? std::wstring(s_config.settings.m_szTextureDir) : g_plugin.GetDefaultTextureDir());
     if (dir.empty())
         return;
-
-    // A texture pack's own folder keeps its images in a "textures" subfolder: take that one.
-    if (CPlugin::CountTextureFiles(dir) == 0 && CPlugin::CountTextureFiles(dir + L"textures\\") > 0)
-        dir += L"textures\\";
     if (dir.size() >= MAX_PATH)
     {
-        wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
-        g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
+        g_plugin.AddError(L"That folder's path is too long for MilkDrop.", 4.0f, ERR_MISC, true);
         return;
     }
     SetTextureFolder(dir);
 }
 
-// Makes `dir` the user's textures folder, searched before the default one, and saves it. `dir`: an
-// absolute folder path ending in a backslash, shorter than MAX_PATH, or empty to use only the
-// default folder. Presets loaded from now on find their textures there.
+// Makes `dir` the user's textures folder, searched before the default one, saves it, and shows
+// where textures now come from. `dir`: an absolute folder path ending in a backslash, shorter than
+// MAX_PATH, or empty to use only the default folder. The preset on screen picks it up at once.
 void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
 {
     wcscpy_s(s_config.settings.m_szTextureDir, dir.c_str());
     milk2_config::save_texture_dir(dir);
-    g_plugin.SetTextureDir(dir.c_str());
+    const std::wstring searched = g_plugin.SetTextureDir(dir.c_str());
 
-    const std::wstring shown = dir.empty() ? g_plugin.GetDefaultTextureDir() : dir;
-    std::wstring msg = L"Texture folder: " + shown + L" (" + std::to_wstring(CPlugin::CountTextureFiles(shown)) + L" textures)";
-    g_plugin.AddError(msg.data(), 4.0f, ERR_NOTIFY, false);
+    const std::wstring shown = searched.empty() ? g_plugin.GetDefaultTextureDir() : searched;
+    const std::wstring msg = L"Texture folder: " + shown + L" (" + std::to_wstring(CPlugin::CountTextureFiles(shown)) + L" textures)";
+    g_plugin.AddError(msg.c_str(), 4.0f, ERR_NOTIFY, false);
 }
 
 #pragma endregion
