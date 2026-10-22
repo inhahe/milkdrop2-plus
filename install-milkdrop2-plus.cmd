@@ -62,9 +62,18 @@ exit /b %RESULT%
     there already, which may have been edited. It also keeps a preset folder that exists, so as not to
     undo a change made since; -Force replaces it.
 
-    What it replaces is first moved or copied to <profile>\milkdrop2-plus-install-backup\<date and time>\:
-    the plugin's previous build, a build under the plugin's older name (foo_vis_milk2, which claims
-    the same UI element), theme.fth and browser_config.ini.
+    Each run keeps a backup in <profile>\milkdrop2-plus-install-backup\<date and time>\: what it
+    replaced (the plugin's previous build, a build under one of the plugin's older names, which would
+    claim the same UI element, and theme.fth) and a list of every change it made (run.txt), including
+    the preset folder's old value and what it put where there was nothing.
+
+    -Restore undoes the newest install from its backup: it puts back what that install replaced,
+    removes what it put where there was nothing and sets the preset folder back, leaving the presets
+    and textures it added. Another -Restore undoes the install before that. What a restore displaces
+    is kept in a backup of its own. Run without options on a profile with an install to undo, the
+    script asks whether to install or to undo it.
+
+    Given the folder and -Layout or -NoLayout, it asks nothing, for a run nobody watches.
 
     foobar2000 must not be running with the target profile: it rewrites theme.fth when it exits.
 
@@ -87,6 +96,9 @@ exit /b %RESULT%
     Point the plugin at the installed presets even when its preset folder is set to one that exists,
     and install the layout without asking.
 
+.PARAMETER Restore
+    Undo the newest install instead of installing, as described above.
+
 .EXAMPLE
     Double-click install-milkdrop2-plus.cmd, or drop the foobar2000 folder on it.
 
@@ -95,6 +107,9 @@ exit /b %RESULT%
 
 .EXAMPLE
     install-milkdrop2-plus.cmd "C:\foobar2000" -LayoutFrom "D:\foobar2000"
+
+.EXAMPLE
+    install-milkdrop2-plus.cmd "C:\foobar2000" -Restore
 #>
 [CmdletBinding()]
 param(
@@ -102,7 +117,8 @@ param(
     [switch] $Layout,
     [switch] $NoLayout,
     [string] $LayoutFrom,
-    [switch] $Force
+    [switch] $Force,
+    [switch] $Restore
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,6 +140,10 @@ $PresetLibraryStored = 'milkdrop2\presets\'
 # original, too), and milkdrop2_plus in builds that an earlier install.bat installed. They all
 # register the same Default UI element, so only one may be installed.
 $ComponentNames = @('foo_vis_milk2', 'milkdrop2_plus', 'foo_milkdrop2_plus')
+# The folder in the profile that holds a backup folder for each run that changed something, and the
+# manifest in each of those (see Backups below).
+$BackupFolderName = 'milkdrop2-plus-install-backup'
+$ManifestName = 'run.txt'
 # The first 16 bytes of every .fth file.
 $ThemeMagic = [byte[]](0x98, 0xBA, 0xA0, 0xAD, 0xD4, 0x36, 0x16, 0x4A, 0x8E, 0x14, 0x41, 0x5F, 0x73, 0xB4, 0xCB, 0x21)
 # The MilkDrop Default UI element, as a layout stores it.
@@ -131,6 +151,8 @@ $MilkDropElement = ([guid]'204B0345-4DF5-4B47-ADD3-989F811BD9A5').ToByteArray()
 
 $script:ProfileDir = $null
 $script:BackupDir = $null
+# What this run does, for its manifest: install, or restore.
+$script:RunKind = 'install'
 
 function Step([string] $Text) { Write-Host "`n== $Text" -ForegroundColor Cyan }
 
@@ -197,16 +219,196 @@ function Test-Bytes([byte[]] $Haystack, [byte[]] $Needle, [int] $Offset = -1) {
     $hex.Contains($find)
 }
 
-# Saves $Path (a file or folder) in this run's backup folder, moving it with -Move, copying it otherwise.
-function Save-Backup([string] $Path, [switch] $Move) {
-    if (-not $script:BackupDir) {
-        $script:BackupDir = Join-Path $script:ProfileDir ('milkdrop2-plus-install-backup\' + (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'))
-        New-Item -ItemType Directory -Path $script:BackupDir | Out-Null
+# --- Backups ----------------------------------------------------------------------------------------
+# Each run that changes the profile keeps a backup folder, <profile>\milkdrop2-plus-install-backup\
+# <date and time>\, holding what it moved or copied away at the same place relative to the profile,
+# and a manifest, run.txt: tab-separated lines, "sequence <n>" and "kind install" (or "kind restore",
+# or "kind undone" for a backup kept after its restore because it holds files this script did not put
+# there) first, then one line for each change, written as the change is made, so that a run which
+# fails part-way can still be undone:
+#   saved <path>                  the run moved or copied the item at <path> (relative to the profile) here
+#   absent <path>                 there was nothing at <path>; the run put something there
+#   setting <file> <key> <value>  the run changed <key> in the ini file <file> from <value>, kept as
+#                                 Latin-1 (one character per byte) so that the bytes come back exactly
+#   nosetting <file> <key>        the run set <key> in <file>, where it was not set
+# Runs are ordered by their sequence numbers, not by the dates, which a change of clock can reorder.
+
+# The backups in the profile, as objects: Path, Name, Sequence, Kind, and Entries (objects with Kind,
+# Path, Source, Key and Value). A backup that an earlier version of this script made has no manifest:
+# its entries are derived from the names it holds, and its sequence is 0, older than any other.
+function Get-Backups {
+    $root = Join-Path $script:ProfileDir $BackupFolderName
+    foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+        $backup = [pscustomobject]@{ Path = $dir.FullName; Name = $dir.Name; Sequence = 0; Kind = 'install'; Entries = @(); Legacy = $false }
+        $manifest = Join-Path $dir.FullName $ManifestName
+        if (Test-Path -LiteralPath $manifest -PathType Leaf) {
+            $entries = @()
+            foreach ($line in [IO.File]::ReadAllLines($manifest, [Text.Encoding]::UTF8)) {
+                $f = $line.Split([char[]] @([char] 9), 4)
+                switch ($f[0]) {
+                    'sequence' { $backup.Sequence = [int] $f[1] }
+                    'kind' { $backup.Kind = $f[1] }
+                    'saved' { $entries += [pscustomobject]@{ Kind = 'saved'; Path = $f[1]; Source = $f[1]; Key = $null; Value = $null } }
+                    'absent' { $entries += [pscustomobject]@{ Kind = 'absent'; Path = $f[1]; Source = $null; Key = $null; Value = $null } }
+                    'setting' { $entries += [pscustomobject]@{ Kind = 'setting'; Path = $f[1]; Source = $null; Key = $f[2]; Value = $f[3] } }
+                    'nosetting' { $entries += [pscustomobject]@{ Kind = 'setting'; Path = $f[1]; Source = $null; Key = $f[2]; Value = $null } }
+                    '' { }
+                    default { throw "$manifest has a line this script does not know: $line" }
+                }
+            }
+            $backup.Entries = $entries
+        }
+        else {
+            # Earlier versions saved items flat, under their own names: components (from
+            # user-components-x64), theme.fth and browser_config.ini, and <name>.absent for one created.
+            $backup.Legacy = $true
+            $backup.Entries = @(foreach ($item in Get-ChildItem -LiteralPath $dir.FullName -Force) {
+                $name = $item.Name -replace '\.absent$', ''
+                $path = if ($ComponentNames -contains $name) { "user-components-x64\$name" }
+                        elseif ($name -in 'theme.fth', 'browser_config.ini') { $name }
+                        else { $null }
+                if ($path) {
+                    $kind = if ($item.Name -like '*.absent') { 'absent' } else { 'saved' }
+                    [pscustomobject]@{ Kind = $kind; Path = $path; Source = $item.Name; Key = $null; Value = $null }
+                }
+            })
+        }
+        $backup
     }
-    $dest = Join-Path $script:BackupDir (Split-Path -Leaf $Path)
+}
+
+# The backup of the newest install, which -Restore undoes, or $null.
+function Get-NewestInstallBackup {
+    Get-Backups | Where-Object { $_.Kind -eq 'install' } | Sort-Object Sequence, Name | Select-Object -Last 1
+}
+
+# When the run that made $Backup happened, for people: from its folder's name.
+function Get-BackupDate($Backup) {
+    try { [datetime]::ParseExact($Backup.Name.Substring(0, 19), 'yyyy-MM-dd_HH-mm-ss', [Globalization.CultureInfo]::InvariantCulture).ToString('f') }
+    catch { $Backup.Name }
+}
+
+# This run's backup folder, made with its manifest the first time it is needed.
+function Get-BackupDir {
+    if (-not $script:BackupDir) {
+        $sequence = 1 + (@(Get-Backups | ForEach-Object { $_.Sequence }) + 0 | Measure-Object -Maximum).Maximum
+        $stamp = (Get-Date).ToString('yyyy-MM-dd_HH-mm-ss', [Globalization.CultureInfo]::InvariantCulture)
+        $base = Join-Path (Join-Path $script:ProfileDir $BackupFolderName) $stamp
+        $dir = $base
+        for ($n = 2; Test-Path -LiteralPath $dir; $n++) { $dir = "$base-$n" }
+        New-Item -ItemType Directory -Path $dir | Out-Null
+        $script:BackupDir = $dir
+        Add-ManifestLine 'sequence' $sequence
+        Add-ManifestLine 'kind' $script:RunKind
+    }
+    $script:BackupDir
+}
+
+# Adds a line of its arguments, separated by tabs, to this run's manifest.
+function Add-ManifestLine {
+    $line = (@($args) | ForEach-Object { "$_" }) -join "`t"
+    [IO.File]::AppendAllText((Join-Path (Get-BackupDir) $ManifestName), "$line`r`n", (New-Object Text.UTF8Encoding($false)))
+}
+
+# $Path, which must be in the profile, relative to it.
+function Get-ProfileRelative([string] $Path) {
+    $root = $script:ProfileDir.TrimEnd('\') + '\'
+    if (-not $Path.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw "Internal error: $Path is not in the profile $root." }
+    $Path.Substring($root.Length)
+}
+
+# Saves the item at $Path (a file or folder in the profile) in this run's backup folder, moving it with
+# -Move, copying it otherwise; or, when there is nothing there, notes that, so that -Restore removes
+# what this run puts there.
+function Save-Backup([string] $Path, [switch] $Move) {
+    $relative = Get-ProfileRelative $Path
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Add-ManifestLine 'absent' $relative
+        return
+    }
+    $dest = Join-Path (Get-BackupDir) $relative
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $dest))
     if ($Move) { Move-Item -LiteralPath $Path -Destination $dest }
     else { Copy-Item -LiteralPath $Path -Destination $dest -Recurse }
-    Write-Host "  saved the old $(Split-Path -Leaf $Path) as $dest"
+    Add-ManifestLine 'saved' $relative
+    Write-Host "  saved the old $relative in $(Get-BackupDir)"
+}
+
+# Moves $From to $To, which must not exist yet (Move-Item would move into a folder there), and records
+# the move in the list $Log, so that it can be reversed.
+function Move-Logged([string] $From, [string] $To, $Log) {
+    if (Test-Path -LiteralPath $To) { throw "$To is in the way." }
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $To))
+    Move-Item -LiteralPath $From -Destination $To
+    $Log.Add([pscustomobject]@{ From = $From; To = $To })
+}
+
+# Undoes the install that $Backup (from Get-Backups) records, newest change first: puts back what it
+# saved, removes what it put where there was nothing, and sets back the settings it changed. What this
+# displaces goes into this run's own backup folder, of kind restore, which -Restore passes over, so the
+# next -Restore undoes the install before. If a step fails, the steps made so far are reversed, so
+# that the backup stays whole for another try; once all succeed, the backup is gone, as it is undone.
+function Restore-Backup($Backup) {
+    if ($Backup.Legacy) {
+        Write-Host '  (An earlier version of this script made this backup, without noting what it created; that stays.)'
+    }
+    $entries = @($Backup.Entries)
+    [array]::Reverse($entries)
+    # The moves (From, To) and setting changes (Setting, Key, Value before) made so far, to reverse.
+    $moves = New-Object Collections.Generic.List[object]
+    try {
+        foreach ($entry in $entries) {
+            $target = Join-Path $script:ProfileDir $entry.Path
+            if ($entry.Kind -eq 'setting') {
+                $current = @(Get-IniValues $target $entry.Key)
+                $previous = if ($current.Count -gt 0) { $current[-1] } else { $null }
+                if ($null -ne $previous) { Add-ManifestLine 'setting' $entry.Path $entry.Key $previous } else { Add-ManifestLine 'nosetting' $entry.Path $entry.Key }
+                Set-IniValue $target $entry.Key $entry.Value
+                $moves.Add([pscustomobject]@{ Setting = $target; Key = $entry.Key; Value = $previous })
+                Write-Host "  set $($entry.Key) in $($entry.Path) back"
+                continue
+            }
+            $existed = Test-Path -LiteralPath $target
+            if ($existed) {
+                Move-Logged $target (Join-Path (Get-BackupDir) $entry.Path) $moves
+                Add-ManifestLine 'saved' $entry.Path
+            }
+            elseif ($entry.Kind -eq 'saved') { Add-ManifestLine 'absent' $entry.Path }
+            if ($entry.Kind -eq 'saved') {
+                Move-Logged (Join-Path $Backup.Path $entry.Source) $target $moves
+                Write-Host "  put back $($entry.Path)"
+            }
+            elseif ($existed) { Write-Host "  removed $($entry.Path), which that run put there" }
+        }
+    }
+    catch {
+        $problem = $_.Exception.Message
+        for ($i = $moves.Count - 1; $i -ge 0; $i--) {
+            $done = $moves[$i]
+            try {
+                if ($done.Setting) { Set-IniValue $done.Setting $done.Key $done.Value }
+                else { Move-Item -LiteralPath $done.To -Destination $done.From }
+            }
+            catch { }
+        }
+        if ($script:BackupDir) {
+            Remove-Item -LiteralPath $script:BackupDir -Recurse -Force -ErrorAction SilentlyContinue
+            $script:BackupDir = $null
+        }
+        throw "Could not restore ($problem). What was restored so far is undone again, and the backup in $($Backup.Path) is whole for another try."
+    }
+    # What is left is the manifest, an earlier version's <name>.absent files and empty folders, or what
+    # this script does not know.
+    Remove-Item -LiteralPath (Join-Path $Backup.Path $ManifestName) -ErrorAction SilentlyContinue
+    foreach ($entry in $entries | Where-Object { $_.Kind -eq 'absent' -and $_.Source }) {
+        Remove-Item -LiteralPath (Join-Path $Backup.Path $entry.Source) -ErrorAction SilentlyContinue
+    }
+    if (@(Get-ChildItem -LiteralPath $Backup.Path -Recurse -File -Force).Count -eq 0) { Remove-Item -LiteralPath $Backup.Path -Recurse -Force }
+    else {
+        # Marked as undone, so that -Restore passes over it from now on.
+        [IO.File]::WriteAllText((Join-Path $Backup.Path $ManifestName), "sequence`t$($Backup.Sequence)`r`nkind`tundone`r`n")
+        Write-Host "  left $($Backup.Path), which holds files this script did not put there"
+    }
 }
 
 # The files below the folder $Folder of the open zip archive $Archive ('' for all of it), as a
@@ -266,49 +468,61 @@ function Get-Layout([string] $From) {
     , [IO.File]::ReadAllBytes($file)
 }
 
+# The ini files here are read and written as Latin-1, which maps every byte to one character and back,
+# so that lines this does not touch keep their bytes, whatever encoding they are in (UTF-8 now, Latin-1
+# before v0.3.0, a byte order mark), and a value read and written back comes back byte for byte.
+$Latin1 = [Text.Encoding]::GetEncoding(28591)
+
+# The values of the "<Key>=" lines in the ini file $Path, as Latin-1, in order (the plugin uses the last).
+function Get-IniValues([string] $Path, [string] $Key) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    $text = $Latin1.GetString([IO.File]::ReadAllBytes($Path))
+    @([regex]::Matches($text, "(?m)^$([regex]::Escape($Key))=([^\r\n]*)") | ForEach-Object { $_.Groups[1].Value })
+}
+
+# Sets every "<Key>=" line of the ini file $Path to $Value (Latin-1, as Get-IniValues returns it),
+# adding one, and the file with the [BrowserConfig] header the plugin writes, when there is none; or,
+# with $Value $null, removes those lines. Keeps the file's other lines, encoding and line endings.
+function Set-IniValue([string] $Path, [string] $Key, $Value) {
+    $exists = Test-Path -LiteralPath $Path -PathType Leaf
+    if (-not $exists -and $null -eq $Value) { return }
+    $text = if ($exists) { $Latin1.GetString([IO.File]::ReadAllBytes($Path)) } else { "[BrowserConfig]`r`n" }
+    $line = "(?m)^$([regex]::Escape($Key))=[^\r\n]*"
+    if ($null -eq $Value) { $text = [regex]::Replace($text, "$line(\r?\n)?", '') }
+    elseif ([regex]::IsMatch($text, $line)) { $text = [regex]::Replace($text, $line, "$Key=$Value".Replace('$', '$$')) }
+    else {
+        $newline = if ($text.Contains("`r`n") -or -not $text.Contains("`n")) { "`r`n" } else { "`n" }
+        if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += $newline }
+        $text += "$Key=$Value$newline"
+    }
+    [IO.File]::WriteAllBytes($Path, $Latin1.GetBytes($text))
+}
+
 # Points the plugin at the preset folder $Value (as browser_config.ini stores it) in the
 # browser_config.ini at $Path, unless that already names a folder that exists and -Force was not
-# given. Keeps the file's other lines, encoding and line endings.
+# given, noting the old value for -Restore.
 function Set-PresetFolder([string] $Path, [string] $Value) {
-    $line = "PresetLibraryPath=$Value"
-    if (-not (Test-Path -LiteralPath $Path)) {
-        [IO.File]::WriteAllText($Path, "[BrowserConfig]`r`n$line`r`n", (New-Object Text.UTF8Encoding($false)))
-        Write-Host "  set to $Value"
+    $key = 'PresetLibraryPath'
+    $values = @(Get-IniValues $Path $key)
+    if ($values.Count -gt 0 -and @($values | Where-Object { $_ -ne $Value }).Count -eq 0) {
+        Write-Host "  already $Value"
         return
     }
-    # Latin-1 maps every byte to one character and back, so lines this does not touch keep their
-    # bytes, whatever encoding they are in: UTF-8 now, Latin-1 before v0.3.0, a byte order mark.
-    $latin1 = [Text.Encoding]::GetEncoding(28591)
-    $text = $latin1.GetString([IO.File]::ReadAllBytes($Path))
-    $pattern = '(?m)^PresetLibraryPath=([^\r\n]*)'
-    $found = @([regex]::Matches($text, $pattern))
-    if ($found.Count -gt 0) {
-        if (@($found | Where-Object { $_.Groups[1].Value -ne $Value }).Count -eq 0) {
-            Write-Host "  already $Value"
+    # The plugin reads a line as UTF-8, or as Latin-1 if it is not valid UTF-8.
+    $raw = if ($values.Count -gt 0) { $values[-1] } else { $null }
+    $old = "$raw".TrimEnd(' ', "`t")
+    try { $old = (New-Object Text.UTF8Encoding($false, $true)).GetString($Latin1.GetBytes($old)) } catch { }
+    if ($old -and -not $Force) {
+        $oldDir = if ([IO.Path]::IsPathRooted($old)) { $old } else { Join-Path $script:ProfileDir $old }
+        if (Test-Path -LiteralPath $oldDir -PathType Container) {
+            Write-Host "  kept $old, which exists (-Force replaces it); the presets installed here are in milkdrop2\presets\Milkdrop-Original\"
             return
         }
-        # The plugin uses the last such line, read as UTF-8, or as Latin-1 if it is not valid UTF-8.
-        $old = $found[-1].Groups[1].Value.TrimEnd(' ', "`t")
-        try { $old = (New-Object Text.UTF8Encoding($false, $true)).GetString($latin1.GetBytes($old)) } catch { }
-        if ($old -and -not $Force) {
-            $oldDir = if ([IO.Path]::IsPathRooted($old)) { $old } else { Join-Path $script:ProfileDir $old }
-            if (Test-Path -LiteralPath $oldDir -PathType Container) {
-                Write-Host "  kept $old, which exists (-Force replaces it); the presets installed here are in milkdrop2\presets\Milkdrop-Original\"
-                return
-            }
-        }
-        Save-Backup $Path
-        $text = [regex]::Replace($text, $pattern, $line.Replace('$', '$$'))
-        if ($old) { Write-Host "  changed from $old, which does not exist, to $Value" } else { Write-Host "  set to $Value" }
     }
-    else {
-        Save-Backup $Path
-        $newline = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
-        if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += $newline }
-        $text += $line + $newline
-        Write-Host "  set to $Value"
-    }
-    [IO.File]::WriteAllBytes($Path, $latin1.GetBytes($text))
+    $relative = Get-ProfileRelative $Path
+    if ($null -ne $raw) { Add-ManifestLine 'setting' $relative $key $raw } else { Add-ManifestLine 'nosetting' $relative $key }
+    Set-IniValue $Path $key $Value
+    if ($old) { Write-Host "  changed from $old, which does not exist, to $Value" } else { Write-Host "  set to $Value" }
 }
 
 # The folders of the foobar2000 installations this can find: running ones, ones in Windows' list of
@@ -347,7 +561,7 @@ function Find-Foobar {
 function Select-FoobarDir {
     $found = @(Find-Foobar)
     if ($found.Count -eq 1) {
-        $answer = Read-Host "Install into the foobar2000 in $($found[0])? Press Enter for yes, or type N and Enter to choose another"
+        $answer = Read-Host "Use the foobar2000 in $($found[0])? Press Enter for yes, or type N and Enter to choose another"
         if ("$answer".Trim() -notmatch '^n') { return $found[0] }
     }
     elseif ($found.Count -gt 1) {
@@ -360,7 +574,7 @@ function Select-FoobarDir {
     try {
         Add-Type -AssemblyName System.Windows.Forms
         $dialog = New-Object Windows.Forms.OpenFileDialog
-        $dialog.Title = 'Choose foobar2000.exe in the foobar2000 to install MilkDrop 2 Plus into'
+        $dialog.Title = 'Choose foobar2000.exe in the foobar2000 to use'
         $dialog.Filter = 'foobar2000|foobar2000.exe'
         $dialog.InitialDirectory = $env:SystemDrive + '\'
         # An invisible topmost owner keeps the dialog from opening behind the console window.
@@ -375,6 +589,9 @@ function Select-FoobarDir {
 }
 
 function Install-MilkDrop {
+    $installOptions = $Layout -or $NoLayout -or $LayoutFrom -or $Force
+    if ($Restore -and $installOptions) { throw '-Restore takes no option but the foobar2000 folder.' }
+
     # --- Check the target -------------------------------------------------------------------------
     $dir = if ($FoobarDir) { $FoobarDir } else { Select-FoobarDir }
     $dir = Get-CleanPath $dir 'foobar2000 folder'
@@ -398,6 +615,28 @@ function Install-MilkDrop {
     Write-Host "Profile:     $profileDir"
     if (-not $portable) {
         Write-Host '  A standard installation keeps components, presets and settings in the profile above, not beside foobar2000.exe.'
+    }
+
+    # Install, or undo the newest install: as -Restore says, or as asked when there is one to undo and
+    # no option says to install.
+    $newest = Get-NewestInstallBackup
+    $restoring = [bool] $Restore
+    if (-not $Restore -and -not $installOptions -and $newest) {
+        $answer = Read-Host "This script installed into this foobar2000 on $(Get-BackupDate $newest). Press Enter to install or update, or type R and press Enter to undo that install"
+        $restoring = "$answer".Trim() -eq 'r'
+    }
+    if ($restoring) {
+        if (-not $newest) { throw "There is nothing to restore: no backup of an install in $(Join-Path $profileDir $BackupFolderName)." }
+        # foobar2000 may have been started while the question waited.
+        Assert-NotRunning $profileDir
+        Step "Undoing the install of $(Get-BackupDate $newest)"
+        $script:RunKind = 'restore'
+        Restore-Backup $newest
+        Write-Host "`nDone. Start foobar2000." -ForegroundColor Green
+        if ($script:BackupDir) { Write-Host "What this displaced is in $script:BackupDir." }
+        $older = Get-NewestInstallBackup
+        if ($older) { Write-Host "Run -Restore again to undo the install of $(Get-BackupDate $older) too." }
+        return
     }
 
     # Settle the layout before downloading anything, so that a bad -LayoutFrom costs nothing and the
@@ -483,9 +722,14 @@ function Install-MilkDrop {
             (Get-Sha256 ([IO.File]::OpenRead($installedDll))) -eq (Get-Sha256 $componentFiles[$dlls[0]].Open())
         foreach ($name in $ComponentNames + $componentName | Select-Object -Unique) {
             $installed = Join-Path $componentsDir $name
-            if (-not (Test-Path -LiteralPath $installed) -or ($name -eq $componentName -and $sameBuild)) { continue }
-            if ($name -ne $componentName) { Write-Host "  moving $name out of the way: it would claim the same UI element" }
-            Save-Backup $installed -Move
+            if ($name -eq $componentName) {
+                # Saved, or noted as absent, so that -Restore can take it out again.
+                if (-not $sameBuild) { Save-Backup $installed -Move }
+            }
+            elseif (Test-Path -LiteralPath $installed) {
+                Write-Host "  moving $name out of the way: it would claim the same UI element"
+                Save-Backup $installed -Move
+            }
         }
         $n = Expand-ZipFiles $componentFiles $componentDest
         Write-Host "  $n files in $componentDest$(if ($sameBuild) { ' (this build was installed already)' })"
@@ -504,7 +748,7 @@ function Install-MilkDrop {
 
         if ($installLayout) {
             Step 'Installing the layout'
-            if (Test-Path -LiteralPath $themeFile) { Save-Backup $themeFile }
+            Save-Backup $themeFile -Move
             [IO.File]::WriteAllBytes($themeFile, $newLayout)
             Write-Host "  wrote $themeFile"
             if (Test-Path -LiteralPath (Join-Path $componentsDir 'foo_ui_columns')) {
@@ -518,7 +762,9 @@ function Install-MilkDrop {
     }
 
     Write-Host "`nDone. Start foobar2000." -ForegroundColor Green
-    if ($script:BackupDir) { Write-Host "Replaced files are in $script:BackupDir" }
+    if ($script:BackupDir) {
+        Write-Host "To undo this install, run this script again and type R when it asks, or run it with -Restore. (Its backup: $script:BackupDir)"
+    }
 }
 
 # The Default UI layout (profile\theme.fth) of the foobar2000 this script was made from, what it shows,
