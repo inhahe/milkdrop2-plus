@@ -226,10 +226,18 @@ void CPluginShell::OnWindowSizeChanged(int width, int height, bool bForce)
         m_lpDX->m_ready = false; // flag to exit
 }
 
+// Moves the swap chain to `window` (entering or leaving full screen), `width` x `height`, and
+// recreates the engine's device resources for that size, as OnWindowSizeChanged does: the new
+// window's first WM_SIZE finds the size already set and does nothing.
 void CPluginShell::OnWindowSwap(HWND window, int width, int height)
 {
-    if (!m_lpDX->OnWindowSwap(window, width, height))
+    if (!m_lpDX->m_ready)
         return;
+    CleanUpDX11(0);
+    if (!m_lpDX->OnWindowSwap(window, width, height))
+        return; // not ready any more: the plugin stops
+    if (!AllocateDX11())
+        m_lpDX->m_ready = false;
 }
 
 void CPluginShell::OnWindowMoved()
@@ -1475,17 +1483,18 @@ void CPluginShell::RenderPlaylist()
 
             // Apply PgUp/PgDn keypresses since last time.
             const LRESULT posBefore = m_playlist_pos;
-            m_playlist_pos -= m_playlist_pageups * disp_lines;
-            m_playlist_pageups = 0;
+            const int pageups = m_playlist_pageups.exchange(0);
+            m_playlist_pos -= pageups * disp_lines;
 
             if (m_playlist_pos < 0)
                 m_playlist_pos = 0;
             if (m_playlist_pos >= nSongs)
                 m_playlist_pos = nSongs - 1;
 
-            // Have the host select the item when it moved here (Page Up/Down, or a shorter
-            // playlist); a selection the host made, or the keys, which select it themselves, stays.
-            if (m_playlist_pos != posBefore && m_host.selectPlaylistItem)
+            // Have the host select the item Page Up or Page Down moved to. Other moves leave the
+            // host's selection alone: the arrow keys select themselves, and a shorter playlist is
+            // the user's own edit.
+            if (pageups != 0 && m_playlist_pos != posBefore && m_host.selectPlaylistItem)
                 m_host.selectPlaylistItem(static_cast<int>(m_playlist_pos));
 
             int cur_page = static_cast<int>(m_playlist_pos / disp_lines);

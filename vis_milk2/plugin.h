@@ -502,7 +502,11 @@ class CPlugin : public CPluginShell
 
     NowPlaying m_frameNowPlaying; // GetNowPlaying() as of this frame's start (MilkDropRenderFrame)
     wchar_t m_szSongTitle[256];
-    wchar_t m_szSongTitlePrev[256];
+    unsigned m_nSongTitleTrack = 0; // the NowPlaying::track the song title animation last ran for
+
+    std::wstring m_albumArtFile; // what SetAlbumArt shows
+    std::vector<uint8_t> m_albumArtImage;
+    void LaunchAlbumArt();
 
     // Stuff for the menu system.
     CMilkMenu* m_pCurMenu; // should always be valid!
@@ -552,6 +556,14 @@ class CPlugin : public CPluginShell
     // Raises the shaders of the preset on screen below PixelShaderUpgradeTarget() to it, and
     // recompiles them ('y' at the upgrade prompt). Render thread.
     void UpgradePixelShaders();
+    // The sprite number album art is launched as: past the numbers sprites from the image list
+    // take (0-99). Its section there ([img100]) says how it is drawn.
+    static constexpr int kAlbumArtSprite = 100;
+    // Shows the image file `file`, or else the encoded image `image`, as the album art sprite in
+    // place of the last, or removes it when both are empty. Other sprites stay. Kept and shown
+    // again whenever the device resources are remade (a resize, a change of settings, a window
+    // swap, a device reset), which empties every sprite slot. Render thread.
+    void SetAlbumArt(std::wstring file, std::vector<uint8_t> image);
 
   private:
     int PixelShaderUpgradeTarget() const;

@@ -460,6 +460,9 @@ class milk2_config
     // Saves the user's textures folder in the milk2.szTextureDir setting. `dir`: an absolute folder
     // path, or empty to use only the default textures folder.
     static void save_texture_dir(const std::wstring& dir);
+    // Saves the settings the context menu toggles (Show Album Art, Downmix Channels) at once, as
+    // the preferences do theirs: reset() reads them back.
+    void save_menu_toggles() const;
 
     // `milk2.ini`
     plugin_config settings{};

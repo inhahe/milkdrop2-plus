@@ -358,7 +358,7 @@ void milk2_ui_element::OnMove(CPoint ptPos)
     UNREFERENCED_PARAMETER(ptPos);
 
     MILK2_CONSOLE_LOG("OnMove ", GetWnd())
-    if (m_milk2)
+    if (!m_in_sizemove && m_milk2) // during a drag, once at its end (OnExitSizeMove)
     {
 #ifdef TIMER_TP
         EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
@@ -392,15 +392,8 @@ void milk2_ui_element::OnSize(UINT nType, CSize size)
     }
     else if (!m_in_sizemove && m_milk2)
     {
-        int width = size.cx;
-        int height = size.cy;
-
-        if (!width || !height)
+        if (!size.cx || !size.cy)
             return;
-        if (width < 128)
-            width = 128;
-        if (height < 128)
-            height = 128;
         MILK2_CONSOLE_LOG("OnSize1 ", nType, ", ", size.cx, ", ", size.cy, ", ", GetWnd())
 #ifdef TIMER_TP
         EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
@@ -430,6 +423,7 @@ void milk2_ui_element::OnExitSizeMove()
         RECT rc;
         WIN32_OP_D(GetClientRect(&rc));
         g_plugin.OnWindowSizeChanged(rc.right - rc.left, rc.bottom - rc.top);
+        g_plugin.OnWindowMoved(); // what OnMove skipped during the drag
 #ifdef TIMER_TP
         LeaveCriticalSection(&s_cs);
 #endif
@@ -803,6 +797,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             break;
         case IDM_ENABLE_DOWNMIX:
             s_config.settings.m_bEnableDownmix = !s_config.settings.m_bEnableDownmix;
+            s_config.save_menu_toggles();
             UpdateChannelMode();
             break;
         case IDM_SHOW_PREFS:
@@ -820,6 +815,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
         case IDM_SHOW_ALBUM:
             {
                 s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
+                s_config.save_menu_toggles();
                 metadb_handle_ptr track;
                 m_playback_control->get_now_playing(track);
                 ShowAlbumArt(track);
@@ -1420,12 +1416,7 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-// The sprite number the album art is launched as: past the numbers sprites from the image list
-// take (0-99), so that the art replaces only itself. Its section there ([img100]) says how it is
-// drawn.
-static constexpr int kAlbumArtSprite = 100;
-
-// Whether the sprites' settings file (milk_img.ini) exists; the album art option is offered only
+// Whether the sprites' settings file (milk2_img.ini) exists; the album art option is offered only
 // then.
 bool milk2_ui_element::AlbumArtSpriteFileExists()
 {
@@ -1497,14 +1488,8 @@ void milk2_ui_element::ShowAlbumArt(const metadb_handle_ptr& track)
     }
 
     // On the render thread, which draws the sprites.
-    g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)] {
-        for (int x = 0; x < NUM_TEX; x++)
-            if (g_plugin.m_texmgr.m_tex[x].pSurface && g_plugin.m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
-                g_plugin.KillSprite(x);
-        if (!file.empty())
-            g_plugin.LaunchSprite(kAlbumArtSprite, -1, file);
-        else if (!raster.empty())
-            g_plugin.LaunchSprite(kAlbumArtSprite, -1, L"", raster);
+    g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)]() mutable {
+        g_plugin.SetAlbumArt(std::move(file), std::move(raster));
     });
 }
 
@@ -1689,25 +1674,32 @@ static service_factory_single_t<ui_element_milk2> g_ui_element_milk2_factory;
 #pragma endregion
 
 #pragma region Playback feed
+// The compiled title format and the pattern it was compiled from (PlaybackTitleScript). Released
+// when foobar2000 quits (milk2_initquit), not when the DLL unloads, after the services are gone.
+static titleformat_object::ptr s_titleScript;
+static pfc::string8 s_titleScriptPattern;
+
 // The title format the engine shows titles in (the song title, the playlist overlay): the
 // setting, or the default until the settings are read. Recompiled when it changes. Main thread.
 static titleformat_object::ptr PlaybackTitleScript()
 {
-    static titleformat_object::ptr script;
-    static pfc::string8 compiledFrom;
     pfc::string8 pattern = s_config.settings.m_szTitleFormat[0] ? pfc::string8(pfc::utf8FromWide(s_config.settings.m_szTitleFormat)) : pfc::string8(default_szTitleFormat);
-    if (script.is_empty() || pattern != compiledFrom)
+    if (s_titleScript.is_empty() || pattern != s_titleScriptPattern)
     {
-        static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(script, pattern);
-        compiledFrom = pattern;
+        static_api_ptr_t<titleformat_compiler>()->compile_safe_ex(s_titleScript, pattern);
+        s_titleScriptPattern = pattern;
     }
-    return script;
+    return s_titleScript;
 }
+
+// NowPlaying::track: counts the tracks started (milk2_playback_feed). Main thread.
+static unsigned s_nowPlayingTrack = 1;
 
 static void PublishNowPlaying()
 {
     auto pc = playback_control::get();
     CPluginShell::NowPlaying np;
+    np.track = s_nowPlayingTrack;
     pfc::string8 title;
     if (pc->playback_format_title(nullptr, title, PlaybackTitleScript(), nullptr, playback_control::display_level_all))
         np.title = pfc::wideFromUTF8(title);
@@ -1787,12 +1779,20 @@ class milk2_playback_feed : private play_callback_impl_base, private playlist_ca
 
   private:
     void on_playback_starting(play_control::t_track_command, bool) override { PublishNowPlaying(); }
-    void on_playback_new_track(metadb_handle_ptr) override { PublishPlayback(); }
+    void on_playback_new_track(metadb_handle_ptr) override
+    {
+        ++s_nowPlayingTrack;
+        PublishPlayback();
+    }
     void on_playback_stop(play_control::t_stop_reason) override { PublishPlayback(); }
     void on_playback_seek(double) override { PublishNowPlaying(); }
     void on_playback_pause(bool) override { PublishNowPlaying(); }
     void on_playback_edited(metadb_handle_ptr) override { PublishNowPlaying(); }
-    void on_playback_dynamic_info_track(const file_info&) override { PublishNowPlaying(); }
+    void on_playback_dynamic_info_track(const file_info&) override // a stream's next title
+    {
+        ++s_nowPlayingTrack;
+        PublishNowPlaying();
+    }
     void on_playback_time(double) override { PublishNowPlaying(); } // each second: keeps the position from drifting
 
     void on_items_added(t_size, metadb_handle_list_cref, const bit_array&) override { PublishPlaylist(); }
@@ -1823,6 +1823,7 @@ class milk2_initquit : public initquit
         MILK2_CONSOLE_LOG("on_quit")
         //NSEEL_quit();
         s_playbackFeed.reset();
+        s_titleScript.release();
         if (core_api::is_quiet_mode_enabled())
             return;
         //delete_first_run();

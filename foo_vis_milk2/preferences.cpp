@@ -1339,6 +1339,12 @@ void milk2_config::save_texture_dir(const std::wstring& dir)
     cfg_szTextureDir.set(pfc::utf8FromWide(folder_to_stored(dir).c_str()));
 }
 
+void milk2_config::save_menu_toggles() const
+{
+    cfg_bShowAlbum = settings.m_bShowAlbum;
+    cfg_bEnableDownmix = settings.m_bEnableDownmix;
+}
+
 void milk2_config::update_paths()
 {
     const std::wstring stored = m_version >= 2 ? std::wstring(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str()) : std::wstring();

@@ -32,6 +32,7 @@
 #define __NULLSOFT_DX_PLUGIN_SHELL_H__
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <mutex>
@@ -126,6 +127,7 @@ class CPluginShell : public DX::IDeviceNotify
         bool playing = false;  // also while paused
         bool paused = false;
         std::chrono::steady_clock::time_point stamp;
+        unsigned track = 0; // counts the tracks started (a new track, or a stream's next title), from 1
     };
     // Set whenever it changes, and at least once a second while playing.
     void SetNowPlaying(NowPlaying np);
@@ -226,7 +228,7 @@ class CPluginShell : public DX::IDeviceNotify
     bool m_show_help;
     bool m_show_playlist;
     LRESULT m_playlist_pos; // current selection on (plugin's) playlist menu
-    int m_playlist_pageups; // can be + or -
+    std::atomic<int> m_playlist_pageups; // Page Up presses (negative: Page Down) the overlay has yet to apply; the keys add
     int m_playlist_top_idx; // used to track when the playlist cache (`m_playlist`) needs updating
     int m_playlist_btm_idx; // used to track when the playlist cache (`m_playlist`) needs updating
     int m_exiting;

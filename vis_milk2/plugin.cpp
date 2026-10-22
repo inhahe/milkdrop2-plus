@@ -647,7 +647,7 @@ void CPlugin::MilkDropPreInitialize()
     m_fShowRatingUntilThisTime = -1.0f;
     //ClearErrors();
     m_szSongTitle[0] = L'\0';
-    m_szSongTitlePrev[0] = L'\0';
+    m_nSongTitleTrack = 0;
 
     m_lpVS[0] = NULL;
     m_lpVS[1] = NULL;
@@ -1109,6 +1109,8 @@ void CPlugin::CleanUpMilkDropNonDX11()
         std::lock_guard<std::mutex> lock(m_renderTasksLock);
         m_renderTasks.clear();
     }
+    m_albumArtFile.clear(); // the next session shows its own
+    m_albumArtImage.clear();
 
     m_menuPreset.Finish();
     m_menuWave.Finish();
@@ -1847,7 +1849,28 @@ int CPlugin::AllocateMilkDropDX11()
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
     }
 
+    LaunchAlbumArt(); // the sprites were just made anew, empty
+
     return true;
+}
+
+void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
+{
+    m_albumArtFile = std::move(file);
+    m_albumArtImage = std::move(image);
+    for (int x = 0; x < NUM_TEX; x++)
+        if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
+            KillSprite(x);
+    LaunchAlbumArt();
+}
+
+// Launches the album art sprite from what SetAlbumArt kept, if anything.
+void CPlugin::LaunchAlbumArt()
+{
+    if (!m_albumArtFile.empty())
+        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile);
+    else if (!m_albumArtImage.empty())
+        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage);
 }
 
 static float fCubicInterpolate(float y0, float y1, float y2, float y3, float t)
@@ -3545,9 +3568,11 @@ void CPlugin::MilkDropRenderFrame(int redraw)
     if (!redraw)
     {
         wcsncpy_s(m_szSongTitle, m_frameNowPlaying.title.c_str(), _TRUNCATE);
-        if (wcscmp(m_szSongTitle, m_szSongTitlePrev) != 0)
+        // Animated once per track, though the title may change while it plays (a title format
+        // that shows the playback time, or the bitrate).
+        if (m_frameNowPlaying.track != m_nSongTitleTrack)
         {
-            wcscpy_s(m_szSongTitlePrev, m_szSongTitle);
+            m_nSongTitleTrack = m_frameNowPlaying.track;
             if (m_bSongTitleAnims)
                 LaunchSongTitleAnim();
         }

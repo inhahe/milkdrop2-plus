@@ -34,6 +34,14 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 **Fix:** as the Default UI element's `Initialize` does, pre-initialize only when `s_milk2` is false and otherwise swap the engine to the new window under `s_cs`; and let only one panel's timer render (or refuse a second panel, with a message in it).
 
+## Sprites launched with the keys vanish at a resize
+
+**Where:** `CPlugin::CleanUpMilkDropDX11` (`m_texmgr.Finish`) and `AllocateMilkDropDX11` (`m_texmgr.Init`), run by every resize, change of settings, window swap and device reset.
+
+**What happens:** every sprite slot is emptied, and only the album art is launched again (`LaunchAlbumArt`); sprites launched with K and two digits are gone. They were lost before too, but leaked instead of released.
+
+**Fix:** have the texture manager remember each sprite's number and start time and launch them again after the reallocation, the way the album art is.
+
 ## The scan cache records default ratings for filtered-out presets
 
 **Where:** `__UpdatePresetList` in `vis_milk2/plugin.cpp`, step 4.
