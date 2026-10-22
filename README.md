@@ -70,7 +70,7 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 
 From a command prompt: `install-milkdrop2-plus.cmd "C:\foobar2000"`, with `-Layout` or `-NoLayout` to answer the layout question in advance. Everything goes into foobar2000's profile folder, and whatever it replaces (the layout, the preset folder setting, an earlier build of the plugin) is first saved in `<profile>\milkdrop2-plus-install-backup\`. Run it again to update the plugin and add any new presets and textures; those already there are kept, edited or not.
 
-To undo an install, run the script again and type R when it asks, or run it with `-Restore`: that puts back what the install replaced, takes out what it added (except the presets and textures) and sets the preset folder back. Another `-Restore` undoes the install before that. Its other options (`-LayoutFrom`, `-Force`) are described at the top of the file.
+To undo an install, run the script again and type R when it asks, or run it with `-Restore`: that puts back what the install replaced, takes out what it added (except the presets and textures) and sets the preset folder back, unless you have changed it since. Another `-Restore` undoes the install before that. Its other options (`-LayoutFrom`, `-Force`) are described at the top of the file.
 
 ### Install from Source
 

@@ -68,8 +68,9 @@ exit /b %RESULT%
     the preset folder's old value and what it put where there was nothing.
 
     -Restore undoes the newest install from its backup: it puts back what that install replaced,
-    removes what it put where there was nothing and sets the preset folder back, leaving the presets
-    and textures it added. Another -Restore undoes the install before that. What a restore displaces
+    removes what it put where there was nothing and sets the preset folder back (unless it has been
+    changed since), leaving the presets and textures it added. Another -Restore undoes the install
+    before that. What a restore displaces
     is kept in a backup of its own. Run without options on a profile with an install to undo, the
     script asks whether to install or to undo it.
 
@@ -153,6 +154,8 @@ $script:ProfileDir = $null
 $script:BackupDir = $null
 # What this run does, for its manifest: install, or restore.
 $script:RunKind = 'install'
+# The backup folders already warned about, so that each warning is given once.
+$script:Warned = New-Object 'Collections.Generic.HashSet[string]'
 
 function Step([string] $Text) { Write-Host "`n== $Text" -ForegroundColor Cyan }
 
@@ -221,59 +224,84 @@ function Test-Bytes([byte[]] $Haystack, [byte[]] $Needle, [int] $Offset = -1) {
 
 # --- Backups ----------------------------------------------------------------------------------------
 # Each run that changes the profile keeps a backup folder, <profile>\milkdrop2-plus-install-backup\
-# <date and time>\, holding what it moved or copied away at the same place relative to the profile,
-# and a manifest, run.txt: tab-separated lines, "sequence <n>" and "kind install" (or "kind restore",
-# or "kind undone" for a backup kept after its restore because it holds files this script did not put
-# there) first, then one line for each change, written as the change is made, so that a run which
-# fails part-way can still be undone:
-#   saved <path>                  the run moved or copied the item at <path> (relative to the profile) here
-#   absent <path>                 there was nothing at <path>; the run put something there
-#   setting <file> <key> <value>  the run changed <key> in the ini file <file> from <value>, kept as
-#                                 Latin-1 (one character per byte) so that the bytes come back exactly
-#   nosetting <file> <key>        the run set <key> in <file>, where it was not set
-# Runs are ordered by their sequence numbers, not by the dates, which a change of clock can reorder.
+# <date and time>\, holding what it moved away at the same place relative to the profile, and a
+# manifest, run.txt: tab-separated lines, "sequence <n>" and "kind install" (or "kind restore", or
+# "kind undone" for a backup kept after its restore because it holds files this script did not put
+# there) first, then one line for each change, written before the change is made, so that a run which
+# stops part-way can still be undone:
+#   saved <path>                      the item at <path>, relative to the profile, is moved here
+#   absent <path>                     there was nothing at <path>; the run puts something there
+#   setting <file> <key> <new> <old>  the run sets <key> in the ini file <file> to <new>; it was <old>
+#   nosetting <file> <key> <new>      the same, where <key> was not set
+# Values are kept as Latin-1 (one character per byte), so that they come back byte for byte. Runs are
+# ordered by their sequence numbers, not by the dates, which a change of clock can reorder.
 
-# The backups in the profile, as objects: Path, Name, Sequence, Kind, and Entries (objects with Kind,
-# Path, Source, Key and Value). A backup that an earlier version of this script made has no manifest:
-# its entries are derived from the names it holds, and its sequence is 0, older than any other.
+# A change a backup records (see above): Kind saved, absent or setting; Path, relative to the profile;
+# Source, where the backup holds what goes back; Key; New, the value the run set; Old, the one before.
+function New-Entry([string] $Kind, [string] $Path, [string] $Source, [string] $Key, $New, $Old) {
+    [pscustomobject]@{ Kind = $Kind; Path = $Path; Source = $Source; Key = $Key; New = $New; Old = $Old }
+}
+
+# The backups in the profile, as objects: Path, Name, Sequence, Kind, Entries and Legacy. A backup that an
+# earlier version of this script made has no manifest, and counts as older than any other (see
+# Get-LegacyEntries). One whose manifest this script cannot read is passed over, with a warning.
 function Get-Backups {
+    $fields = @{ sequence = 2; kind = 2; saved = 2; absent = 2; setting = 5; nosetting = 4 }
     $root = Join-Path $script:ProfileDir $BackupFolderName
     foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
         $backup = [pscustomobject]@{ Path = $dir.FullName; Name = $dir.Name; Sequence = 0; Kind = 'install'; Entries = @(); Legacy = $false }
         $manifest = Join-Path $dir.FullName $ManifestName
-        if (Test-Path -LiteralPath $manifest -PathType Leaf) {
+        if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+            $backup.Legacy = $true
+            $backup.Entries = @(Get-LegacyEntries $dir.FullName)
+            $backup
+            continue
+        }
+        try {
             $entries = @()
             foreach ($line in [IO.File]::ReadAllLines($manifest, [Text.Encoding]::UTF8)) {
-                $f = $line.Split([char[]] @([char] 9), 4)
+                if (-not $line) { continue }
+                $f = $line.Split([char[]] @([char] 9), 5)
+                if ($fields[$f[0]] -ne $f.Count) { throw "a line this script does not know: $line" }
                 switch ($f[0]) {
                     'sequence' { $backup.Sequence = [int] $f[1] }
                     'kind' { $backup.Kind = $f[1] }
-                    'saved' { $entries += [pscustomobject]@{ Kind = 'saved'; Path = $f[1]; Source = $f[1]; Key = $null; Value = $null } }
-                    'absent' { $entries += [pscustomobject]@{ Kind = 'absent'; Path = $f[1]; Source = $null; Key = $null; Value = $null } }
-                    'setting' { $entries += [pscustomobject]@{ Kind = 'setting'; Path = $f[1]; Source = $null; Key = $f[2]; Value = $f[3] } }
-                    'nosetting' { $entries += [pscustomobject]@{ Kind = 'setting'; Path = $f[1]; Source = $null; Key = $f[2]; Value = $null } }
-                    '' { }
-                    default { throw "$manifest has a line this script does not know: $line" }
+                    'saved' { $entries += New-Entry 'saved' $f[1] -Source $f[1] }
+                    'absent' { $entries += New-Entry 'absent' $f[1] }
+                    'setting' { $entries += New-Entry 'setting' $f[1] -Key $f[2] -New $f[3] -Old $f[4] }
+                    'nosetting' { $entries += New-Entry 'setting' $f[1] -Key $f[2] -New $f[3] -Old $null }
                 }
             }
             $backup.Entries = $entries
         }
-        else {
-            # Earlier versions saved items flat, under their own names: components (from
-            # user-components-x64), theme.fth and browser_config.ini, and <name>.absent for one created.
-            $backup.Legacy = $true
-            $backup.Entries = @(foreach ($item in Get-ChildItem -LiteralPath $dir.FullName -Force) {
-                $name = $item.Name -replace '\.absent$', ''
-                $path = if ($ComponentNames -contains $name) { "user-components-x64\$name" }
-                        elseif ($name -in 'theme.fth', 'browser_config.ini') { $name }
-                        else { $null }
-                if ($path) {
-                    $kind = if ($item.Name -like '*.absent') { 'absent' } else { 'saved' }
-                    [pscustomobject]@{ Kind = $kind; Path = $path; Source = $item.Name; Key = $null; Value = $null }
-                }
-            })
+        catch {
+            $backup.Kind = 'unreadable'
+            if ($script:Warned.Add($dir.FullName)) { Write-Warning "Passing over $($dir.FullName): its $ManifestName has $($_.Exception.Message)" }
         }
         $backup
+    }
+}
+
+# The changes that a backup made by an earlier version of this script, in the folder $Dir, stands for.
+# Those versions moved components and theme.fth there under their own names, and copied
+# browser_config.ini there before changing its PresetLibraryPath to $PresetLibraryStored; they did not
+# note what they created. A run that moved a component away installed another, so the other
+# components are taken out again: only one may be installed.
+function Get-LegacyEntries([string] $Dir) {
+    $components = @()
+    foreach ($item in @(Get-ChildItem -LiteralPath $Dir -Force)) {
+        if ($ComponentNames -contains $item.Name) {
+            $components += $item.Name
+            New-Entry 'saved' "user-components-x64\$($item.Name)" -Source $item.Name
+        }
+        elseif ($item.Name -eq 'theme.fth') { New-Entry 'saved' 'theme.fth' -Source 'theme.fth' }
+        elseif ($item.Name -eq 'browser_config.ini') {
+            $old = @(Get-IniValues $item.FullName 'PresetLibraryPath')
+            New-Entry 'setting' 'browser_config.ini' -Source 'browser_config.ini' -Key 'PresetLibraryPath' -New $PresetLibraryStored -Old $(if ($old.Count -gt 0) { $old[-1] } else { $null })
+        }
+    }
+    if ($components.Count -gt 0) {
+        foreach ($name in $ComponentNames | Where-Object { $components -notcontains $_ }) { New-Entry 'absent' "user-components-x64\$name" }
     }
 }
 
@@ -317,95 +345,114 @@ function Get-ProfileRelative([string] $Path) {
     $Path.Substring($root.Length)
 }
 
-# Saves the item at $Path (a file or folder in the profile) in this run's backup folder, moving it with
-# -Move, copying it otherwise; or, when there is nothing there, notes that, so that -Restore removes
-# what this run puts there.
-function Save-Backup([string] $Path, [switch] $Move) {
+# Moves $From to $To, which must not exist yet (Move-Item would move into a folder there), and, with a
+# list $Log, records the move there, so that it can be reversed.
+function Move-Logged([string] $From, [string] $To, $Log) {
+    if (Test-Path -LiteralPath $To) { throw "$To is in the way." }
+    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $To))
+    Move-Item -LiteralPath $From -Destination $To
+    if ($null -ne $Log) { $Log.Add([pscustomobject]@{ From = $From; To = $To }) }
+}
+
+# Moves the item at $Path (a file or folder in the profile) into this run's backup folder, at the same
+# place relative to the profile; or, when there is nothing there, notes that, so that -Restore takes
+# out what this run puts there. With a list $Log, the move is recorded there too (see Move-Logged).
+function Save-Backup([string] $Path, $Log) {
     $relative = Get-ProfileRelative $Path
     if (-not (Test-Path -LiteralPath $Path)) {
         Add-ManifestLine 'absent' $relative
         return
     }
-    $dest = Join-Path (Get-BackupDir) $relative
-    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $dest))
-    if ($Move) { Move-Item -LiteralPath $Path -Destination $dest }
-    else { Copy-Item -LiteralPath $Path -Destination $dest -Recurse }
     Add-ManifestLine 'saved' $relative
+    Move-Logged $Path (Join-Path (Get-BackupDir) $relative) $Log
     Write-Host "  saved the old $relative in $(Get-BackupDir)"
 }
 
-# Moves $From to $To, which must not exist yet (Move-Item would move into a folder there), and records
-# the move in the list $Log, so that it can be reversed.
-function Move-Logged([string] $From, [string] $To, $Log) {
-    if (Test-Path -LiteralPath $To) { throw "$To is in the way." }
-    [void][IO.Directory]::CreateDirectory((Split-Path -Parent $To))
-    Move-Item -LiteralPath $From -Destination $To
-    $Log.Add([pscustomobject]@{ From = $From; To = $To })
+# Sets $Key in the ini file at $Path (in the profile) to $Value (Latin-1, or $null to remove it), noting
+# the new and the old value in the manifest first, and returns the old value, or $null if it was not set.
+function Save-Setting([string] $Path, [string] $Key, $Value) {
+    $current = @(Get-IniValues $Path $Key)
+    $old = if ($current.Count -gt 0) { $current[-1] } else { $null }
+    $relative = Get-ProfileRelative $Path
+    if ($null -ne $old) { Add-ManifestLine 'setting' $relative $Key $Value $old } else { Add-ManifestLine 'nosetting' $relative $Key $Value }
+    Set-IniValue $Path $Key $Value
+    $old
 }
 
 # Undoes the install that $Backup (from Get-Backups) records, newest change first: puts back what it
-# saved, removes what it put where there was nothing, and sets back the settings it changed. What this
-# displaces goes into this run's own backup folder, of kind restore, which -Restore passes over, so the
-# next -Restore undoes the install before. If a step fails, the steps made so far are reversed, so
-# that the backup stays whole for another try; once all succeed, the backup is gone, as it is undone.
+# moved away, takes out what it put where there was nothing, and sets back the settings it changed,
+# unless they have been changed since. What this displaces goes into this run's own backup folder, of
+# kind restore, which -Restore passes over, so the next -Restore undoes the install before. If a step
+# fails, the steps made so far are reversed, so that the backup stays whole for another try; once all
+# succeed, the backup is gone, as it is undone.
 function Restore-Backup($Backup) {
     if ($Backup.Legacy) {
-        Write-Host '  (An earlier version of this script made this backup, without noting what it created; that stays.)'
+        Write-Host '  (An earlier version of this script made this backup, without noting what it created, which stays, but for another build of the plugin.)'
     }
     $entries = @($Backup.Entries)
     [array]::Reverse($entries)
-    # The moves (From, To) and setting changes (Setting, Key, Value before) made so far, to reverse.
-    $moves = New-Object Collections.Generic.List[object]
+    # The moves (From, To) and setting changes (Setting, Key, and Value before) made so far, to reverse.
+    $done = New-Object Collections.Generic.List[object]
     try {
         foreach ($entry in $entries) {
             $target = Join-Path $script:ProfileDir $entry.Path
-            if ($entry.Kind -eq 'setting') {
-                $current = @(Get-IniValues $target $entry.Key)
-                $previous = if ($current.Count -gt 0) { $current[-1] } else { $null }
-                if ($null -ne $previous) { Add-ManifestLine 'setting' $entry.Path $entry.Key $previous } else { Add-ManifestLine 'nosetting' $entry.Path $entry.Key }
-                Set-IniValue $target $entry.Key $entry.Value
-                $moves.Add([pscustomobject]@{ Setting = $target; Key = $entry.Key; Value = $previous })
-                Write-Host "  set $($entry.Key) in $($entry.Path) back"
-                continue
+            switch ($entry.Kind) {
+                'setting' {
+                    $current = @(Get-IniValues $target $entry.Key)
+                    $now = if ($current.Count -gt 0) { $current[-1] } else { $null }
+                    if ($now -cne $entry.New) {
+                        Write-Host "  left $($entry.Key) in $($entry.Path), which has been changed since"
+                        break
+                    }
+                    $before = Save-Setting $target $entry.Key $entry.Old
+                    $done.Add([pscustomobject]@{ Setting = $target; Key = $entry.Key; Value = $before })
+                    Write-Host "  set $($entry.Key) in $($entry.Path) back"
+                }
+                'saved' {
+                    $source = Join-Path $Backup.Path $entry.Source
+                    if (-not (Test-Path -LiteralPath $source)) {
+                        Write-Warning "Cannot put back $($entry.Path): it is not in $($Backup.Path)."
+                        break
+                    }
+                    Save-Backup $target $done
+                    Move-Logged $source $target $done
+                    Write-Host "  put back $($entry.Path)"
+                }
+                'absent' {
+                    if (Test-Path -LiteralPath $target) {
+                        Save-Backup $target $done
+                        Write-Host "  took out $($entry.Path), which that run put there"
+                    }
+                }
             }
-            $existed = Test-Path -LiteralPath $target
-            if ($existed) {
-                Move-Logged $target (Join-Path (Get-BackupDir) $entry.Path) $moves
-                Add-ManifestLine 'saved' $entry.Path
-            }
-            elseif ($entry.Kind -eq 'saved') { Add-ManifestLine 'absent' $entry.Path }
-            if ($entry.Kind -eq 'saved') {
-                Move-Logged (Join-Path $Backup.Path $entry.Source) $target $moves
-                Write-Host "  put back $($entry.Path)"
-            }
-            elseif ($existed) { Write-Host "  removed $($entry.Path), which that run put there" }
         }
     }
     catch {
         $problem = $_.Exception.Message
-        for ($i = $moves.Count - 1; $i -ge 0; $i--) {
-            $done = $moves[$i]
+        $stuck = @()
+        for ($i = $done.Count - 1; $i -ge 0; $i--) {
+            $step = $done[$i]
             try {
-                if ($done.Setting) { Set-IniValue $done.Setting $done.Key $done.Value }
-                else { Move-Item -LiteralPath $done.To -Destination $done.From }
+                if ($step.Setting) { Set-IniValue $step.Setting $step.Key $step.Value }
+                else { Move-Item -LiteralPath $step.To -Destination $step.From }
             }
-            catch { }
+            catch { $stuck += $(if ($step.Setting) { "$($step.Key) in $($step.Setting)" } else { "$($step.To) to $($step.From)" }) }
+        }
+        if ($stuck.Count -gt 0) {
+            throw "Could not restore ($problem), nor undo all of what it restored so far. Still to move back by hand: $($stuck -join '; '). The backup is in $($Backup.Path), and what this displaced in $script:BackupDir."
         }
         if ($script:BackupDir) {
-            Remove-Item -LiteralPath $script:BackupDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $script:BackupDir -Recurse -Force
             $script:BackupDir = $null
         }
-        throw "Could not restore ($problem). What was restored so far is undone again, and the backup in $($Backup.Path) is whole for another try."
+        throw "Could not restore ($problem). What it restored so far is undone again, and the backup in $($Backup.Path) is whole for another try."
     }
-    # What is left is the manifest, an earlier version's <name>.absent files and empty folders, or what
-    # this script does not know.
-    Remove-Item -LiteralPath (Join-Path $Backup.Path $ManifestName) -ErrorAction SilentlyContinue
-    foreach ($entry in $entries | Where-Object { $_.Kind -eq 'absent' -and $_.Source }) {
-        Remove-Item -LiteralPath (Join-Path $Backup.Path $entry.Source) -ErrorAction SilentlyContinue
-    }
-    if (@(Get-ChildItem -LiteralPath $Backup.Path -Recurse -File -Force).Count -eq 0) { Remove-Item -LiteralPath $Backup.Path -Recurse -Force }
+    # Left in the backup should be its manifest, an earlier version's copy of browser_config.ini, and
+    # empty folders; anything else, this script did not put there.
+    $known = @($ManifestName) + @($entries | Where-Object { $_.Kind -eq 'setting' -and $_.Source } | ForEach-Object { $_.Source })
+    $others = @(Get-ChildItem -LiteralPath $Backup.Path -Recurse -File -Force | Where-Object { $known -notcontains $_.FullName.Substring($Backup.Path.Length + 1) })
+    if ($others.Count -eq 0) { Remove-Item -LiteralPath $Backup.Path -Recurse -Force }
     else {
-        # Marked as undone, so that -Restore passes over it from now on.
         [IO.File]::WriteAllText((Join-Path $Backup.Path $ManifestName), "sequence`t$($Backup.Sequence)`r`nkind`tundone`r`n")
         Write-Host "  left $($Backup.Path), which holds files this script did not put there"
     }
@@ -519,9 +566,7 @@ function Set-PresetFolder([string] $Path, [string] $Value) {
             return
         }
     }
-    $relative = Get-ProfileRelative $Path
-    if ($null -ne $raw) { Add-ManifestLine 'setting' $relative $key $raw } else { Add-ManifestLine 'nosetting' $relative $key }
-    Set-IniValue $Path $key $Value
+    $null = Save-Setting $Path $key $Value
     if ($old) { Write-Host "  changed from $old, which does not exist, to $Value" } else { Write-Host "  set to $Value" }
 }
 
@@ -635,7 +680,7 @@ function Install-MilkDrop {
         Write-Host "`nDone. Start foobar2000." -ForegroundColor Green
         if ($script:BackupDir) { Write-Host "What this displaced is in $script:BackupDir." }
         $older = Get-NewestInstallBackup
-        if ($older) { Write-Host "Run -Restore again to undo the install of $(Get-BackupDate $older) too." }
+        if ($older) { Write-Host "To undo the install of $(Get-BackupDate $older) too, run this script again without options and type R when it asks, or run it with -Restore." }
         return
     }
 
@@ -724,11 +769,11 @@ function Install-MilkDrop {
             $installed = Join-Path $componentsDir $name
             if ($name -eq $componentName) {
                 # Saved, or noted as absent, so that -Restore can take it out again.
-                if (-not $sameBuild) { Save-Backup $installed -Move }
+                if (-not $sameBuild) { Save-Backup $installed }
             }
             elseif (Test-Path -LiteralPath $installed) {
                 Write-Host "  moving $name out of the way: it would claim the same UI element"
-                Save-Backup $installed -Move
+                Save-Backup $installed
             }
         }
         $n = Expand-ZipFiles $componentFiles $componentDest
@@ -748,7 +793,7 @@ function Install-MilkDrop {
 
         if ($installLayout) {
             Step 'Installing the layout'
-            Save-Backup $themeFile -Move
+            Save-Backup $themeFile
             [IO.File]::WriteAllBytes($themeFile, $newLayout)
             Write-Host "  wrote $themeFile"
             if (Test-Path -LiteralPath (Join-Path $componentsDir 'foo_ui_columns')) {
@@ -763,7 +808,7 @@ function Install-MilkDrop {
 
     Write-Host "`nDone. Start foobar2000." -ForegroundColor Green
     if ($script:BackupDir) {
-        Write-Host "To undo this install, run this script again and type R when it asks, or run it with -Restore. (Its backup: $script:BackupDir)"
+        Write-Host "To undo this install, run this script again without options and type R when it asks, or run it with -Restore. (Its backup: $script:BackupDir)"
     }
 }
 
