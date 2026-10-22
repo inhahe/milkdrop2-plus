@@ -173,6 +173,9 @@ static constexpr GUID guid_cfg_nAlbumArtPosition = {
 static constexpr GUID guid_cfg_nAlbumArtSize = {
     0x71de6599, 0x5b30, 0x4a15, {0x8e, 0x9d, 0xa7, 0x2f, 0x39, 0x38, 0x9d, 0xd4}
 }; // {71DE6599-5B30-4A15-8E9D-A72F39389DD4}
+static constexpr GUID guid_cfg_bAlbumArtSearch = {
+    0x7df8529e, 0x4b0f, 0x486c, {0xa6, 0x88, 0xb7, 0xa0, 0x45, 0xc3, 0xf, 0x94}
+}; // {7DF8529E-4B0F-486C-A688-B7A045C30F94}
 static constexpr GUID guid_cfg_bAlbumArtFadeOut = {
     0x69b05c8c, 0xae7d, 0x4665, {0x85, 0xa2, 0xa, 0xec, 0x4b, 0xac, 0x16, 0xcd}
 }; // {69B05C8C-AE7D-4665-85A2-0AEC4BAC16CD}
@@ -272,6 +275,7 @@ static constexpr bool default_bEnableDownmix = false;
 static constexpr bool default_bShowAlbum = false;
 static constexpr int default_nAlbumArtPosition = ALBUM_ART_LOWER_RIGHT;
 static constexpr int default_nAlbumArtSize = DEFAULT_ALBUM_ART_SIZE;
+static constexpr bool default_bAlbumArtSearch = true;
 static constexpr bool default_bAlbumArtFadeOut = false;
 static constexpr double default_fAlbumArtShowFor = DEFAULT_ALBUM_ART_SHOW_FOR;
 static constexpr double default_fAlbumArtFadeTime = DEFAULT_ALBUM_ART_FADE_TIME;
@@ -429,6 +433,7 @@ class milk2_album_art_page : public preferences_page_instance, public CDialogImp
         MSG_WM_DESTROY(OnDestroy)
         COMMAND_HANDLER_EX(IDC_CB_SHOW_ALBUM, BN_CLICKED, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ARTWORK_FORMAT, EN_CHANGE, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_CB_ALBUM_ART_SEARCH, BN_CLICKED, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ALBUM_ART_POSITION, CBN_SELCHANGE, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ALBUM_ART_SIZE, CBN_SELCHANGE, OnControlChange)
         COMMAND_HANDLER_EX(IDC_CB_ALBUM_ART_FADE_OUT, BN_CLICKED, OnControlChange)
@@ -446,9 +451,10 @@ class milk2_album_art_page : public preferences_page_instance, public CDialogImp
     BOOL OnInitDialog(CWindow, LPARAM);
     void OnDestroy();
     void OnControlChange(UINT uNotifyCode, int nID, CWindow wndCtl);
-    // Shows these settings in the page's controls: `format` is the artwork format, `position` an
-    // AlbumArtPosition, `size` in percent, `showFor` and `fadeTime` in seconds.
-    void ShowSettings(bool showAlbum, const char* format, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime);
+    // Shows these settings in the page's controls: `format` is the artwork format, `search` whether
+    // foobar2000's album art search is asked, `position` an AlbumArtPosition, `size` in percent,
+    // `showFor` and `fadeTime` in seconds.
+    void ShowSettings(bool showAlbum, const char* format, bool search, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime);
     // Greys out what does not apply: everything while album art is off, and the seconds before
     // it fades out while it does not.
     void EnableControls();

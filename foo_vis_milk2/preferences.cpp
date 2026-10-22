@@ -40,6 +40,7 @@ static cfg_bool cfg_bEnableDownmix(guid_cfg_bEnableDownmix, default_bEnableDownm
 static cfg_bool cfg_bShowAlbum(guid_cfg_bShowAlbum, default_bShowAlbum);
 static cfg_int cfg_nAlbumArtPosition(guid_cfg_nAlbumArtPosition, static_cast<int64_t>(default_nAlbumArtPosition));
 static cfg_int cfg_nAlbumArtSize(guid_cfg_nAlbumArtSize, static_cast<int64_t>(default_nAlbumArtSize));
+static cfg_bool cfg_bAlbumArtSearch(guid_cfg_bAlbumArtSearch, default_bAlbumArtSearch);
 static cfg_bool cfg_bAlbumArtFadeOut(guid_cfg_bAlbumArtFadeOut, default_bAlbumArtFadeOut);
 static cfg_float cfg_fAlbumArtShowFor(guid_cfg_fAlbumArtShowFor, default_fAlbumArtShowFor);
 static cfg_float cfg_fAlbumArtFadeTime(guid_cfg_fAlbumArtFadeTime, default_fAlbumArtFadeTime);
@@ -866,13 +867,14 @@ BOOL milk2_album_art_page::OnInitDialog(CWindow, LPARAM)
         swprintf_s(buf, L"%d%%", percent);
         AddComboItem(ctrl, buf, percent);
     }
-    ShowSettings(cfg_bShowAlbum, cfg_szArtworkFormat.get().c_str(), cfg_nAlbumArtPosition, cfg_nAlbumArtSize, cfg_bAlbumArtFadeOut, cfg_fAlbumArtShowFor,
+    ShowSettings(cfg_bShowAlbum, cfg_szArtworkFormat.get().c_str(), cfg_bAlbumArtSearch, cfg_nAlbumArtPosition, cfg_nAlbumArtSize, cfg_bAlbumArtFadeOut, cfg_fAlbumArtShowFor,
                  cfg_fAlbumArtFadeTime);
 
     // clang-format off
     const std::pair<int, UINT> tips[] = {
         {IDC_CB_SHOW_ALBUM, IDS_SHOW_ALBUM_HELP},
         {IDC_ARTWORK_FORMAT, IDS_ARTWORK_FORMAT_HELP},
+        {IDC_CB_ALBUM_ART_SEARCH, IDS_ALBUM_ART_SEARCH_HELP},
         {IDC_ALBUM_ART_POSITION, IDS_ALBUM_ART_POSITION_HELP},
         {IDC_ALBUM_ART_SIZE, IDS_ALBUM_ART_SIZE_HELP},
         {IDC_CB_ALBUM_ART_FADE_OUT, IDS_ALBUM_ART_FADE_OUT_HELP},
@@ -913,10 +915,11 @@ void milk2_album_art_page::OnControlChange(UINT, int, CWindow)
     m_callback->on_state_changed();
 }
 
-void milk2_album_art_page::ShowSettings(bool showAlbum, const char* format, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime)
+void milk2_album_art_page::ShowSettings(bool showAlbum, const char* format, bool search, int64_t position, int64_t size, bool fadeOut, double showFor, double fadeTime)
 {
     CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(showAlbum));
     SetDlgItemText(IDC_ARTWORK_FORMAT, pfc::wideFromUTF8(format));
+    CheckDlgButton(IDC_CB_ALBUM_ART_SEARCH, static_cast<UINT>(search));
     if (SelectComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION), static_cast<LRESULT>(position)) < 0)
         SelectComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION), default_nAlbumArtPosition); // a newer version's
     if (SelectComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE), static_cast<LRESULT>(size)) < 0)
@@ -931,7 +934,7 @@ void milk2_album_art_page::EnableControls()
 {
     const bool bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED;
     const bool bFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
-    for (const int id : {IDC_ARTWORK_FORMAT_LABEL, IDC_ARTWORK_FORMAT, IDC_ALBUM_ART_POSITION_CAPTION, IDC_ALBUM_ART_POSITION, IDC_ALBUM_ART_SIZE_CAPTION,
+    for (const int id : {IDC_ARTWORK_FORMAT_LABEL, IDC_ARTWORK_FORMAT, IDC_CB_ALBUM_ART_SEARCH, IDC_ALBUM_ART_POSITION_CAPTION, IDC_ALBUM_ART_POSITION, IDC_ALBUM_ART_SIZE_CAPTION,
                          IDC_ALBUM_ART_SIZE, IDC_CB_ALBUM_ART_FADE_OUT, IDC_ALBUM_ART_FADE_TIME_CAPTION, IDC_ALBUM_ART_FADE_TIME, IDC_ALBUM_ART_FADE_TIME_UNIT})
         ::EnableWindow(GetDlgItem(id), bShowAlbum);
     for (const int id : {IDC_ALBUM_ART_SHOW_FOR, IDC_ALBUM_ART_SHOW_FOR_UNIT})
@@ -959,6 +962,7 @@ bool milk2_album_art_page::HasChanged() const
     GetDlgItemText(IDC_ARTWORK_FORMAT, buf, 256);
     const pfc::string8 format = pfc::utf8FromWide(buf);
     return (IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED) != cfg_bShowAlbum || !format.equals(cfg_szArtworkFormat.get()) ||
+           (IsDlgButtonChecked(IDC_CB_ALBUM_ART_SEARCH) == BST_CHECKED) != cfg_bAlbumArtSearch ||
            ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)) != cfg_nAlbumArtPosition || ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE)) != cfg_nAlbumArtSize ||
            (IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED) != cfg_bAlbumArtFadeOut || ReadSeconds(IDC_ALBUM_ART_SHOW_FOR) != cfg_fAlbumArtShowFor ||
            ReadSeconds(IDC_ALBUM_ART_FADE_TIME) != cfg_fAlbumArtFadeTime;
@@ -975,6 +979,7 @@ void milk2_album_art_page::apply()
         cfg_szArtworkFormat = format;
     else
         ShowScriptError(GetDlgItem(IDC_ARTWORK_FORMAT));
+    cfg_bAlbumArtSearch = IsDlgButtonChecked(IDC_CB_ALBUM_ART_SEARCH) == BST_CHECKED;
     cfg_nAlbumArtPosition = ComboValue(GetDlgItem(IDC_ALBUM_ART_POSITION)); // both always have a selection (ShowSettings)
     cfg_nAlbumArtSize = ComboValue(GetDlgItem(IDC_ALBUM_ART_SIZE));
     cfg_bAlbumArtFadeOut = IsDlgButtonChecked(IDC_CB_ALBUM_ART_FADE_OUT) == BST_CHECKED;
@@ -989,8 +994,8 @@ void milk2_album_art_page::apply()
 
 void milk2_album_art_page::reset()
 {
-    ShowSettings(default_bShowAlbum, default_szArtworkFormat, default_nAlbumArtPosition, default_nAlbumArtSize, default_bAlbumArtFadeOut, default_fAlbumArtShowFor,
-                 default_fAlbumArtFadeTime);
+    ShowSettings(default_bShowAlbum, default_szArtworkFormat, default_bAlbumArtSearch, default_nAlbumArtPosition, default_nAlbumArtSize, default_bAlbumArtFadeOut,
+                 default_fAlbumArtShowFor, default_fAlbumArtFadeTime);
     m_callback->on_state_changed();
 }
 
@@ -1340,6 +1345,7 @@ void milk2_config::reset()
     settings.m_bShowAlbum = cfg_bShowAlbum;
     settings.m_nAlbumArtPosition = static_cast<int32_t>(cfg_nAlbumArtPosition);
     settings.m_nAlbumArtSize = static_cast<int32_t>(cfg_nAlbumArtSize);
+    settings.m_bAlbumArtSearch = cfg_bAlbumArtSearch;
     settings.m_bAlbumArtFadeOut = cfg_bAlbumArtFadeOut;
     settings.m_dAlbumArtShowFor = cfg_fAlbumArtShowFor;
     settings.m_dAlbumArtFadeTime = cfg_fAlbumArtFadeTime;
@@ -1633,6 +1639,7 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_bShowAlbum = settings.m_bShowAlbum;
         cfg_nAlbumArtPosition = settings.m_nAlbumArtPosition;
         cfg_nAlbumArtSize = settings.m_nAlbumArtSize;
+        cfg_bAlbumArtSearch = settings.m_bAlbumArtSearch;
         cfg_bAlbumArtFadeOut = settings.m_bAlbumArtFadeOut;
         cfg_fAlbumArtShowFor = settings.m_dAlbumArtShowFor;
         cfg_fAlbumArtFadeTime = settings.m_dAlbumArtFadeTime;

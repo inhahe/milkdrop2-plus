@@ -1404,10 +1404,11 @@ static std::vector<uint8_t> AlbumArtFile(const metadb_handle_ptr& track, const p
 }
 
 // The front cover of `track` as an encoded image: the one embedded in its file, which is the
-// track's own, or else one foobar2000's album art settings find for it. Those may be an image
-// beside the file, which in a folder of tracks from different albums is often another album's
-// (a cover.jpg), so they come second. Empty if there is none. Any thread.
-static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, abort_callback& abort)
+// track's own, or else, if `search`, one foobar2000's album art settings find for it. Those may
+// be an image beside the file, which in a folder of tracks from different albums is often another
+// album's (a cover.jpg), so they come second, and the user may turn them off (the album art
+// search setting). Empty if there is none. Any thread.
+static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool search, abort_callback& abort)
 {
     const auto bytes = [](const album_art_data::ptr& aad) {
         if (!aad.is_valid() || aad->size() == 0)
@@ -1427,6 +1428,8 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, abort_
         {
         }
     }
+    if (!search)
+        return {};
     try
     {
         auto extractor = album_art_manager_v2::get()->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), abort);
@@ -1463,10 +1466,11 @@ static void ShowAlbumArt(const metadb_handle_ptr& track)
         return;
     }
     s_albumArtAbort = std::make_shared<abort_callback_impl>();
-    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), abort = s_albumArtAbort, show] {
+    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), search = s_config.settings.m_bAlbumArtSearch,
+                     abort = s_albumArtAbort, show] {
         std::vector<uint8_t> image = AlbumArtFile(track, format, *abort);
         if (image.empty())
-            image = AlbumArtImage(track, *abort);
+            image = AlbumArtImage(track, search, *abort);
         fb2k::inMainThread([show, image = std::move(image)]() mutable { show(std::move(image)); });
     });
 }
@@ -3235,10 +3239,12 @@ void ApplyMilkDropPreferences(bool bRemakeResources)
 {
     const bool showAlbum = s_config.settings.m_bShowAlbum;
     const std::wstring artworkFormat = s_config.settings.m_szArtworkFormat;
+    const bool albumArtSearch = s_config.settings.m_bAlbumArtSearch;
     s_config.reset();
     PublishPlayback(); // the title format may have changed
-    if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat)
-        ShowNowPlayingAlbumArt(); // the other album art settings reach the art on screen each frame (PanelSettings)
+    if (s_config.settings.m_bShowAlbum != showAlbum || artworkFormat != s_config.settings.m_szArtworkFormat ||
+        s_config.settings.m_bAlbumArtSearch != albumArtSearch) // what to show; how is in the settings the sprites take each frame
+        ShowNowPlayingAlbumArt();
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread
 #endif
