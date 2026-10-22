@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -59,6 +60,8 @@ class D3D11Shim
     void SetVertexColor(bool bUseColor);
 
     D3D_FEATURE_LEVEL GetFeatureLevel() { return m_pDevice->GetFeatureLevel(); }
+    // Distinct for each shim made, so a new one is told from a freed one whose address it reuses.
+    unsigned Serial() const { return m_serial; }
 
     HRESULT CreateVertexShader(const void* pByteCode, SIZE_T codeLength, ID3D11VertexShader** ppShader, CConstantTable* p_constant_table);
     HRESULT CreatePixelShader(const void* pByteCode, SIZE_T codeLength, ID3D11PixelShader** ppShader, CConstantTable* p_constant_table);
@@ -100,6 +103,7 @@ class D3D11Shim
     static constexpr size_t kMaxTextureViews = 256;
     std::unordered_map<ID3D11Resource*, TextureViews> m_textureViews;
 
+    const unsigned m_serial;
     cbTransforms m_transforms;
     ID3D11Device* m_pDevice;
     ID3D11DeviceContext* m_pContext;

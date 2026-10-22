@@ -28,7 +28,10 @@ namespace
 #include <texture1ps.inc>
 }
 
+static std::atomic<unsigned> s_nextShimSerial{1};
+
 D3D11Shim::D3D11Shim(ID3D11Device* pDevice, ID3D11DeviceContext* pContext) :
+    m_serial(s_nextShimSerial++),
     m_pDevice(pDevice),
     m_pContext(pContext),
     m_pImmContext(nullptr),

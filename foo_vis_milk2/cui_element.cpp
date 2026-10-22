@@ -100,6 +100,7 @@ class milk2_cui_panel : public uie::window,
                 PublishPlayback(); // in the title format just read
 #ifdef TIMER_TP
                 InitializeCriticalSection(&s_cs);
+                m_csInitialized = true;
 #endif
             }
 
@@ -149,10 +150,14 @@ class milk2_cui_panel : public uie::window,
             g_plugin.PluginQuit();
             s_milk2 = false;
             m_dxInitialized = false;
-#ifdef TIMER_TP
-            DeleteCriticalSection(&s_cs); // OnCreate makes it anew, as the Default UI element does
-#endif
         }
+#ifdef TIMER_TP
+        if (m_csInitialized) // whether or not the engine started: OnCreate makes it anew
+        {
+            DeleteCriticalSection(&s_cs);
+            m_csInitialized = false;
+        }
+#endif
 
         // This object outlives its window (one for the component): a window made later, after a
         // change of layout, starts the engine again.
@@ -352,6 +357,7 @@ class milk2_cui_panel : public uie::window,
     double m_last_time = 0.0;
     bool m_dxInitialized = false;
     bool m_initPosted = false;
+    bool m_csInitialized = false; // s_cs, which OnCreate made
 #ifdef TIMER_TP
     PTP_TIMER m_tpTimer = nullptr;
 #endif

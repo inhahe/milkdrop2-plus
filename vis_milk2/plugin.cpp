@@ -1031,26 +1031,18 @@ int CPlugin::AllocateMilkDropNonDX11()
 
     // Read in `m_szShaderIncludeText`.
     // clang-format off
-    bool bSuccess = true;
-    bSuccess = ReadFileToString(L"data\\include.fx", m_szShaderIncludeText, sizeof(m_szShaderIncludeText) - 4, false);
-    if (!bSuccess) return false;
+    // Each is needed (tools\package.ps1 ships them): without one, the engine does not start.
+    if (!ReadFileToString(L"data\\include.fx", m_szShaderIncludeText, sizeof(m_szShaderIncludeText) - 4, false)) return false;
     StripComments(m_szShaderIncludeText);
     m_nShaderIncludeTextLen = strlen(m_szShaderIncludeText);
 
-    bSuccess |= ReadFileToString(L"data\\warp_vs.fx", m_szDefaultWarpVShaderText, sizeof(m_szDefaultWarpVShaderText), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\warp_ps.fx", m_szDefaultWarpPShaderText, sizeof(m_szDefaultWarpPShaderText), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\comp_vs.fx", m_szDefaultCompVShaderText, sizeof(m_szDefaultCompVShaderText), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\comp_ps.fx", m_szDefaultCompPShaderText, sizeof(m_szDefaultCompPShaderText), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\blur_vs.fx", m_szBlurVS, sizeof(m_szBlurVS), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\blur1_ps.fx", m_szBlurPSX, sizeof(m_szBlurPSX), true);
-    if (!bSuccess) return false;
-    bSuccess |= ReadFileToString(L"data\\blur2_ps.fx", m_szBlurPSY, sizeof(m_szBlurPSY), true);
-    if (!bSuccess) return false;
+    if (!ReadFileToString(L"data\\warp_vs.fx", m_szDefaultWarpVShaderText, sizeof(m_szDefaultWarpVShaderText), true)) return false;
+    if (!ReadFileToString(L"data\\warp_ps.fx", m_szDefaultWarpPShaderText, sizeof(m_szDefaultWarpPShaderText), true)) return false;
+    if (!ReadFileToString(L"data\\comp_vs.fx", m_szDefaultCompVShaderText, sizeof(m_szDefaultCompVShaderText), true)) return false;
+    if (!ReadFileToString(L"data\\comp_ps.fx", m_szDefaultCompPShaderText, sizeof(m_szDefaultCompPShaderText), true)) return false;
+    if (!ReadFileToString(L"data\\blur_vs.fx", m_szBlurVS, sizeof(m_szBlurVS), true)) return false;
+    if (!ReadFileToString(L"data\\blur1_ps.fx", m_szBlurPSX, sizeof(m_szBlurPSX), true)) return false;
+    if (!ReadFileToString(L"data\\blur2_ps.fx", m_szBlurPSY, sizeof(m_szBlurPSY), true)) return false;
     // clang-format on
 
     BuildMenus();
@@ -1856,13 +1848,18 @@ int CPlugin::AllocateMilkDropDX11()
     return true;
 }
 
-// Launches on a new device the sprites the last one had (CleanUpMilkDropDX11), from the start.
+// Launches on a new device the sprites the last one had on screen (CleanUpMilkDropDX11), from the
+// start.
 void CPlugin::RelaunchSprites()
 {
     for (const int n : m_spritesToRelaunch)
-        LaunchSprite(n, -1);
+    {
+        if (n == kAlbumArtSprite)
+            LaunchAlbumArt();
+        else
+            LaunchSprite(n, -1);
+    }
     m_spritesToRelaunch.clear();
-    LaunchAlbumArt();
 }
 
 void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
@@ -1875,13 +1872,31 @@ void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
     LaunchAlbumArt();
 }
 
+// The album art's code when the image list has no [img100] section: a thumbnail in the lower right
+// corner, its longer side a fifth of the canvas's shorter side, with a margin of a fortieth of it,
+// fading in. Not burned in: a burned sprite is also drawn into the preset's own image every frame,
+// which the preset then smears. A sprite's x and y run from 0 to 1 across the canvas's longer
+// side, centred on the canvas, and sx and sy give the image's longer side as a fraction of it; a
+// non-square image is shrunk about its middle. Hence `aspect` (the canvas's width / height) and
+// `imgaspect` (the image's).
+static const char* const kAlbumArtInitCode = "burn = 0;";
+static const char* const kAlbumArtCode =
+    "wide = above(aspect, 1);"
+    "r = if(wide, 1 / aspect, 1); q = if(wide, 1, aspect);" // the shorter side / the width, / the height
+    "hw = 0.1 * if(above(imgaspect, 1), 1, imgaspect);"     // the image's half width, and half height,
+    "hh = 0.1 * if(above(imgaspect, 1), 1 / imgaspect, 1);" // / the shorter side
+    "sx = 0.2 * min(aspect, 1 / aspect); sy = sx;"
+    "x = 0.5 + 0.5 * (1 - 2 * r * (0.025 + hw)) * if(wide, 1, aspect);"
+    "y = 0.5 + 0.5 * (1 - 2 * q * (0.025 + hh)) / if(wide, aspect, 1);"
+    "a = min(time * 2, 1);";
+
 // Launches the album art sprite from what SetAlbumArt kept, if anything.
 void CPlugin::LaunchAlbumArt()
 {
     if (!m_albumArtFile.empty())
-        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile);
+        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile, {}, kAlbumArtInitCode, kAlbumArtCode);
     else if (!m_albumArtImage.empty())
-        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage);
+        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, kAlbumArtInitCode, kAlbumArtCode);
 }
 
 static float fCubicInterpolate(float y0, float y1, float y2, float y3, float t)
@@ -3422,13 +3437,13 @@ void CPlugin::CleanUpMilkDropDX11(int final_cleanup)
     m_superTitle.reset();
 #endif
 
-    // The sprites go only with the device, their textures' maker. Those from the image list are
-    // launched again on the next device (RelaunchSprites), and the album art too.
+    // The sprites go only with the device, their textures' maker. Those on screen, from the image
+    // list or the album art, are launched again on the next device (RelaunchSprites).
     if (final_cleanup)
     {
         m_spritesToRelaunch.clear();
         for (int x = 0; x < NUM_TEX; x++)
-            if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData >= 0 && m_texmgr.m_tex[x].nUserData < kAlbumArtSprite)
+            if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData >= 0 && m_texmgr.m_tex[x].nUserData <= kAlbumArtSprite)
                 m_spritesToRelaunch.push_back(m_texmgr.m_tex[x].nUserData);
         m_texmgr.Finish();
     }
@@ -7128,7 +7143,7 @@ void CPlugin::LaunchSongTitleAnim()
     m_supertext.fStartTime = GetTime();
 }
 
-bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filename, const std::vector<uint8_t>& data)
+bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filename, const std::vector<uint8_t>& data, const char* szDefaultInitCode, const char* szDefaultCode)
 {
     char initcode[8192], code[8192], sectionA[64];
     char szTemp[8192];
@@ -7217,22 +7232,15 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
         pStr[char_pos++] = '\0'; // null-terminate
     }
 
-    // Album art without a section of its own: a thumbnail in the lower right corner, a fifth of
-    // the canvas's shorter side with a margin of a fortieth, fading in, drawn over the preset
-    // only (burn 0: a burned sprite is also drawn into the preset's own image every frame, which
-    // the preset then smears). Sprite coordinates count from the canvas's middle in units of its
-    // width (x and y from 0 to 1, sx and sy the half sizes), so a corner's place depends on
-    // `aspect`, the canvas's width / height.
-    if (nSpriteNum == kAlbumArtSprite && initcode[0] == '\0' && code[0] == '\0')
+    // A sprite the image list has no code for runs the code its launcher supplies, if any.
+    if (initcode[0] == '\0' && code[0] == '\0')
     {
-        strcpy_s(initcode, "burn = 0;");
-        strcpy_s(code,
-                 "wide = above(aspect, 1);"
-                 "sx = if(wide, 0.2 / aspect, 0.2 * aspect); sy = sx;"
-                 "x = 0.5 + 0.5 * if(wide, 1 - (2 * 0.025 + 0.2) / aspect, aspect * (1 - 2 * 0.025 - 0.2));"
-                 "y = 0.5 + 0.5 * if(wide, (1 - 2 * 0.025 - 0.2) / aspect, 1 - aspect * (2 * 0.025 + 0.2));"
-                 "a = min(time * 2, 1);");
+        if (szDefaultInitCode)
+            strcpy_s(initcode, szDefaultInitCode);
+        if (szDefaultCode)
+            strcpy_s(code, szDefaultCode);
     }
+    m_texmgr.m_canvasAspect = GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0; // for its init code
 
     if (nSlot == -1)
     {

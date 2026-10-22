@@ -231,7 +231,8 @@ void milk2_ui_element::OnDestroy()
         m_milk2 = false;
     s_count = 0ull;
 
-    if (!s_in_toggle)
+    const bool bQuit = !s_in_toggle; // not the swap to or from full screen: the engine ends
+    if (bQuit)
     {
         MILK2_CONSOLE_LOG("ExitVis")
         s_fullscreen = false;
@@ -240,8 +241,6 @@ void milk2_ui_element::OnDestroy()
         s_milk2 = false;
 #if defined(TIMER_32)
         KillTimer(ID_REFRESH_TIMER);
-#elif defined(TIMER_TP)
-        DeleteCriticalSection(&s_cs);
 #endif
         wcscpy_s(s_config.settings.m_szPresetDir, g_plugin.GetPresetDir()); // save last "Load Preset" menu directory
         g_plugin.PluginQuit();
@@ -258,6 +257,8 @@ void milk2_ui_element::OnDestroy()
     }
 #ifdef TIMER_TP
     LeaveCriticalSection(&s_cs);
+    if (bQuit)
+        DeleteCriticalSection(&s_cs); // once left: the next window's OnCreate makes it anew
 #endif
 }
 

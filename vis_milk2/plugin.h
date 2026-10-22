@@ -507,7 +507,7 @@ class CPlugin : public CPluginShell
     std::wstring m_albumArtFile; // what SetAlbumArt shows
     std::vector<uint8_t> m_albumArtImage;
     void LaunchAlbumArt();
-    std::vector<int> m_spritesToRelaunch; // image-list numbers of the sprites a lost device had
+    std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
 
     // Stuff for the menu system.
@@ -560,11 +560,12 @@ class CPlugin : public CPluginShell
     void UpgradePixelShaders();
     // The sprite number album art is launched as: past the numbers sprites from the image list
     // take (0-99). A section [img100] there says how it is drawn; without one, it is a thumbnail
-    // in the lower right corner (LaunchSprite).
+    // in the lower right corner (LaunchAlbumArt).
     static constexpr int kAlbumArtSprite = 100;
     // Shows the image file `file`, or else the encoded image `image`, as the album art sprite in
     // place of the last, or removes it when both are empty. Other sprites stay. Kept, and shown
-    // again on a new device after a device reset (RelaunchSprites). Render thread.
+    // again on a new device after a device reset if it was on screen (RelaunchSprites). Render
+    // thread.
     void SetAlbumArt(std::wstring file, std::vector<uint8_t> image);
 
   private:
@@ -697,7 +698,11 @@ class CPlugin : public CPluginShell
     void MergeSortPresets(int left, int right);
     void BuildMenus();
     void SetMenusForPresetVersion(int WarpPSVersion, int CompPSVersion);
-    bool LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filename = L"", const std::vector<uint8_t>& vec = std::vector<uint8_t>());
+    // Launches sprite `nSpriteNum` of the image list (0-99), or one numbered past it from `filename`
+    // or else the encoded image `vec`, in slot `nSlot` (-1: a free one, or the oldest). Its code is
+    // the image list's [imgNN] section, or without one `szDefaultInitCode` and `szDefaultCode`.
+    bool LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filename = L"", const std::vector<uint8_t>& vec = std::vector<uint8_t>(),
+                      const char* szDefaultInitCode = nullptr, const char* szDefaultCode = nullptr);
     void KillSprite(int iSlot);
     void DoCustomSoundAnalysis();
     void DrawMotionVectors();

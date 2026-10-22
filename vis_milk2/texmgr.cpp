@@ -73,12 +73,12 @@ void texmgr::Finish()
 
 bool texmgr::Init(D3D11Shim* lpDD)
 {
-    if (m_lpDD)
-    {
-        assert(m_lpDD == lpDD); // the sprites' textures belong to the device they were made on
+    if (m_lpDD && m_deviceSerial == lpDD->Serial())
         return false;
-    }
+    if (m_lpDD)
+        Abandon(); // a device that went without Finish (a start that failed partway): its sprites go
     m_lpDD = lpDD;
+    m_deviceSerial = lpDD->Serial();
 
     for (int i = 0; i < NUM_TEX; i++)
     {
@@ -90,6 +90,30 @@ bool texmgr::Init(D3D11Shim* lpDD)
             m_tex[i].tex_eel_ctx = NSEEL_VM_alloc();
     }
     return true;
+}
+
+// Empties the slots of a device that is gone, without asking it to forget their views (its shim,
+// with their views, went with it).
+void texmgr::Abandon()
+{
+    for (int i = 0; i < NUM_TEX; i++)
+    {
+        if (m_tex[i].pSurface)
+        {
+            bool bReleasedAlready = false; // an instance of a texture an earlier slot holds
+            for (int j = 0; j < i; j++)
+                bReleasedAlready |= m_tex[j].pSurface == m_tex[i].pSurface;
+            if (!bReleasedAlready)
+                m_tex[i].pSurface->Release();
+        }
+        FreeCode(i);
+    }
+    for (int i = 0; i < NUM_TEX; i++)
+    {
+        m_tex[i].pSurface = NULL;
+        m_tex[i].szFileName[0] = L'\0';
+    }
+    m_lpDD = nullptr;
 }
 
 /*
@@ -198,7 +222,11 @@ int texmgr::LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCo
         for (int x = 0; x < NUM_TEX; x++)
             if (m_tex[x].pSurface && _wcsicmp(m_tex[x].szFileName, szFilename) == 0)
             {
+                // The texture is shared (KillTex counts its users); the code and its variables
+                // are the slot's own, in its own VM (RunInitCode registers them there below).
+                const NSEEL_VMCTX ownVm = m_tex[iSlot].tex_eel_ctx;
                 memcpy_s(&m_tex[iSlot], sizeof(td_tex), &m_tex[x], sizeof(td_tex));
+                m_tex[iSlot].tex_eel_ctx = ownVm;
                 m_tex[iSlot].m_szExpr[0] = '\0';
                 m_tex[iSlot].m_codehandle = nullptr;
 
@@ -710,6 +738,7 @@ bool texmgr::RunInitCode(int iSlot, char* szInitCode)
     *(m_tex[iSlot].var_blendmode) = 0.0;
     *(m_tex[iSlot].var_done) = 0.0;
     *(m_tex[iSlot].var_burn) = 1.0;
+    SetPlacementInputs(iSlot); // so that init code may place the sprite once
 
 #ifndef _NO_EXPR_
     if (m_tex[iSlot].m_codehandle)
@@ -767,6 +796,12 @@ bool texmgr::RecompileExpressions(int iSlot)
     return true;
 }
 
+void texmgr::SetPlacementInputs(int iSlot)
+{
+    *(m_tex[iSlot].var_aspect) = m_canvasAspect;
+    *(m_tex[iSlot].var_imgaspect) = m_tex[iSlot].img_h ? m_tex[iSlot].img_w / static_cast<double>(m_tex[iSlot].img_h) : 1.0;
+}
+
 // Free the built-in variables AND any user variables.
 void texmgr::FreeVars(int /* iSlot */)
 {
@@ -799,6 +834,7 @@ void texmgr::RegisterBuiltInVariables(int iSlot)
     m_tex[iSlot].var_treb = NSEEL_VM_regvar(eel_ctx, "treb");
     m_tex[iSlot].var_treb_att = NSEEL_VM_regvar(eel_ctx, "treb_att");
     m_tex[iSlot].var_aspect = NSEEL_VM_regvar(eel_ctx, "aspect");
+    m_tex[iSlot].var_imgaspect = NSEEL_VM_regvar(eel_ctx, "imgaspect");
 
     // Output variables.
     m_tex[iSlot].var_x = NSEEL_VM_regvar(eel_ctx, "x");

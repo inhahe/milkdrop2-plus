@@ -3331,6 +3331,7 @@ void CPlugin::DrawUserSprites()
     //lpDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTFN_LINEAR);
     //lpDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTFP_LINEAR);
 
+    m_texmgr.m_canvasAspect = GetWidth() / static_cast<double>(GetHeight()); // as the placement below uses it
     for (int iSlot = 0; iSlot < NUM_TEX; iSlot++)
     {
         if (m_texmgr.m_tex[iSlot].pSurface)
@@ -3346,7 +3347,7 @@ void CPlugin::DrawUserSprites()
             *(m_texmgr.m_tex[iSlot].var_bass_att) = (double)mdsound.avg_rel[0];
             *(m_texmgr.m_tex[iSlot].var_mid_att) = (double)mdsound.avg_rel[1];
             *(m_texmgr.m_tex[iSlot].var_treb_att) = (double)mdsound.avg_rel[2];
-            *(m_texmgr.m_tex[iSlot].var_aspect) = GetWidth() / static_cast<double>(GetHeight()); // as the placement below uses it
+            m_texmgr.SetPlacementInputs(iSlot);
 
 #ifndef _NO_EXPR_
             // Evaluate expressions.
@@ -3630,10 +3631,8 @@ void CPlugin::DrawUserSprites()
             SafeRelease(pBackBuffer);
             //SafeRelease(pZBuffer);
 
-            if (bKillSprite)
-            {
-                //KillSprite(iSlot);
-            }
+            if (bKillSprite) // its code set `done`: drawn this last time (and burned in, with `burn`)
+                KillSprite(iSlot);
 
             lpDevice->SetShader(0);
         }

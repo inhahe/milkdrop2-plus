@@ -1,7 +1,7 @@
-# Builds the release package, milkdrop2-plus.fb2k-component: the x64 Release DLL at its top and,
-# in data\, the files the plugin reads when it starts (the shader sources, external\winamp\data\*.fx,
-# and the help text, vis_milk2\help.bin). Without data\ the plugin cannot start, so the script stops
-# if any of those is missing. Build Release x64 first.
+# Builds the release package, milkdrop2-plus.fb2k-component: the x64 Release DLL at its top and, in
+# data\, the shader sources (external\winamp\data\*.fx), which the engine reads when it starts:
+# without one of them it does not start (CPlugin::AllocateMilkDropNonDX11), so the script stops if
+# any is missing. (The help text is built into the DLL.) Build Release x64 first.
 #
 # Usage: pwsh tools\package.ps1 [-OutDir <folder>]    (default: the repository's root; *.fb2k-component
 #        files are ignored by git)
@@ -12,13 +12,14 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 
 $root = Split-Path -Parent $PSScriptRoot
 if (-not $OutDir) { $OutDir = $root }
+# .NET opens files relative to the process's directory, not PowerShell's location: resolve it here.
+$OutDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutDir)
+if (-not (Test-Path -LiteralPath $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
 $dll = Join-Path $root 'Bin\x64\Release\foo_milkdrop2_plus.dll'
 if (-not (Test-Path -LiteralPath $dll)) { throw "No Release x64 build at $dll." }
 
-# The shader files the engine reads at start (CPlugin::AllocateMilkDropNonDX11, which fails
-# without them, so that the plugin does not start).
 $shaders = 'include.fx', 'warp_vs.fx', 'warp_ps.fx', 'comp_vs.fx', 'comp_ps.fx', 'blur_vs.fx', 'blur1_ps.fx', 'blur2_ps.fx'
-$data = @(foreach ($name in $shaders) { Join-Path $root "external\winamp\data\$name" }) + (Join-Path $root 'vis_milk2\help.bin')
+$data = @(foreach ($name in $shaders) { Join-Path $root "external\winamp\data\$name" })
 foreach ($file in $data) { if (-not (Test-Path -LiteralPath $file)) { throw "Missing $file." } }
 
 $out = Join-Path $OutDir 'milkdrop2-plus.fb2k-component'
