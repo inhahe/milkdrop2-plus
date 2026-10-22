@@ -3689,13 +3689,18 @@ void CPlugin::ApplyShaderParams(CShaderParams* p, CConstantTable* pCT, CState* p
     //if (p->texbind_vs >= 0) lpDevice->SetTexture(p->texbind_vs, m_lpVS[0]);
     //if (p->texbind_noise >= 0) lpDevice->SetTexture(p->texbind_noise, m_pTexNoise);
 
-    // Bind textures.
+    // Bind textures, into emptied slots: a slot this shader binds nothing to then holds nothing, so
+    // a sampler whose texture is missing reads black rather than what an earlier draw left in its
+    // texture register (which need not be its sampler's index), and emptying one sampler's index
+    // cannot undo a texture another sampler bound there.
+    for (int i = 0; i < sizeof(p->m_texture_bindings) / sizeof(p->m_texture_bindings[0]); i++)
+        lpDevice->SetTexture(i, NULL);
     for (int i = 0; i < sizeof(p->m_texture_bindings) / sizeof(p->m_texture_bindings[0]); i++)
     {
         if (p->m_texcode[i] == TEX_VS)
             lpDevice->SetTexture(p->m_texture_bindings[i].bindPoint, m_lpVS[0]);
-        else
-            lpDevice->SetTexture(p->m_texture_bindings[i].texptr ? p->m_texture_bindings[i].bindPoint : i, p->m_texture_bindings[i].texptr);
+        else if (p->m_texture_bindings[i].texptr)
+            lpDevice->SetTexture(p->m_texture_bindings[i].bindPoint, p->m_texture_bindings[i].texptr);
 
         // Also set up sampler stage, if anything is bound here...
         if (p->m_texcode[i] == TEX_VS || p->m_texture_bindings[i].texptr)
