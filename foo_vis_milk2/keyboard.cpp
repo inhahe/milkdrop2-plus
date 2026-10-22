@@ -373,7 +373,8 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
                         g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_X;
                         g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_X;
                         break;
-                    case MD2_PS_2_X:
+                    case MD2_PS_2_X: // 2.x and 3.0 compile alike, so on to 4.0
+                    case MD2_PS_3_0:
                         g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_4_0;
                         g_plugin.m_pState->m_nCompPSVersion = MD2_PS_4_0;
                         break;
@@ -407,10 +408,11 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
                         g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_2_X);
                         break;
                     case MD2_PS_2_X:
+                    case MD2_PS_3_0:
                         g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_4_0);
                         g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_4_0);
                         break;
-                    case MD2_PS_5_0:
+                    case MD2_PS_4_0:
                         g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_5_0);
                         g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_5_0);
                         break;
@@ -422,7 +424,8 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
             g_plugin.m_pState->m_nMinPSVersion = std::min(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
             g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
 
-            g_plugin.m_shaderRequests |= CPlugin::LOAD_MISSING_SHADERS; // the render thread compiles them
+            // The render thread recompiles both, at their new versions.
+            g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_WARP | CPlugin::RECOMPILE_COMP;
         }
         if (chChar != '\r')
         {

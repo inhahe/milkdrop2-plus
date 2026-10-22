@@ -731,8 +731,8 @@ BEGIN
     IDS_WARP_SHADER_LOCKED  "(keep in mind... warp shader was locked.)"
     IDS_COMPOSITE_SHADER_LOCKED 
                             "(keep in mind... composite shader was locked.)"
-    //IDS_PRESET_USES_HIGHEST_PIXEL_SHADER_VERSION 
-    //                        "This preset already uses the highest pixel shader model (%d) supported by your graphics chip."
+    IDS_PRESET_USES_HIGHEST_PIXEL_SHADER_VERSION 
+                            "This preset already uses the highest pixel shader model (%s) allowed here."
     IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS 
                             "This preset has mixed versions of shaders in it."
     IDS_UPGRADE_SHADERS_TO_USE_PS2 
@@ -1562,6 +1562,10 @@ BEGIN
     IDS_PRESETS_MAY_NEED_NEWER_SHADERS "They need a newer pixel shader model, or are unreadable."
     IDS_MISSING_TEXTURES    "Missing textures: "
     IDS_HOW_TO_SET_TEXTURE_FOLDER "Right-click > Set Texture Folder... to use a texture pack."
+    IDS_PRESET_CURRENTLY_USES_PS4 "This preset currently uses pixel shader model 4.0."
+    IDS_UPGRADE_TO_USE_PS5  "Do you want to upgrade it to use pixel shader model 5.0?  [y/N]"
+    IDS_UPGRADE_SHADERS_TO_USE_PS5 
+                            "Do you want to upgrade all shaders to use (at least) pixel shader model 5.0?  [y/N]"
 END
 
 #endif    // English (United States) resources

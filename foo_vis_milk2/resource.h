@@ -636,6 +636,9 @@
 #define IDS_PRESETS_MAY_NEED_NEWER_SHADERS 654
 #define IDS_MISSING_TEXTURES            655
 #define IDS_HOW_TO_SET_TEXTURE_FOLDER   656
+#define IDS_PRESET_CURRENTLY_USES_PS4   657
+#define IDS_UPGRADE_TO_USE_PS5          658
+#define IDS_UPGRADE_SHADERS_TO_USE_PS5  659
 #define IDD_PREFS                       700
 //#define IDC_CB_FOG                      1000
 //#define IDC_CB_SUPERTEX                 1001

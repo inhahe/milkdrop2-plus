@@ -32,6 +32,8 @@ A texture found nowhere is left unbound (it samples black) and noted in that sha
 
 The shim keeps one current pixel shader; a draw that needs a particular one (for instance `ShowSongTitleAnim`, which needs the textured shader 0) must select it, because the previous draw may have left an untextured one. Before binding a preset shader's textures, `ApplyShaderParams` empties all 16 texture slots (`ClearTextures`) and then binds each sampler's texture at its own texture register, so a sampler whose texture is missing reads black.
 
+A preset's pixel shaders compile at the model its `PSVERSION` lines name (`RecompilePShader`): 2.0 as `ps_4_0_level_9_1`, 2.x and 3.0 as `ps_4_0_level_9_3`, 4.0 as `ps_4_0`, 5.0 as `ps_5_0`. The highest model allowed, `m_nMaxPSVersion`, is the preferences' choice or else the device's (5.0 at feature level 11, 4.0 at 10); the scan leaves presets above it out of its list, though the preset browser can still load them by path. The menu's "upgrade preset's pixel shader model" steps 2.0, 2.x, 4.0, 5.0 (the keys in `keyboard.cpp`, the prompts in `MilkDropRenderUI`) and recompiles both shaders.
+
 Text (preset name, notices, menus) is retained-mode: each line is a `TextElement` registered with `CTextManager`, laid out by `MilkDropRenderUI` each frame, and hidden and unregistered when no longer shown. An upper-right box is one line high, so multi-line notices use one element per line. The upper-right messages (`AddError`, `ClearErrors`) may be added or cleared from any thread: each call queues a request under `m_errorRequestsLock`, and the render thread, the only one that touches `m_errors` and their text elements, carries the queue out at the start of `MilkDropRenderUI` (`ApplyErrorRequests`).
 
 ## Presets

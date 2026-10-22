@@ -351,9 +351,9 @@ class CPlugin : public CPluginShell
     //bool m_bAnisotropicFiltering;
     bool m_bPresetLockOnAtStartup;
     bool m_bPreventScollLockHandling;
-    int m_nMaxPSVersion_ConfigPanel; // -1 = auto, 0 = disable shaders, 2 = ps_2_0, 3 = ps_2_x, 4 = ps_3_0, 5 = ps_4_0
-    int m_nMaxPSVersion_DX; // 0 = no shader support, 2 = ps_2_0, 3 = ps_2_x, 4 = ps_3_0, 5 = ps_4_0
-    int m_nMaxPSVersion; // the minimum of the other two
+    int m_nMaxPSVersion_ConfigPanel; // -1 = auto, else an MD2_PS_* value (the preferences offer none, 2.0 and 4.0)
+    int m_nMaxPSVersion_DX; // the highest MD2_PS_* value the device's feature level supports
+    int m_nMaxPSVersion; // the preferences' value if set (it may exceed the device's), else the device's
     int m_nMaxImages;
     int m_nMaxBytes;
 
@@ -550,9 +550,8 @@ class CPlugin : public CPluginShell
     // (DoShaderRequests()): compiling binds textures, which the frames drawn meanwhile use.
     enum ShaderRequest : unsigned
     {
-        RECOMPILE_WARP = 1,       // the shader editor changed the warp shader's text
-        RECOMPILE_COMP = 2,       // ... the composite shader's
-        LOAD_MISSING_SHADERS = 4, // the pixel shader upgrade gave a preset without shaders some
+        RECOMPILE_WARP = 1, // the shader editor changed the warp shader's text, or the upgrade its version
+        RECOMPILE_COMP = 2, // ... the composite shader's
     };
     std::atomic<unsigned> m_shaderRequests{0};
     void DoShaderRequests(unsigned requests);
