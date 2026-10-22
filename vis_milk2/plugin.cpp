@@ -2907,6 +2907,46 @@ static const wchar_t* ShaderModelName(int PSVersion)
     }
 }
 
+// The pixel shader model the upgrade raises the preset on screen to (UI_UPGRADE_PIXEL_SHADER):
+// the step after its lowest shader's (none, 2.0, 2.x, then 4.0, since 2.x and 3.0 compile alike
+// here, then 5.0), but no higher than the highest model allowed.
+int CPlugin::PixelShaderUpgradeTarget() const
+{
+    int next;
+    switch (m_pState->m_nMinPSVersion)
+    {
+        case MD2_PS_NONE: next = MD2_PS_2_0; break;
+        case MD2_PS_2_0: next = MD2_PS_2_X; break;
+        case MD2_PS_2_X:
+        case MD2_PS_3_0: next = MD2_PS_4_0; break;
+        default: next = MD2_PS_5_0; break;
+    }
+    return std::min(next, m_nMaxPSVersion);
+}
+
+// Whether every shader of the preset on screen already uses the highest model allowed, so there
+// is no upgrade to offer.
+bool CPlugin::PixelShadersAtHighestModel() const
+{
+    return m_pState->m_nWarpPSVersion >= m_nMaxPSVersion && m_pState->m_nCompPSVersion >= m_nMaxPSVersion;
+}
+
+void CPlugin::UpgradePixelShaders()
+{
+    if (PixelShadersAtHighestModel())
+        return;
+    const int target = PixelShaderUpgradeTarget();
+    if (m_pState->m_nWarpPSVersion < MD2_PS_2_0 && target >= MD2_PS_2_0)
+        m_pState->GenDefaultWarpShader(); // it had none
+    if (m_pState->m_nCompPSVersion < MD2_PS_2_0 && target >= MD2_PS_2_0)
+        m_pState->GenDefaultCompShader();
+    m_pState->m_nWarpPSVersion = std::max(m_pState->m_nWarpPSVersion, target);
+    m_pState->m_nCompPSVersion = std::max(m_pState->m_nCompPSVersion, target);
+    m_pState->m_nMinPSVersion = std::min(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion);
+    m_pState->m_nMaxPSVersion = std::max(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion);
+    RecompilePresetShaders(true, true);
+}
+
 bool CPlugin::RecompilePShader(const char* szShadersText, PShaderInfo* si, int shaderType, bool bHardErrors, int PSVersion)
 {
     assert(m_nMaxPSVersion > 0);
@@ -3501,9 +3541,10 @@ void CPlugin::MilkDropRenderFrame(int redraw)
     }
     */
 
+    m_frameNowPlaying = GetNowPlaying();
     if (!redraw)
     {
-        wcsncpy_s(m_szSongTitle, GetNowPlaying().title.c_str(), _TRUNCATE);
+        wcsncpy_s(m_szSongTitle, m_frameNowPlaying.title.c_str(), _TRUNCATE);
         if (wcscmp(m_szSongTitle, m_szSongTitlePrev) != 0)
         {
             wcscpy_s(m_szSongTitlePrev, m_szSongTitle);
@@ -3633,7 +3674,7 @@ void CPlugin::MilkDropRenderFrame(int redraw)
     m_menuText[line].SetText(str); \
     m_menuText[line].SetTextStyle(font); \
     m_menuText[line].SetTextShadow(false); \
-    top += m_text.DrawD2DText(font, &m_menuText[line], static_cast<wchar_t*>(str), &r2, flags | DT_CALCRECT, color, bDarkBox, boxColor); \
+    top += m_text.DrawD2DText(font, &m_menuText[line], static_cast<const wchar_t*>(str), &r2, flags | DT_CALCRECT, color, bDarkBox, boxColor); \
     m_menuText[line].SetTextBox(fBox, r2); \
     if (!m_menuText[line].IsVisible()) { m_text.RegisterElement(&m_menuText[line]); m_menuText[line].SetVisible(true); } \
 }
@@ -3925,11 +3966,9 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         // Render song title in lower-left corner.
         if (m_bShowSongTitle)
         {
-            wchar_t buf4[512] = {0};
             SelectFont(DECORATIVE_FONT);
-            wcsncpy_s(buf4, GetNowPlaying().title.c_str(), _TRUNCATE);
-            if (buf4[0])
-                MilkDropTextOut_Shadow(buf4, m_songTitle, 0xFFFFFFFF, MTO_LOWER_LEFT);
+            if (m_szSongTitle[0])
+                MilkDropTextOut_Shadow(m_szSongTitle, m_songTitle, 0xFFFFFFFF, MTO_LOWER_LEFT);
         }
         else
         {
@@ -3945,7 +3984,7 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
         wchar_t szStats[64] = {0}; // with an extra space at the end, so italicized fonts do not get clipped
         if (m_bShowSongTime || m_bShowSongLen)
         {
-            const NowPlaying np = GetNowPlaying();
+            const NowPlaying& np = m_frameNowPlaying;
             if (np.playing)
             {
                 wchar_t szPos[32] = {0}, szLen[32] = {0};
@@ -4377,76 +4416,33 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
             D2D1_RECT_F rect{};
             rect = D2D1::RectF(static_cast<FLOAT>(xL), static_cast<FLOAT>(*upper_left_corner_y), static_cast<FLOAT>(xR), static_cast<FLOAT>(*lower_left_corner_y));
 
-            // The prompts follow the steps the 'y' key takes (keyboard.cpp): none, 2.0, 2.x, then
-            // 4.0 (2.x and 3.0 compile alike here), then 5.0.
-            if (m_pState->m_nWarpPSVersion >= m_nMaxPSVersion && m_pState->m_nCompPSVersion >= m_nMaxPSVersion)
+            const auto line = [&](int n, const wchar_t* text) {
+                MilkDropMenuOut_Box(rect.top, n, GetFont(SIMPLE_FONT), text, rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
+            };
+            if (PixelShadersAtHighestModel())
             {
                 swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_PRESET_USES_HIGHEST_PIXEL_SHADER_VERSION), ShaderModelName(m_nMaxPSVersion));
-                MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), buf, rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESS_ESC_TO_RETURN), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
+                line(0, buf);
+                line(1, WASABI_API_LNGSTRINGW(IDS_PRESS_ESC_TO_RETURN));
+            }
+            else if (m_pState->m_nMinPSVersion != m_pState->m_nMaxPSVersion)
+            {
+                line(0, WASABI_API_LNGSTRINGW(IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS));
+                swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_UPGRADE_SHADERS_TO_USE_PS), ShaderModelName(PixelShaderUpgradeTarget()));
+                line(1, buf);
             }
             else
             {
-                if (m_pState->m_nMinPSVersion != m_pState->m_nMaxPSVersion)
-                {
-                    switch (m_pState->m_nMinPSVersion)
-                    {
-                        case MD2_PS_NONE:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_SHADERS_TO_USE_PS2), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_2_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_SHADERS_TO_USE_PS2X), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_2_X:
-                        case MD2_PS_3_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_SHADERS_TO_USE_PS4), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_4_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_SHADERS_TO_USE_PS5), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        default:
-                            assert(false);
-                            break;
-                    }
-                }
+                if (m_pState->m_nMinPSVersion == MD2_PS_NONE)
+                    line(0, WASABI_API_LNGSTRINGW(IDS_PRESET_DOES_NOT_USE_PIXEL_SHADERS));
                 else
                 {
-                    switch (m_pState->m_nMinPSVersion)
-                    {
-                        case MD2_PS_NONE:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_DOES_NOT_USE_PIXEL_SHADERS), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS2), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 2, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_2_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_CURRENTLY_USES_PS2), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS2X), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 2, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_2_X:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_CURRENTLY_USES_PS2X), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS4), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 2, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_3_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_CURRENTLY_USES_PS3), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS4), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 2, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        case MD2_PS_4_0:
-                            MilkDropMenuOut_Box(rect.top, 0, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_PRESET_CURRENTLY_USES_PS4), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 1, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS5), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            MilkDropMenuOut_Box(rect.top, 2, GetFont(SIMPLE_FONT), WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET), rect, DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX, MENU_COLOR, true, 0xFF000000);
-                            break;
-                        default:
-                            assert(false);
-                            break;
-                    }
+                    swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_PRESET_CURRENTLY_USES_PS), ShaderModelName(m_pState->m_nMinPSVersion));
+                    line(0, buf);
                 }
+                swprintf_s(buf, WASABI_API_LNGSTRINGW(IDS_UPGRADE_TO_USE_PS), ShaderModelName(PixelShaderUpgradeTarget()));
+                line(1, buf);
+                line(2, WASABI_API_LNGSTRINGW(IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET));
             }
             *upper_left_corner_y = static_cast<int>(rect.top);
         }

@@ -8,7 +8,6 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <d3d11_1.h>
@@ -87,8 +86,8 @@ class D3D11Shim
     int NumVertsFromType(unsigned int primType, int iPrimCount);
     void UpdateVBuffer(unsigned int iNumVerts, const void* pVData, unsigned int vertexStride);
     void UpdateIBuffer(unsigned int iNumIndices, const void* pIData);
-    ID3D11ShaderResourceView* ShaderResourceViewOf(ID3D11Resource* pResource);
-    ID3D11RenderTargetView* RenderTargetViewOf(ID3D11Texture2D* pTexture);
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> ShaderResourceViewOf(ID3D11Resource* pResource);
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> RenderTargetViewOf(ID3D11Texture2D* pTexture);
 
     struct TextureViews
     {
@@ -97,10 +96,9 @@ class D3D11Shim
     };
     // The views kept, by texture. Past kMaxTextureViews (far more than the engine's textures, a
     // dozen or two) it is emptied, so a texture released without ForgetTexture() is not kept
-    // for long. Locked: sprites are loaded and killed on the UI thread.
+    // for long. Not locked: like the device context, the shim is used by one thread at a time.
     static constexpr size_t kMaxTextureViews = 256;
     std::unordered_map<ID3D11Resource*, TextureViews> m_textureViews;
-    std::mutex m_textureViewsLock;
 
     cbTransforms m_transforms;
     ID3D11Device* m_pDevice;

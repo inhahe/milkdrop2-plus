@@ -1474,6 +1474,7 @@ void CPluginShell::RenderPlaylist()
                 return;
 
             // Apply PgUp/PgDn keypresses since last time.
+            const LRESULT posBefore = m_playlist_pos;
             m_playlist_pos -= m_playlist_pageups * disp_lines;
             m_playlist_pageups = 0;
 
@@ -1482,66 +1483,70 @@ void CPluginShell::RenderPlaylist()
             if (m_playlist_pos >= nSongs)
                 m_playlist_pos = nSongs - 1;
 
-            // Have the host select the item, when it moved here (Page Up/Down, or a shorter playlist).
-            if (m_playlist_pos != m_playlistPosSent)
-            {
-                m_playlistPosSent = m_playlist_pos;
-                if (m_host.selectPlaylistItem)
-                    m_host.selectPlaylistItem(static_cast<int>(m_playlist_pos));
-            }
+            // Have the host select the item when it moved here (Page Up/Down, or a shorter
+            // playlist); a selection the host made, or the keys, which select it themselves, stays.
+            if (m_playlist_pos != posBefore && m_host.selectPlaylistItem)
+                m_host.selectPlaylistItem(static_cast<int>(m_playlist_pos));
 
             int cur_page = static_cast<int>(m_playlist_pos / disp_lines);
             //int cur_line = (m_playlist_pos + disp_lines - 1) % disp_lines;
             int new_top_idx = cur_page * disp_lines;
             int new_btm_idx = new_top_idx + disp_lines;
-            const bool bPageChanged = m_playlist_top_idx != new_top_idx || m_playlist_btm_idx != new_btm_idx;
-            bool bTitlesArrived = false;
+            const int rows = std::min(disp_lines, nSongs - new_top_idx); // the items on this page
 
-            // The page's titles come from the host, asked for when the page or the playlist
-            // changes; a new page shows just the numbers until they come (a frame or two).
-            if (m_playlistShownFirst != new_top_idx || m_playlistShownGeneration != generation)
+            // Lay the rows out again when the page, the rows that fit or the items there change
+            // (every row drawn must have been laid out), or when titles come.
+            bool bRelayout = m_playlist_top_idx != new_top_idx || m_playlist_btm_idx != new_btm_idx || nSongs != m_playlistLaidOutSongs;
+
+            // The page's titles come from the host, asked for when the page, its rows or the
+            // playlist change. Rows without theirs yet show just their numbers (a frame or two).
+            if (m_playlistShownFirst != new_top_idx || m_playlistShownGeneration != generation || m_playlistShownRows < rows)
             {
                 std::vector<std::wstring> titles;
                 {
                     std::lock_guard<std::mutex> lock(m_hostDataLock);
-                    if (m_playlistTitlesFirst == new_top_idx && m_playlistTitlesGeneration == generation)
-                    {
+                    if (m_playlistTitlesFirst == new_top_idx && m_playlistTitlesGeneration == generation && static_cast<int>(m_playlistTitles.size()) >= rows)
                         titles = m_playlistTitles;
-                        bTitlesArrived = true;
-                    }
                 }
-                if (bTitlesArrived)
+                if (!titles.empty())
                 {
-                    for (int i = 0; i < disp_lines; i++)
-                        if (new_top_idx + i < nSongs)
-                        {
-                            // Clip maximum length of song name to 240 characters, to prevent overflows; leave an
-                            // extra space at the end, so italicized fonts do not get clipped.
-                            const std::wstring title = i < static_cast<int>(titles.size()) ? titles[i].substr(0, 240) : std::wstring();
-                            swprintf_s(m_playlist[i], L"%d. %s ", new_top_idx + i + 1, title.c_str());
-                        }
+                    for (int i = 0; i < rows; i++)
+                    {
+                        // Clip maximum length of song name to 240 characters, to prevent overflows; leave an
+                        // extra space at the end, so italicized fonts do not get clipped.
+                        swprintf_s(m_playlist[i], L"%d. %s ", new_top_idx + i + 1, titles[i].substr(0, 240).c_str());
+                    }
                     m_playlistShownFirst = new_top_idx;
                     m_playlistShownGeneration = generation;
+                    m_playlistShownRows = rows;
+                    bRelayout = true;
                 }
                 else
                 {
-                    if (m_playlistRequestedFirst != new_top_idx || m_playlistRequestedGeneration != generation)
+                    if (m_playlistRequestedFirst != new_top_idx || m_playlistRequestedGeneration != generation || m_playlistRequestedRows < rows)
                     {
                         m_playlistRequestedFirst = new_top_idx;
                         m_playlistRequestedGeneration = generation;
+                        m_playlistRequestedRows = rows;
                         if (m_host.requestPlaylistTitles)
-                            m_host.requestPlaylistTitles(new_top_idx, disp_lines, generation);
+                            m_host.requestPlaylistTitles(new_top_idx, rows, generation);
                     }
-                    if (bPageChanged && m_playlistShownFirst != new_top_idx)
-                        for (int i = 0; i < disp_lines; i++)
-                            if (new_top_idx + i < nSongs)
-                                swprintf_s(m_playlist[i], L"%d. ", new_top_idx + i + 1);
+                    if (bRelayout)
+                    {
+                        // Keep the rows that already hold this page's titles; number the others.
+                        const int kept = m_playlistShownFirst == new_top_idx ? std::min(m_playlistShownRows, rows) : 0;
+                        for (int i = kept; i < rows; i++)
+                            swprintf_s(m_playlist[i], L"%d. ", new_top_idx + i + 1);
+                        m_playlistShownFirst = new_top_idx;
+                        m_playlistShownRows = kept;
+                    }
                 }
             }
 
             // Update playlist cache, if necessary.
-            if (bPageChanged || bTitlesArrived)
+            if (bRelayout)
             {
+                m_playlistLaidOutSongs = nSongs;
                 m_playlist_top_idx = new_top_idx;
                 m_playlist_btm_idx = new_btm_idx;
                 m_playlist_width_pixels = 0.0f;
@@ -1553,12 +1558,6 @@ void CPluginShell::RenderPlaylist()
                     int j = new_top_idx + i;
                     if (j < nSongs)
                     {
-                        // Clip maximum length of song name to 240 characters, to prevent overflows.
-                        //char bufA[240] = L'\0';
-                        //LRESULT szTitle = SendMessage(m_hWndWinamp, WM_WA_IPC, j, IPC_GETPLAYLISTTITLE);
-                        //strcpy_s(bufA, reinterpret_cast<char*>(szTitle), 240);
-                        //sprintf_s(m_playlist[i], "%d. %s ", j + 1, bufA); // leave an extra space @ end, so italicized fonts don't get clipped
-
                         r = {0.0f, 0.0f, max_w, 1024.0f};
                         if (!m_playlist_song[i].IsVisible())
                             m_playlist_song[i].Initialize(m_lpDX->GetD2DDeviceContext());

@@ -270,13 +270,17 @@ class CPluginShell : public DX::IDeviceNotify
     int m_playlistTitlesFirst = -1;    // the titles the host delivered last: from which item, for which generation
     unsigned m_playlistTitlesGeneration = 0;
     std::vector<std::wstring> m_playlistTitles;
-    // The playlist overlay's own bookkeeping (render thread only): the page and generation whose
-    // titles `m_playlist` holds and were last asked for, and the selection last told to the host.
+    // The playlist overlay's own bookkeeping (render thread only): the page `m_playlist` holds and
+    // how many of its first rows hold titles, of which playlist generation; the page, rows and
+    // generation whose titles were last asked for; and how many items the playlist had at the
+    // last layout.
     int m_playlistShownFirst = -1;
+    int m_playlistShownRows = 0;
     unsigned m_playlistShownGeneration = 0;
     int m_playlistRequestedFirst = -1;
+    int m_playlistRequestedRows = 0;
     unsigned m_playlistRequestedGeneration = 0;
-    LRESULT m_playlistPosSent = -1;
+    int m_playlistLaidOutSongs = -1;
     //int m_exiting;
     int m_upper_left_corner_y;
     int m_lower_left_corner_y;

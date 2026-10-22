@@ -187,9 +187,6 @@ typedef struct
     wchar_t m_szTitleFormat[256];
     wchar_t m_szArtworkFormat[256];
 
-    //--- Artwork
-    artFetchData* m_artData;
-
     //--- Fonts
     td_fontinfo m_fontinfo[NUM_BASIC_FONTS + NUM_EXTRA_FONTS];
 } plugin_config;

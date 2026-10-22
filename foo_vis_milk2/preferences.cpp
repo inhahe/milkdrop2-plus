@@ -1224,8 +1224,8 @@ void milk2_config::reset()
     //settings.m_bMilkdropScrollLockState = settings.m_bPresetLockOnAtStartup;
 
     //--- Extras
-    settings.m_bEnableDownmix = default_bEnableDownmix;
-    settings.m_bShowAlbum = default_bShowAlbum;
+    settings.m_bEnableDownmix = cfg_bEnableDownmix;
+    settings.m_bShowAlbum = cfg_bShowAlbum;
     settings.m_bEnableHDR = default_bEnableHDR;
     settings.m_bSkipCompShader = static_cast<uint32_t>(cfg_bSkipCompShader);
     settings.m_nBackBufferFormat = default_nBackBufferFormat;

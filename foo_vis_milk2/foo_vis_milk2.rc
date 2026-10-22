@@ -735,32 +735,24 @@ BEGIN
                             "This preset already uses the highest pixel shader model (%s) allowed here."
     IDS_PRESET_HAS_MIXED_VERSIONS_OF_SHADERS 
                             "This preset has mixed versions of shaders in it."
-    IDS_UPGRADE_SHADERS_TO_USE_PS2 
-                            "Do you want to upgrade all shaders to use (at least) pixel shader model 2.0?  [y/N]"
-    IDS_UPGRADE_SHADERS_TO_USE_PS4 
-                            "Do you want to upgrade all shaders to use (at least) pixel shader model 4.0?  [y/N]"
+    IDS_UPGRADE_SHADERS_TO_USE_PS 
+                            "Do you want to upgrade all shaders to use (at least) pixel shader model %s?  [y/N]"
     IDS_PRESET_DOES_NOT_USE_PIXEL_SHADERS 
                             "This preset does not currently use pixel shaders."
 END
 
 STRINGTABLE
 BEGIN
-    IDS_UPGRADE_TO_USE_PS2  "Do you want to upgrade it to use pixel shader model 2.0?  [y/N]"
+    IDS_UPGRADE_TO_USE_PS   "Do you want to upgrade it to use pixel shader model %s?  [y/N]"
     IDS_WARNING_OLD_GPU_MIGHT_NOT_WORK_WITH_PRESET 
                             "  (WARNING: if you save it, other users with older graphics chips might not be able to use the preset."
-    IDS_PRESET_CURRENTLY_USES_PS2 "This preset currently uses pixel shader model 2.0."
-    IDS_UPGRADE_TO_USE_PS3  "Do you want to upgrade it to pixel shader model 3.0?  [y/N]"
-    IDS_PRESET_CURRENTLY_USES_PS3 "This preset currently uses pixel shader model 3.0."
-    IDS_UPGRADE_TO_USE_PS4  "Do you want to upgrade it to use pixel shader model 4.0?  [y/N]"
+    IDS_PRESET_CURRENTLY_USES_PS "This preset currently uses pixel shader model %s."
     IDS_WARNING_DO_NOT_FORGET_WARP_SHADER_WAS_LOCKED 
                             " WARNING: do not forget WARP shader was LOCKED! "
     IDS_WARNING_DO_NOT_FORGET_COMPOSITE_SHADER_WAS_LOCKED 
                             " WARNING: do not forget COMPOSITE shader was LOCKED! "
     IDS_PRESET_MASH_UP_TEXT1 
                             "Preset Mash-Up:          use keys 1-5 to change bin;"
-    IDS_PRESET_CURRENTLY_USES_PS2X 
-                            "This preset currently uses pixel shader 2.x."
-    IDS_UPGRADE_TO_USE_PS2X "Do you want to upgrade it to use pixel shader 2.x?  [y/N]"
     IDS_PRESET_MASH_UP_TEXT2 
                             "                         up/down/a-z to browse presets for current bin;"
     IDS_PRESET_MASH_UP_TEXT3 
@@ -1535,8 +1527,6 @@ BEGIN
     IDS_COMP_HELP4          "           // + texsize, aspect, time, fps, rand_frame, rand_preset,"
     IDS_COMP_HELP5          "           //   q1-q32/_qa-_qh, bass, treb_att, vol... - see docs"
     IDS_COMP_HELP6          " output:   float3 ret;         //display pixel color (r,g,b)"
-    IDS_UPGRADE_SHADERS_TO_USE_PS2X 
-                            "Do you want to upgrade all shaders to use (at least) pixel shader 2.X?  [y/N]"
     IDS_PRESS_ESC_TO_RETURN "Press ESC to return."
     //IDS_COULD_NOT_LOAD_TEXTURE_X "Could not load texture: %hs.%hs"
     //IDS_ERROR_COMPILING_X_X_SHADER "Error compiling %hs %hs shader:\n"
@@ -1562,10 +1552,6 @@ BEGIN
     IDS_PRESETS_MAY_NEED_NEWER_SHADERS "They need a newer pixel shader model, or are unreadable."
     IDS_MISSING_TEXTURES    "Missing textures: "
     IDS_HOW_TO_SET_TEXTURE_FOLDER "Right-click > Set Texture Folder... to use a texture pack."
-    IDS_PRESET_CURRENTLY_USES_PS4 "This preset currently uses pixel shader model 4.0."
-    IDS_UPGRADE_TO_USE_PS5  "Do you want to upgrade it to use pixel shader model 5.0?  [y/N]"
-    IDS_UPGRADE_SHADERS_TO_USE_PS5 
-                            "Do you want to upgrade all shaders to use (at least) pixel shader model 5.0?  [y/N]"
 END
 
 #endif    // English (United States) resources

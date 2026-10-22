@@ -309,7 +309,7 @@ void D3D11Shim::SetRasterizerState(D3D11_CULL_MODE cullMode, D3D11_FILL_MODE fil
 
 void D3D11Shim::SetRenderTarget(ID3D11Texture2D* pTexture, ID3D11DepthStencilView** ppView)
 {
-    ID3D11RenderTargetView* pRTView = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtView;
     ID3D11DepthStencilView* pDSView = nullptr;
 
     if (!ppView)
@@ -320,20 +320,20 @@ void D3D11Shim::SetRenderTarget(ID3D11Texture2D* pTexture, ID3D11DepthStencilVie
 
     if (pTexture)
     {
-        pRTView = RenderTargetViewOf(pTexture);
-        if (!pRTView)
+        rtView = RenderTargetViewOf(pTexture);
+        if (!rtView)
         {
             if (!ppView)
                 SafeRelease(pDSView);
             return;
         }
-        CD3D11_VIEWPORT vp(pTexture, pRTView);
+        CD3D11_VIEWPORT vp(pTexture, rtView.Get());
         m_pContext->RSSetViewports(1, &vp);
     }
 
-    m_pContext->OMSetRenderTargets(1, &pRTView, pDSView);
+    ID3D11RenderTargetView* views[1] = {rtView.Get()};
+    m_pContext->OMSetRenderTargets(1, views, pDSView);
 
-    SafeRelease(pRTView);
     if (!ppView)
         SafeRelease(pDSView);
 }
@@ -378,17 +378,15 @@ void D3D11Shim::SetShader(unsigned int iIndex)
 
 void D3D11Shim::SetTexture(unsigned int iSlot, ID3D11Resource* pResource)
 {
-    ID3D11ShaderResourceView* views[1] = {pResource ? ShaderResourceViewOf(pResource) : nullptr};
+    const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> view = pResource ? ShaderResourceViewOf(pResource) : nullptr;
+    ID3D11ShaderResourceView* views[1] = {view.Get()};
     m_pContext->PSSetShaderResources(iSlot, 1, views);
-    if (views[0])
-        views[0]->Release();
 }
 
-// The shader resource view of `pResource`, made the first time and kept (see ForgetTexture),
-// AddRef'd for the caller to release (another thread may forget it meanwhile). Null on failure.
-ID3D11ShaderResourceView* D3D11Shim::ShaderResourceViewOf(ID3D11Resource* pResource)
+// The shader resource view of `pResource`, made the first time and kept (see ForgetTexture).
+// Null on failure.
+Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> D3D11Shim::ShaderResourceViewOf(ID3D11Resource* pResource)
 {
-    std::lock_guard<std::mutex> lock(m_textureViewsLock);
     if (m_textureViews.size() >= kMaxTextureViews && m_textureViews.find(pResource) == m_textureViews.end())
         m_textureViews.clear();
     TextureViews& views = m_textureViews[pResource];
@@ -403,46 +401,37 @@ ID3D11ShaderResourceView* D3D11Shim::ShaderResourceViewOf(ID3D11Resource* pResou
             srvDesc = CD3D11_SHADER_RESOURCE_VIEW_DESC(reinterpret_cast<ID3D11Texture3D*>(pResource));
         m_pDevice->CreateShaderResourceView(pResource, &srvDesc, views.srv.ReleaseAndGetAddressOf());
     }
-    ID3D11ShaderResourceView* pView = views.srv.Get();
-    if (pView)
-        pView->AddRef();
-    return pView;
+    return views.srv;
 }
 
-// The render target view of `pTexture`, AddRef'd for the caller to release: the kept one for a
-// texture the engine also samples, a fresh one for any other (the back buffer). Null on failure.
-ID3D11RenderTargetView* D3D11Shim::RenderTargetViewOf(ID3D11Texture2D* pTexture)
+// The render target view of `pTexture`: the kept one for a texture the engine also samples, a
+// fresh one for any other (the back buffer). Null on failure.
+Microsoft::WRL::ComPtr<ID3D11RenderTargetView> D3D11Shim::RenderTargetViewOf(ID3D11Texture2D* pTexture)
 {
     D3D11_TEXTURE2D_DESC desc{};
     pTexture->GetDesc(&desc);
     CD3D11_RENDER_TARGET_VIEW_DESC rtvDesc(pTexture, D3D11_RTV_DIMENSION_TEXTURE2D);
-    ID3D11RenderTargetView* pView = nullptr;
     if (!(desc.BindFlags & D3D11_BIND_SHADER_RESOURCE))
     {
-        m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, &pView);
-        return pView;
+        Microsoft::WRL::ComPtr<ID3D11RenderTargetView> view;
+        m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, view.GetAddressOf());
+        return view;
     }
-    std::lock_guard<std::mutex> lock(m_textureViewsLock);
     if (m_textureViews.size() >= kMaxTextureViews && m_textureViews.find(pTexture) == m_textureViews.end())
         m_textureViews.clear();
     TextureViews& views = m_textureViews[pTexture];
     if (!views.rtv)
         m_pDevice->CreateRenderTargetView(pTexture, &rtvDesc, views.rtv.ReleaseAndGetAddressOf());
-    pView = views.rtv.Get();
-    if (pView)
-        pView->AddRef();
-    return pView;
+    return views.rtv;
 }
 
 void D3D11Shim::ForgetTexture(ID3D11Resource* pResource)
 {
-    std::lock_guard<std::mutex> lock(m_textureViewsLock);
     m_textureViews.erase(pResource);
 }
 
 void D3D11Shim::ForgetTextures()
 {
-    std::lock_guard<std::mutex> lock(m_textureViewsLock);
     m_textureViews.clear();
 }
 
@@ -516,11 +505,9 @@ void D3D11Shim::SetPixelShader(ID3D11PixelShader* pPShader, CConstantTable* pTab
 
 void D3D11Shim::ClearRenderTarget(ID3D11Texture2D* pRTTexture, const float color[4])
 {
-    ID3D11RenderTargetView* pRTView = pRTTexture ? RenderTargetViewOf(pRTTexture) : nullptr;
-    if (!pRTView)
-        return;
-    m_pContext->ClearRenderTargetView(pRTView, color);
-    pRTView->Release();
+    const Microsoft::WRL::ComPtr<ID3D11RenderTargetView> view = pRTTexture ? RenderTargetViewOf(pRTTexture) : nullptr;
+    if (view)
+        m_pContext->ClearRenderTargetView(view.Get(), color);
 }
 
 void D3D11Shim::CopyResource(ID3D11Resource* pDstResource, ID3D11Resource* pSrcResource)

@@ -53,7 +53,6 @@ milk2_ui_element::milk2_ui_element(ui_element_config::ptr config, ui_element_ins
     m_last_time = 0.0;
 #endif
     m_refresh_interval = 33;
-    m_art_data = std::make_unique<artFetchData>();
 
     m_pwd = L".\\";
     set_configuration(config);
@@ -173,8 +172,6 @@ int milk2_ui_element::OnCreate(LPCREATESTRUCT cs)
 #elif defined(TIMER_DX)
         message_loop_v2::get()->add_idle_handler(this);
 #endif
-
-        RegisterForArtwork();
     }
 
     HRESULT hr = S_OK;
@@ -229,9 +226,6 @@ void milk2_ui_element::OnDestroy()
     if (m_vis_stream.is_valid())
         m_vis_stream.release();
     //DestroyMenu();
-    auto manager = now_playing_album_art_notify_manager::tryGet();
-    if (manager.is_valid())
-        manager->remove(this);
 
     if (m_milk2)
         m_milk2 = false;
@@ -673,15 +667,13 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     menu.AppendMenu(MF_SEPARATOR);
 
     // Original menu items.
+    const UINT albumArtMenuFlags = AlbumArtShown() ? MF_CHECKED : (AlbumArtSpriteFileExists() ? 0 : MF_DISABLED);
     menu.AppendMenu(MF_STRING | (s_config.settings.m_bEnableDownmix ? MF_CHECKED : 0), IDM_ENABLE_DOWNMIX, TEXT("Downmix Channels"));
     menu.AppendMenu(MF_SEPARATOR);
     if (s_fullscreen)
     {
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_playlist ? MF_CHECKED : 0), IDM_SHOW_PLAYLIST, TEXT("Show Playlist\tP"));
-        menu.AppendMenu(MF_STRING | (s_config.settings.m_bShowAlbum && std::filesystem::exists(s_config.settings.m_szImgIniFile)
-                                         ? MF_CHECKED
-                                         : (std::filesystem::exists(s_config.settings.m_szImgIniFile) ? 0 : MF_DISABLED)),
-                        IDM_SHOW_ALBUM, TEXT("Show Album Art"));
+        menu.AppendMenu(MF_STRING | albumArtMenuFlags, IDM_SHOW_ALBUM, TEXT("Show Album Art"));
         menu.AppendMenu(MF_STRING, IDM_SHOW_TITLE, TEXT("Launch Title\tT"));
         menu.AppendMenu(MF_SEPARATOR);
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_help ? MF_CHECKED : 0), IDM_SHOW_HELP, TEXT("Show Help\tF1"));
@@ -692,10 +684,7 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     else
     {
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_playlist ? MF_CHECKED : 0), IDM_SHOW_PLAYLIST, TEXT("Show Playlist"));
-        menu.AppendMenu(MF_STRING | (s_config.settings.m_bShowAlbum && std::filesystem::exists(s_config.settings.m_szImgIniFile)
-                                         ? MF_CHECKED
-                                         : (std::filesystem::exists(s_config.settings.m_szImgIniFile) ? 0 : MF_DISABLED)),
-                        IDM_SHOW_ALBUM, TEXT("Show Album Art"));
+        menu.AppendMenu(MF_STRING | albumArtMenuFlags, IDM_SHOW_ALBUM, TEXT("Show Album Art"));
         menu.AppendMenu(MF_STRING, IDM_SHOW_TITLE, TEXT("Launch Title"));
         menu.AppendMenu(MF_SEPARATOR);
         menu.AppendMenu(MF_STRING | (g_plugin.m_show_help ? MF_CHECKED : 0), IDM_SHOW_HELP, TEXT("Show Help"));
@@ -826,9 +815,13 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             LaunchSongTitle();
             break;
         case IDM_SHOW_ALBUM:
-            s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
-            ShowAlbumArt();
-            break;
+            {
+                s_config.settings.m_bShowAlbum = !s_config.settings.m_bShowAlbum;
+                metadb_handle_ptr track;
+                m_playback_control->get_now_playing(track);
+                ShowAlbumArt(track);
+                break;
+            }
         case IDM_QUIT:
             break;
         default:
@@ -931,12 +924,14 @@ LRESULT milk2_ui_element::OnQuit(UINT uMsg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
+// Answers what the engine asks of the window, all of it on this thread while the engine starts
+// (CPluginShell::PluginPreInitialize): the folders it keeps its files in, and a message to report
+// (CPlugin::ConsoleMessage). What it shows of the music comes from milk2_playback_feed.
 LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg != WM_MILK2)
         return -1;
 
-    // The engine no longer asks the window what is playing (see milk2_playback_feed).
     if (LOBYTE(wParam) == 0x21 && HIBYTE(wParam) == 0x09)
     {
         wchar_t buf[2048], title[64];
@@ -944,27 +939,6 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
         LoadString(core_api::get_my_instance(), HIWORD(lParam), title, 64);
         MILK2_CONSOLE_LOG("milk2 -> title: ", title, ", message: ", buf)
         return HIWORD(lParam) == IDS_MILKDROP_ERROR || HIWORD(lParam) == IDS_MILKDROP_WARNING ? 0 : 1;
-    }
-    else if (lParam == IPC_GETVERSION)
-    {
-        MILK2_CONSOLE_LOG("IPC_GETVERSION")
-        //const t_core_version_data v = core_version_info_v2::get_version();
-        return 1;
-    }
-    else if (lParam == IPC_GETVERSIONSTRING)
-    {
-        MILK2_CONSOLE_LOG("IPC_GETVERSIONSTRING")
-        return reinterpret_cast<LRESULT>(core_version_info_v2::g_get_version_string()); // "foobar2000 v2.1.2"
-    }
-    else if (lParam == IPC_ISPLAYING)
-    {
-        MILK2_CONSOLE_LOG("IPC_ISPLAYING")
-        if (m_playback_control->is_playing())
-            return 1;
-        else if (m_playback_control->is_paused())
-            return 3;
-        else
-            return 0;
     }
     else if (lParam == IPC_GETPLUGINDIRECTORYW)
     {
@@ -981,72 +955,6 @@ LRESULT milk2_ui_element::OnMilk2Message(UINT uMsg, WPARAM wParam, LPARAM lParam
             m_szBuffer = m_szBuffer.substr(0, p + 1);
         return reinterpret_cast<LRESULT>(m_szBuffer.c_str());
     }
-    else if (lParam == IPC_FETCH_ALBUMART)
-    {
-        MILK2_CONSOLE_LOG("IPC_FETCH_ALBUMART")
-        if (m_art_file.empty())
-        {
-            m_art_data->imgData = m_raster.data();
-            m_art_data->imgDataLen = static_cast<int>(m_raster.size());
-            m_art_data->type[0] = L'j'; m_art_data->type[1] = L'p'; m_art_data->type[2] = L'g'; m_art_data->type[3] = L'\0';
-            m_art_data->gracenoteFileId = nullptr;
-        }
-        else
-        {
-            m_art_data->imgData = nullptr;
-            m_art_data->imgDataLen = 0;
-            m_art_data->gracenoteFileId = m_art_file.data();
-            std::wstring ext = GetExtension(m_art_file);
-            std::copy_n(ext.begin(), ext.size(), &m_art_data->type[0]);
-            std::fill_n(&m_art_data->type[0] + ext.size() + 1, 10 - ext.size(), L'\0');
-        }
-        s_config.settings.m_artData = m_art_data.get();
-
-        return reinterpret_cast<LRESULT>(m_art_data.get());
-    }
-#if 0
-    else if (lParam == IPC_SETVISWND)
-    {
-        //MILK2_CONSOLE_LOG("IPC_SETVISWND")
-        //SendMessage(m_hwnd_winamp, WM_WA_IPC, (WPARAM)m_hwnd, IPC_SETVISWND);
-    }
-    else if (lParam == IPC_CB_VISRANDOM)
-    {
-        //MILK2_CONSOLE_LOG("IPC_CB_VISRANDOM")
-        //SendMessage(GetWinampWindow(), WM_WA_IPC, (m_bPresetLockOnAtStartup ? 0 : 1) << 16, IPC_CB_VISRANDOM);
-    }
-    else if (lParam == IPC_IS_PLAYING_VIDEO)
-    {
-        //MILK2_CONSOLE_LOG("IPC_IS_PLAYING_VIDEO")
-        //if (m_screenmode == FULLSCREEN && SendMessage(GetWinampWindow(), WM_WA_IPC, 0, IPC_IS_PLAYING_VIDEO) > 1)
-    }
-    else if (lParam == IPC_SET_VIS_FS_FLAG)
-    {
-        //MILK2_CONSOLE_LOG("IPC_SET_VIS_FS_FLAG")
-        //SendMessage(GetWinampWindow(), WM_WA_IPC, 1, IPC_SET_VIS_FS_FLAG);
-    }
-    else if (lParam == IPC_GET_D3DX9)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GET_D3DX9")
-        //HMODULE d3dx9 = (HMODULE)SendMessage(winamp, WM_WA_IPC, 0, IPC_GET_D3DX9);
-    }
-    else if (lParam == IPC_GET_API_SERVICE)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GET_API_SERVICE")
-        //WASABI_API_SVC = (api_service*)SendMessage(hwndParent, WM_WA_IPC, 0, IPC_GET_API_SERVICE);
-    }
-    else if (lParam == IPC_GETDIALOGBOXPARENT)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GETDIALOGBOXPARENT")
-        //HWND parent = (HWND)SendMessage(winamp, WM_WA_IPC, 0, IPC_GETDIALOGBOXPARENT);
-    }
-    else if (lParam == IPC_GET_RANDFUNC)
-    {
-        //MILK2_CONSOLE_LOG("IPC_GET_RANDFUNC")
-        //int warand();
-        //warand = (int (*)(void))SendMessage(hwndParent, WM_WA_IPC, 0, IPC_GET_RANDFUNC);
-    }
-#endif
 
     return 1;
 }
@@ -1122,6 +1030,10 @@ bool milk2_ui_element::Initialize(HWND window, int width, int height)
         ::SetClassLongPtr(parent, GCLP_HICONSM, (LONG_PTR)hIcon);
 
         s_milk2 = true;
+
+        // A track already playing gets no new-track callback.
+        if (metadb_handle_ptr track; AlbumArtShown() && m_playback_control->get_now_playing(track))
+            ShowAlbumArt(track);
     }
     else
     {
@@ -1505,62 +1417,91 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-// Shows the new track's album art, if that option is on. (Its title and the like reach the engine
-// through milk2_playback_feed.)
-void milk2_ui_element::UpdateAlbumArt(metadb_handle_ptr p_track)
+// The sprite number the album art is launched as: past the numbers sprites from the image list
+// take (0-99), so that the art replaces only itself. Its section there ([img100]) says how it is
+// drawn.
+static constexpr int kAlbumArtSprite = 100;
+
+// Whether the sprites' settings file (milk_img.ini) exists; the album art option is offered only
+// then.
+bool milk2_ui_element::AlbumArtSpriteFileExists()
 {
-    if (!p_track.is_valid())
-        return;
-
-    // Load the album art.
-    if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) != 0)
-    {
-        titleformat_object::ptr script;
-        pfc::string8 pattern = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat);
-        bool success = titleformat_compiler::get()->compile(script, pattern);
-
-        pfc::string result;
-        if (success && script.is_valid() && p_track->format_title(nullptr, result, script, nullptr))
-        {
-            m_art_file.clear();
-            std::vector<uint8_t> empty;
-            m_raster.swap(empty);
-            m_art_file = pfc::wideFromUTF8(result).c_str();
-            m_raster.clear();
-        }
-    }
-    else
-    {
-        LoadAlbumArt(p_track, fb2k::noAbort);
-        ShowAlbumArt();
-    }
+    std::error_code ec;
+    return std::filesystem::exists(s_config.settings.m_szImgIniFile, ec);
 }
 
-// Replaces the sprites with the track's album art, if that option is on: the file the artwork
-// format names, if it exists, or else the art embedded in the track.
-void milk2_ui_element::ShowAlbumArt()
+// Whether album art is shown: the option is on, and offered (a saved "on" without the file could
+// not be turned off).
+bool milk2_ui_element::AlbumArtShown()
+{
+    return s_config.settings.m_bShowAlbum && AlbumArtSpriteFileExists();
+}
+
+// The image file the artwork format names for `track`, if the format is set and the file exists;
+// or else empty.
+static std::wstring AlbumArtFile(const metadb_handle_ptr& track)
+{
+    if (s_config.settings.m_szArtworkFormat[0] == L'\0')
+        return {};
+    titleformat_object::ptr script;
+    pfc::string8 path;
+    if (!titleformat_compiler::get()->compile(script, pfc::utf8FromWide(s_config.settings.m_szArtworkFormat)) ||
+        !track->format_title(nullptr, path, script, nullptr) || path.is_empty())
+        return {};
+    try
+    {
+        if (filesystem::g_exists(path, fb2k::noAbort))
+            return std::wstring(pfc::wideFromUTF8(path));
+    }
+    catch (const std::exception&) // not a path foobar2000 can open
+    {
+    }
+    return {};
+}
+
+// The front cover of `track` as an encoded image, wherever foobar2000's album art settings look
+// for it (embedded, or a file beside the track); empty if there is none.
+static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track)
+{
+    try
+    {
+        auto extractor = album_art_manager_v2::get()->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), fb2k::noAbort);
+        auto aad = extractor->query(album_art_ids::cover_front, fb2k::noAbort);
+        if (aad.is_valid() && aad->size() != 0)
+        {
+            auto data = static_cast<const uint8_t*>(aad->data());
+            return std::vector<uint8_t>(data, data + aad->size());
+        }
+    }
+    catch (const std::exception&) // exception_album_art_not_found, or the file could not be read
+    {
+    }
+    return {};
+}
+
+// Shows `track`'s album art in place of the last, if it is shown (AlbumArtShown): the file the
+// artwork format names, if that exists, or else the track's front cover. Otherwise, or with no
+// track, removes it. Other sprites stay.
+void milk2_ui_element::ShowAlbumArt(const metadb_handle_ptr& track)
 {
     std::wstring file;
     std::vector<uint8_t> raster;
-    if (s_config.settings.m_bShowAlbum)
+    if (AlbumArtShown() && track.is_valid())
     {
-        if (!m_art_file.empty())
-        {
-            if (filesystem::g_exists(pfc::utf8FromWide(m_art_file.c_str()), fb2k::noAbort))
-                file = m_art_file;
-        }
-        else
-            raster = m_raster;
+        file = AlbumArtFile(track);
+        if (file.empty())
+            raster = AlbumArtImage(track);
     }
 
     // On the render thread, which draws the sprites.
     g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)] {
         for (int x = 0; x < NUM_TEX; x++)
-            g_plugin.KillSprite(x);
+            if (g_plugin.m_texmgr.m_tex[x].pSurface && g_plugin.m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
+                g_plugin.KillSprite(x);
         if (!file.empty())
-            g_plugin.LaunchSprite(100, -1, file);
+            g_plugin.LaunchSprite(kAlbumArtSprite, -1, file);
         else if (!raster.empty())
-            g_plugin.LaunchSprite(100, -1, L"", raster);
+            g_plugin.LaunchSprite(kAlbumArtSprite, -1, L"", raster);
     });
 }
 
@@ -1577,9 +1518,10 @@ void milk2_ui_element::UpdatePlaylist()
     }
 }
 
+// On the render thread, which keeps the song title and draws the animation.
 void milk2_ui_element::LaunchSongTitle()
 {
-    g_plugin.LaunchSongTitleAnim();
+    g_plugin.RunOnRenderThread([] { g_plugin.LaunchSongTitleAnim(); });
 }
 
 #ifdef TIMER_TP
@@ -1739,76 +1681,6 @@ void milk2_ui_element::ResolvePwd()
 #endif
 }
 
-// Retrieves image raster data and clears the file path.
-void milk2_ui_element::ExtractRasterData(const uint8_t* data, size_t size) noexcept
-{
-    m_art_file.clear();
-    std::vector<uint8_t> empty;
-    m_raster.swap(empty);
-    if ((data != nullptr) && (size != 0))
-    {
-        m_raster.assign(data, data + size);
-    }
-}
-
-// Registers with the album art notifier.
-void milk2_ui_element::RegisterForArtwork()
-{
-#if 0
-    // Register with the album art notification manager.
-    auto AlbumArtNotificationManager = now_playing_album_art_notify_manager_v2::tryGet();
-
-    if (AlbumArtNotificationManager.is_valid())
-        AlbumArtNotificationManager->add(this);
-
-    // Get the artwork data from the album art.
-    if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) == 0)
-    {
-        auto aanm = now_playing_album_art_notify_manager_v2::get();
-
-        if (aanm != nullptr)
-        {
-            album_art_data_ptr aad = aanm->current();
-
-            if (aad.is_valid())
-            {
-                ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size());
-            }
-        }
-    }
-#endif
-}
-
-// Loads embedded album art.
-void milk2_ui_element::LoadAlbumArt(const metadb_handle_ptr& track, abort_callback& abort)
-{
-    static_api_ptr_t<album_art_manager_v2> aam;
-
-    auto extractor = aam->open(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), abort);
-
-    try
-    {
-        auto aad = extractor->query(album_art_ids::cover_front, abort);
-
-        if (aad.is_valid())
-        {
-            ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size());
-        }
-    }
-    catch (const exception_album_art_not_found&)
-    {
-        return;
-    }
-    catch (const exception_aborted&)
-    {
-        throw;
-    }
-    catch (...)
-    {
-        return;
-    }
-}
-
 // Service factory publishes the class.
 static service_factory_single_t<ui_element_milk2> g_ui_element_milk2_factory;
 #pragma endregion
@@ -1883,8 +1755,8 @@ static std::vector<std::wstring> FormatPlaylistTitles(int first, int count)
 // main thread: the playing track's title, position and length, and the active playlist for the
 // playlist overlay; and answers the engine's requests (m_host) on the main thread too. The
 // render thread so never sends the window a message and waits: the window's thread may itself
-// be waiting for the render thread. One for the whole component, whichever UI hosts the
-// visualization (the Columns UI panel answered no such messages at all).
+// be waiting for the render thread. One for the whole component, whichever UI (Default or
+// Columns) hosts the visualization.
 class milk2_playback_feed : private play_callback_impl_base, private playlist_callback_single_impl_base
 {
   public:

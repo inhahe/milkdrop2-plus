@@ -500,6 +500,7 @@ class CPlugin : public CPluginShell
     void ApplyErrorRequests();
     void EraseErrors(int category);
 
+    NowPlaying m_frameNowPlaying; // GetNowPlaying() as of this frame's start (MilkDropRenderFrame)
     wchar_t m_szSongTitle[256];
     wchar_t m_szSongTitlePrev[256];
 
@@ -548,8 +549,13 @@ class CPlugin : public CPluginShell
     // Recompiles the warp and/or composite shader of the preset on screen from its text and
     // version (after the shader editor or the pixel shader upgrade changed them). Render thread.
     void RecompilePresetShaders(bool bWarp, bool bComp);
+    // Raises the shaders of the preset on screen below PixelShaderUpgradeTarget() to it, and
+    // recompiles them ('y' at the upgrade prompt). Render thread.
+    void UpgradePixelShaders();
 
   private:
+    int PixelShaderUpgradeTarget() const;
+    bool PixelShadersAtHighestModel() const;
     std::mutex m_renderTasksLock;
     std::vector<std::function<void()>> m_renderTasks;
     void RunRenderTasks();

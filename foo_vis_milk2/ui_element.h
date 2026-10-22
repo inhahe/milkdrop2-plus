@@ -36,7 +36,7 @@ CRITICAL_SECTION s_cs;
 void PublishPlayback();
 
 #pragma region UI Element
-class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private play_callback_impl_base, private playlist_callback_impl_base, public now_playing_album_art_notify
+class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui_element>, private play_callback_impl_base, private playlist_callback_impl_base
 #ifdef TIMER_DX
     , public idle_handler
 #endif
@@ -297,16 +297,9 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     static_api_ptr_t<playback_control> m_playback_control;
     titleformat_object::ptr m_search;
 
-    // Artwork and metadata
-    std::unique_ptr<artFetchData> m_art_data;
-    std::vector<uint8_t> m_raster;
-    std::wstring m_art_file;
-
     // clang-format off
     // Playback callback methods
-    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") UpdateAlbumArt(p_track); }
-
-    void UpdateAlbumArt(metadb_handle_ptr p_track);
+    void on_playback_new_track(metadb_handle_ptr p_track) { MILK2_CONSOLE_LOG("+ PlaybackNew") if (AlbumArtShown()) ShowAlbumArt(p_track); }
 
     // Playlist callback methods
     void on_items_added(size_t /*p_playlist*/, size_t /*p_start*/, metadb_handle_list_cref /*p_data*/, const bit_array& /*p_selection*/) { MILK2_CONSOLE_LOG("* PlaylistItemsAdded") UpdatePlaylist(); }
@@ -326,13 +319,10 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     static void SetSelectionSingle(size_t idx, bool toggle, bool focus, bool single_only);
   private:
 
-    // Artwork callback methods
-    void on_album_art(album_art_data::ptr aad) { (void)aad; /*MILK2_CONSOLE_LOG("% AlbumArt"); if (wcsnlen_s(s_config.settings.m_szArtworkFormat, 256) == 0 && aad.is_valid()) { ExtractRasterData(static_cast<const uint8_t*>(aad->data()), aad->size()); }*/ }
-
-    void RegisterForArtwork();
-    void ExtractRasterData(const uint8_t* data, size_t size) noexcept;
-    void LoadAlbumArt(const metadb_handle_ptr& track, abort_callback& abort);
-    void ShowAlbumArt();
+    // Album art
+    static bool AlbumArtSpriteFileExists();
+    static bool AlbumArtShown();
+    static void ShowAlbumArt(const metadb_handle_ptr& track);
     // clang-format on
 
     // Text

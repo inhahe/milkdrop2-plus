@@ -146,80 +146,6 @@
 #define RemoveText g_plugin.ClearText
 #endif
 
-// Raises the preset on screen to the next pixel shader model ('y' at the upgrade prompt; the
-// prompts, in MilkDropRenderUI, name the steps) and recompiles its shaders. Render thread.
-static void UpgradePixelShaders()
-{
-    if (g_plugin.m_pState->m_nWarpPSVersion >= g_plugin.m_nMaxPSVersion && g_plugin.m_pState->m_nCompPSVersion >= g_plugin.m_nMaxPSVersion)
-        return; // already at the highest model allowed, as the prompt says
-    if (g_plugin.m_pState->m_nMinPSVersion == g_plugin.m_pState->m_nMaxPSVersion)
-    {
-        switch (g_plugin.m_pState->m_nMinPSVersion)
-        {
-            case MD2_PS_NONE:
-                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
-                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
-                g_plugin.m_pState->GenDefaultWarpShader();
-                g_plugin.m_pState->GenDefaultCompShader();
-                break;
-            case MD2_PS_2_0:
-                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_X;
-                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_X;
-                break;
-            case MD2_PS_2_X: // 2.x and 3.0 compile alike, so on to 4.0
-            case MD2_PS_3_0:
-                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_4_0;
-                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_4_0;
-                break;
-            case MD2_PS_4_0:
-                g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_5_0;
-                g_plugin.m_pState->m_nCompPSVersion = MD2_PS_5_0;
-                break;
-            default:
-                assert(0);
-                break;
-        }
-    }
-    else
-    {
-        switch (g_plugin.m_pState->m_nMinPSVersion)
-        {
-            case MD2_PS_NONE:
-                if (g_plugin.m_pState->m_nWarpPSVersion < MD2_PS_2_0)
-                {
-                    g_plugin.m_pState->m_nWarpPSVersion = MD2_PS_2_0;
-                    g_plugin.m_pState->GenDefaultWarpShader();
-                }
-                if (g_plugin.m_pState->m_nCompPSVersion < MD2_PS_2_0)
-                {
-                    g_plugin.m_pState->m_nCompPSVersion = MD2_PS_2_0;
-                    g_plugin.m_pState->GenDefaultCompShader();
-                }
-                break;
-            case MD2_PS_2_0:
-                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_2_X);
-                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_2_X);
-                break;
-            case MD2_PS_2_X:
-            case MD2_PS_3_0:
-                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_4_0);
-                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_4_0);
-                break;
-            case MD2_PS_4_0:
-                g_plugin.m_pState->m_nWarpPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, (int)MD2_PS_5_0);
-                g_plugin.m_pState->m_nCompPSVersion = std::max(g_plugin.m_pState->m_nCompPSVersion, (int)MD2_PS_5_0);
-                break;
-            default:
-                assert(false);
-                break;
-        }
-    }
-    g_plugin.m_pState->m_nMinPSVersion = std::min(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
-    g_plugin.m_pState->m_nMaxPSVersion = std::max(g_plugin.m_pState->m_nWarpPSVersion, g_plugin.m_pState->m_nCompPSVersion);
-
-    g_plugin.RecompilePresetShaders(true, true);
-}
-
 void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
 {
     UNREFERENCED_PARAMETER(nFlags);
@@ -432,7 +358,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
     else if (UI_mode == UI_UPGRADE_PIXEL_SHADER)
     {
         if (chChar == 'y' || chChar == 'Y')
-            g_plugin.RunOnRenderThread(UpgradePixelShaders); // it changes what the frames are drawn with
+            g_plugin.RunOnRenderThread([] { g_plugin.UpgradePixelShaders(); }); // it changes what the frames are drawn with
         if (chChar != '\r')
         {
             UI_mode = UI_MENU;
@@ -495,10 +421,10 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
 
                     if (g_plugin.m_nNumericInputDigits >= 2)
                     {
-                        // Sprites are loaded and killed on the render thread, which draws them.
+                        // On the render thread, which draws the messages and sprites.
                         const int num = g_plugin.m_nNumericInputNum;
                         if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_CUST_MSG)
-                            g_plugin.LaunchCustomMessage(num);
+                            g_plugin.RunOnRenderThread([num] { g_plugin.LaunchCustomMessage(num); });
                         else if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_SPRITE)
                             g_plugin.RunOnRenderThread([num] { g_plugin.LaunchSprite(num, -1); });
                         else if (g_plugin.m_nNumericInputMode == NUMERIC_INPUT_MODE_SPRITE_KILL)
@@ -578,7 +504,7 @@ void milk2_ui_element::OnChar(TCHAR chChar, UINT nRepCnt, UINT nFlags)
                 return;
             case 't':
             case 'T':
-                g_plugin.LaunchSongTitleAnim();
+                LaunchSongTitle();
                 return;
             case 'o':
                 g_plugin.m_pState->m_fWarpAmount /= 1.1f;
@@ -1237,40 +1163,32 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                     else if (UI_mode == UI_IMPORT_WAVE || UI_mode == UI_EXPORT_WAVE ||
                              UI_mode == UI_IMPORT_SHAPE || UI_mode == UI_EXPORT_SHAPE)
                     {
-                        //int bWave = (UI_mode == UI_IMPORT_WAVE || UI_mode == UI_EXPORT_WAVE);
-                        int bImport = (UI_mode == UI_IMPORT_WAVE || UI_mode == UI_IMPORT_SHAPE);
-
-                        LPARAM i = g_plugin.m_pCurMenu->GetCurItem()->m_lParam;
-                        int ret = 0;
-                        switch (UI_mode)
-                        {
-                            case UI_IMPORT_WAVE:
-                                ret = g_plugin.m_pState->m_wave[i].Import(NULL, waitstring.szText, 0);
-                                break;
-                            case UI_EXPORT_WAVE:
-                                ret = g_plugin.m_pState->m_wave[i].Export(NULL, waitstring.szText, 0);
-                                break;
-                            case UI_IMPORT_SHAPE:
-                                ret = g_plugin.m_pState->m_shape[i].Import(NULL, waitstring.szText, 0);
-                                break;
-                            case UI_EXPORT_SHAPE:
-                                ret = g_plugin.m_pState->m_shape[i].Export(NULL, waitstring.szText, 0);
-                                break;
-                        }
-
-                        if (bImport)
-                            g_plugin.m_pState->RecompileExpressions(1);
-
-                        //m_fShowUserMessageUntilThisTime = GetTime() - 1.0f; // if there was an error message already, clear it
-                        if (!ret)
-                        {
-                            wchar_t buf[1024];
-                            if (UI_mode == UI_IMPORT_WAVE || UI_mode == UI_IMPORT_SHAPE)
-                                WASABI_API_LNGSTRINGW_BUF(IDS_ERROR_IMPORTING_BAD_FILENAME, buf, 1024);
-                            else
-                                WASABI_API_LNGSTRINGW_BUF(IDS_ERROR_IMPORTING_BAD_FILENAME_OR_NOT_OVERWRITEABLE, buf, 1024);
-                            /*g_plugin.AddError(WASABI_API_LNGSTRINGW(IDS_STRING_TOO_LONG), 2.5f, ERR_MISC, true);*/
-                        }
+                        // On the render thread: an import replaces a wave or shape the frames draw
+                        // and recompiles the code they run, and an export reads them.
+                        const LPARAM i = g_plugin.m_pCurMenu->GetCurItem()->m_lParam;
+                        const ui_mode mode = UI_mode;
+                        const std::wstring file = waitstring.szText;
+                        g_plugin.RunOnRenderThread([i, mode, file] {
+                            switch (mode)
+                            {
+                                case UI_IMPORT_WAVE:
+                                    g_plugin.m_pState->m_wave[i].Import(NULL, file.c_str(), 0);
+                                    break;
+                                case UI_EXPORT_WAVE:
+                                    g_plugin.m_pState->m_wave[i].Export(NULL, file.c_str(), 0);
+                                    break;
+                                case UI_IMPORT_SHAPE:
+                                    g_plugin.m_pState->m_shape[i].Import(NULL, file.c_str(), 0);
+                                    break;
+                                case UI_EXPORT_SHAPE:
+                                    g_plugin.m_pState->m_shape[i].Export(NULL, file.c_str(), 0);
+                                    break;
+                                default:
+                                    break;
+                            }
+                            if (mode == UI_IMPORT_WAVE || mode == UI_IMPORT_SHAPE)
+                                g_plugin.m_pState->RecompileExpressions(1);
+                        });
 
                         UI_mode = UI_MENU;
                         waitstring.bActive = false;
@@ -1718,16 +1636,19 @@ void milk2_ui_element::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
                     }
                     else // Load new preset (and blend to it with the spacebar), on the render thread.
                     {
+                        // The file highlighted now: a rescan may renumber the list before the task
+                        // runs, and the task then leaves the list's position unknown.
                         const int pos = static_cast<int>(g_plugin.m_nPresetListCurPos);
+                        const std::wstring file = g_plugin.GetPresetPath(pos);
                         const float blendTime = (nChar == VK_SPACE) ? g_plugin.m_fBlendTimeUser : 0.0f;
-                        g_plugin.RunOnRenderThread([pos, blendTime] {
-                            const std::wstring file = g_plugin.GetPresetPath(pos); // empty if a rescan replaced the list meanwhile
-                            if (file.empty())
-                                return;
-                            g_plugin.m_nCurrentPreset = pos;
-                            g_plugin.m_presetHistoryPos = (g_plugin.m_presetHistoryPos + 1) % PRESET_HIST_LEN;
-                            g_plugin.LoadPreset(file.c_str(), blendTime);
-                        });
+                        if (!file.empty())
+                        {
+                            g_plugin.RunOnRenderThread([pos, file, blendTime] {
+                                g_plugin.m_nCurrentPreset = g_plugin.GetPresetPath(pos) == file ? pos : -1;
+                                g_plugin.m_presetHistoryPos = (g_plugin.m_presetHistoryPos + 1) % PRESET_HIST_LEN;
+                                g_plugin.LoadPreset(file.c_str(), blendTime);
+                            });
+                        }
                     }
                 }
                 return;
