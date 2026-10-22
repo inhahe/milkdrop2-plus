@@ -8,6 +8,7 @@
 #pragma once
 
 #include <vis_milk2/album_art.h>
+#include "album_art_files.h"
 
 static constexpr int g_nFontSize[] = {
     6,   7,   8,  9,  10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24, 26,
@@ -167,7 +168,7 @@ typedef struct
     bool m_bShowAlbum;
     int32_t m_nAlbumArtPosition; // an AlbumArtPosition (album_art.h)
     int32_t m_nAlbumArtSize;     // the image's longer side, in percent of the canvas's shorter side
-    bool m_bAlbumArtFiles;       // whether foobar2000's album art search may use image files (folder.jpg...)
+    int32_t m_nAlbumArtFiles;    // an AlbumArtFiles (album_art_files.h): which image files the art may be
     bool m_bAlbumArtFadeOut;     // whether the art fades out m_dAlbumArtShowFor seconds after it appears
     double m_dAlbumArtShowFor;   // doubles, as saved: a float would not compare equal to the
     double m_dAlbumArtFadeTime;  // setting it was read from; seconds a fade in or out takes

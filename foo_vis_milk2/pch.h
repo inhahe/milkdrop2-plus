@@ -67,6 +67,8 @@
 #include <sdk/advconfig_impl.h>
 #include <sdk/album_art.h>
 #include <sdk/audio_chunk.h>
+#include <sdk/input.h>
+#include <sdk/file_info_impl.h>
 #include <sdk/console.h>
 #include <sdk/initquit.h>
 #include <sdk/playback_control.h>

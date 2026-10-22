@@ -1407,7 +1407,7 @@ static std::vector<uint8_t> AlbumArtFile(const metadb_handle_ptr& track, const p
 // pattern (such as folder.jpg beside the track, or a central covers folder), but with fallbacks (an
 // online lookup component), and with embedded pictures unless `embedded` is false, for a file
 // already looked in (the search alone reads them for a stream, an archive or a cue sheet). For
-// when the user turns image files off. Any thread.
+// when image files are off, or the one found is another album's. Any thread.
 class album_art_config_without_files : public album_art_manager_config
 {
   public:
@@ -1420,12 +1420,90 @@ class album_art_config_without_files : public album_art_manager_config
     const bool m_embedded;
 };
 
+// The album of the audio file at `path`, as foobar2000 holds it or else as the file's tags say
+// (its first track's, for a file of several, such as a cue sheet); empty if it has none; nothing if
+// it cannot be read. Any thread.
+static std::optional<std::string> AlbumOf(const char* path, abort_callback& abort)
+{
+    const auto album = [](const file_info& info) {
+        const char* album = info.meta_get("album", 0);
+        return std::string(album ? album : "");
+    };
+    try
+    {
+        if (metadb_info_container::ptr cached; metadb::get()->handle_create(path, 0)->get_info_ref(cached))
+            return album(cached->info());
+        input_info_reader::ptr reader;
+        input_entry::g_open_for_info_read(reader, nullptr, path, abort);
+        if (reader->get_subsong_count() == 0)
+            return std::nullopt;
+        file_info_impl info;
+        reader->get_info(reader->get_subsong(0), info, abort);
+        return album(info);
+    }
+    catch (const exception_aborted&)
+    {
+        throw;
+    }
+    catch (const std::exception&) // not a file foobar2000 can read after all, or unreadable
+    {
+    }
+    return std::nullopt;
+}
+
+// Whether the art the album art search found for `track`, through `extractor`, is no image file
+// (a picture embedded in an audio file, or one a fallback component found), or an image file that
+// is the cover of the track's album rather than another's that shares its folder (IsAlbumImage).
+// Any thread.
+static bool IsTheAlbumsArt(const metadb_handle_ptr& track, const album_art_extractor_instance_v2::ptr& extractor, abort_callback& abort)
+{
+    album_art_path_list::ptr paths;
+    try
+    {
+        paths = extractor->query_paths(album_art_ids::cover_front, abort);
+    }
+    catch (const exception_aborted&)
+    {
+        throw;
+    }
+    catch (const std::exception&) // where it came from cannot be told
+    {
+        return true;
+    }
+    if (!paths.is_valid() || paths->get_count() == 0)
+        return true; // a fallback's
+    const char* image = paths->get_path(0);
+    if (input_entry::g_is_supported_path(image))
+        return true; // embedded in the track's file, or in the one its cue sheet plays
+    std::string album;
+    if (metadb_info_container::ptr info; track->get_info_ref(info))
+        if (const char* trackAlbum = info->info().meta_get("album", 0))
+            album = trackAlbum;
+    std::vector<std::string> folderTracks;
+    try
+    {
+        listDirectory(pfc::string_directory(image), abort, [&](const char* path, const t_filestats&, bool isDir) {
+            if (!isDir && input_entry::g_is_supported_path(path))
+                folderTracks.emplace_back(path);
+        });
+    }
+    catch (const exception_aborted&)
+    {
+        throw;
+    }
+    catch (const std::exception&) // a folder that cannot be listed (one on a web server): no tracks known
+    {
+    }
+    return IsAlbumImage(image, track->get_path(), album, folderTracks, [&](const std::string& path) { return AlbumOf(path.c_str(), abort); });
+}
+
 // The front cover of `track` as an encoded image: the one embedded in its file, which is the
-// track's own, read directly; or else what foobar2000's album art search finds for it, image files
-// included only if `files`. Those may be an image beside the file, which in a folder of tracks
-// from different albums is often another album's (a cover.jpg), so they come second, and the user
-// may turn them off. Empty if there is none. Any thread.
-static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool files, abort_callback& abort)
+// track's own, read directly; or else what foobar2000's album art search finds for it, with image
+// files as `files`, an AlbumArtFiles, allows. Those may be an image beside the file, which in a
+// folder of tracks from different albums is often another album's (a cover.jpg), so they come
+// second, and by default only one that is the track's album's is taken; in place of another
+// album's comes what the search finds without image files. Empty if there is none. Any thread.
+static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, int files, abort_callback& abort)
 {
     const auto bytes = [](const album_art_data::ptr& aad) {
         if (!aad.is_valid() || aad->size() == 0)
@@ -1455,11 +1533,17 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, bool f
     }
     try
     {
-        album_art_manager_config::ptr config; // none: foobar2000's own settings
-        if (!files)
-            config = fb2k::service_new<album_art_config_without_files>(!lookedIn);
-        auto extractor = album_art_manager_v3::get()->open_v3(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), config, abort);
-        return bytes(extractor->query(album_art_ids::cover_front, abort));
+        const auto search = [&](bool withFiles) {
+            album_art_manager_config::ptr config; // none: foobar2000's own settings
+            if (!withFiles)
+                config = fb2k::service_new<album_art_config_without_files>(!lookedIn);
+            return album_art_manager_v3::get()->open_v3(pfc::list_single_ref_t(track), pfc::list_single_ref_t(album_art_ids::cover_front), config, abort);
+        };
+        const auto extractor = search(files != ALBUM_ART_FILES_NEVER);
+        auto image = bytes(extractor->query(album_art_ids::cover_front, abort));
+        if (files != ALBUM_ART_FILES_ALBUM || IsTheAlbumsArt(track, extractor, abort))
+            return image;
+        return bytes(search(false)->query(album_art_ids::cover_front, abort)); // another album's: none of its files
     }
     catch (const std::exception&) // exception_album_art_not_found, the file could not be read, or aborted
     {
@@ -1510,7 +1594,7 @@ static void ShowAlbumArt(const metadb_handle_ptr& track, bool bNewTrack = false)
     }
     s_albumArtTrack = track;
     s_albumArtAbort = std::make_shared<abort_callback_impl>();
-    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), files = s_config.settings.m_bAlbumArtFiles,
+    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), files = s_config.settings.m_nAlbumArtFiles,
                      abort = s_albumArtAbort, show] {
         std::vector<uint8_t> image = AlbumArtFile(track, format, *abort);
         if (image.empty())
@@ -3286,13 +3370,13 @@ void ApplyMilkDropPreferences(bool bRemakeResources)
 {
     const bool showAlbum = s_config.settings.m_bShowAlbum;
     const std::wstring artworkFormat = s_config.settings.m_szArtworkFormat;
-    const bool albumArtFiles = s_config.settings.m_bAlbumArtFiles;
+    const int32_t albumArtFiles = s_config.settings.m_nAlbumArtFiles;
     s_config.reset();
     PublishPlayback(); // the title format may have changed
     // What to show; how is in the settings the sprites take each frame.
     if (s_config.settings.m_bShowAlbum != showAlbum)
         ShowNowPlayingAlbumArt(); // as the context menu's switch does
-    else if (s_config.settings.m_bShowAlbum && (artworkFormat != s_config.settings.m_szArtworkFormat || s_config.settings.m_bAlbumArtFiles != albumArtFiles))
+    else if (s_config.settings.m_bShowAlbum && (artworkFormat != s_config.settings.m_szArtworkFormat || s_config.settings.m_nAlbumArtFiles != albumArtFiles))
         ShowAlbumArt(s_albumArtTrack); // the art up, playing or stopped, found again; if the same, it stays
 #ifdef TIMER_TP
     EnterCriticalSection(&s_cs); // a frame at most: the render thread never waits for this thread

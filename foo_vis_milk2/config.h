@@ -173,9 +173,9 @@ static constexpr GUID guid_cfg_nAlbumArtPosition = {
 static constexpr GUID guid_cfg_nAlbumArtSize = {
     0x71de6599, 0x5b30, 0x4a15, {0x8e, 0x9d, 0xa7, 0x2f, 0x39, 0x38, 0x9d, 0xd4}
 }; // {71DE6599-5B30-4A15-8E9D-A72F39389DD4}
-static constexpr GUID guid_cfg_bAlbumArtFiles = {
-    0x7df8529e, 0x4b0f, 0x486c, {0xa6, 0x88, 0xb7, 0xa0, 0x45, 0xc3, 0xf, 0x94}
-}; // {7DF8529E-4B0F-486C-A688-B7A045C30F94}
+static constexpr GUID guid_cfg_nAlbumArtFiles = {
+    0x219d2008, 0x5bd6, 0x450a, {0x8a, 0xa8, 0xd7, 0xfd, 0x1d, 0x27, 0xbd, 0x62}
+}; // {219D2008-5BD6-450A-8AA8-D7FD1D27BD62}
 static constexpr GUID guid_cfg_bAlbumArtFadeOut = {
     0x69b05c8c, 0xae7d, 0x4665, {0x85, 0xa2, 0xa, 0xec, 0x4b, 0xac, 0x16, 0xcd}
 }; // {69B05C8C-AE7D-4665-85A2-0AEC4BAC16CD}
@@ -275,7 +275,7 @@ static constexpr bool default_bEnableDownmix = false;
 static constexpr bool default_bShowAlbum = false;
 static constexpr int default_nAlbumArtPosition = ALBUM_ART_LOWER_RIGHT;
 static constexpr int default_nAlbumArtSize = DEFAULT_ALBUM_ART_SIZE;
-static constexpr bool default_bAlbumArtFiles = true;
+static constexpr int default_nAlbumArtFiles = ALBUM_ART_FILES_ALBUM;
 static constexpr bool default_bAlbumArtFadeOut = false;
 static constexpr double default_fAlbumArtShowFor = DEFAULT_ALBUM_ART_SHOW_FOR;
 static constexpr double default_fAlbumArtFadeTime = DEFAULT_ALBUM_ART_FADE_TIME;
@@ -433,7 +433,7 @@ class milk2_album_art_page : public preferences_page_instance, public CDialogImp
         MSG_WM_DESTROY(OnDestroy)
         COMMAND_HANDLER_EX(IDC_CB_SHOW_ALBUM, BN_CLICKED, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ARTWORK_FORMAT, EN_CHANGE, OnControlChange)
-        COMMAND_HANDLER_EX(IDC_CB_ALBUM_ART_FILES, BN_CLICKED, OnControlChange)
+        COMMAND_HANDLER_EX(IDC_ALBUM_ART_FILES, CBN_SELCHANGE, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ALBUM_ART_POSITION, CBN_SELCHANGE, OnControlChange)
         COMMAND_HANDLER_EX(IDC_ALBUM_ART_SIZE, CBN_SELCHANGE, OnControlChange)
         COMMAND_HANDLER_EX(IDC_CB_ALBUM_ART_FADE_OUT, BN_CLICKED, OnControlChange)
@@ -456,7 +456,7 @@ class milk2_album_art_page : public preferences_page_instance, public CDialogImp
     {
         bool showAlbum;
         std::string format; // the artwork format, UTF-8
-        bool files;         // whether foobar2000's album art search may use image files
+        int64_t files;      // an AlbumArtFiles: which image files foobar2000's album art search may use
         int64_t position;   // an AlbumArtPosition
         int64_t size;       // percent
         bool fadeOut;

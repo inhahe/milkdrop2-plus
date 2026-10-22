@@ -129,18 +129,19 @@ BEGIN
     CONTROL         "Show the playing track's album art",IDC_CB_SHOW_ALBUM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,2,2,200,10
     LTEXT           "Artwork display format:",IDC_ARTWORK_FORMAT_LABEL,14,18,120,10
     EDITTEXT        IDC_ARTWORK_FORMAT,14,28,290,13,ES_AUTOHSCROLL
-    CONTROL         "Use image files, such as a folder.jpg beside the track",IDC_CB_ALBUM_ART_FILES,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,46,290,10
-    LTEXT           "Position:",IDC_ALBUM_ART_POSITION_CAPTION,14,64,30,10
-    COMBOBOX        IDC_ALBUM_ART_POSITION,46,62,80,87,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Size:",IDC_ALBUM_ART_SIZE_CAPTION,140,64,18,10
-    COMBOBOX        IDC_ALBUM_ART_SIZE,160,62,50,123,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "Fade out after",IDC_CB_ALBUM_ART_FADE_OUT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,84,60,10
-    EDITTEXT        IDC_ALBUM_ART_SHOW_FOR,76,82,30,13,ES_CENTER | ES_AUTOHSCROLL
-    LTEXT           "seconds",IDC_ALBUM_ART_SHOW_FOR_UNIT,110,84,60,10
-    LTEXT           "Each fade takes",IDC_ALBUM_ART_FADE_TIME_CAPTION,14,102,60,10
-    EDITTEXT        IDC_ALBUM_ART_FADE_TIME,76,100,30,13,ES_CENTER | ES_AUTOHSCROLL
-    LTEXT           "seconds, in and out",IDC_ALBUM_ART_FADE_TIME_UNIT,110,102,100,10
-    LTEXT           "The art fades in when a track starts. An [img100] section in the sprite list (Edit Sprites, on the MilkDrop page) draws it its own way instead; its code can use artx, arty, artsize, arthide and artfade.",IDC_STATIC,2,124,302,28
+    LTEXT           "Image files, such as folder.jpg:",IDC_ALBUM_ART_FILES_CAPTION,14,48,110,10
+    COMBOBOX        IDC_ALBUM_ART_FILES,126,46,178,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Position:",IDC_ALBUM_ART_POSITION_CAPTION,14,68,30,10
+    COMBOBOX        IDC_ALBUM_ART_POSITION,46,66,80,87,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Size:",IDC_ALBUM_ART_SIZE_CAPTION,140,68,18,10
+    COMBOBOX        IDC_ALBUM_ART_SIZE,160,66,50,123,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Fade out after",IDC_CB_ALBUM_ART_FADE_OUT,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,88,60,10
+    EDITTEXT        IDC_ALBUM_ART_SHOW_FOR,76,86,30,13,ES_CENTER | ES_AUTOHSCROLL
+    LTEXT           "seconds",IDC_ALBUM_ART_SHOW_FOR_UNIT,110,88,60,10
+    LTEXT           "Each fade takes",IDC_ALBUM_ART_FADE_TIME_CAPTION,14,106,60,10
+    EDITTEXT        IDC_ALBUM_ART_FADE_TIME,76,104,30,13,ES_CENTER | ES_AUTOHSCROLL
+    LTEXT           "seconds, in and out",IDC_ALBUM_ART_FADE_TIME_UNIT,110,106,100,10
+    LTEXT           "The art fades in when a track starts. An [img100] section in the sprite list (Edit Sprites, on the MilkDrop page) draws it its own way instead; its code can use artx, arty, artsize, arthide and artfade.",IDC_STATIC,2,128,302,28
 END
 
 
@@ -976,7 +977,7 @@ BEGIN
     IDS_SHOW_ALBUM_HELP     "Shows the playing track's album art over the visualization. Also on the right-click menu of the Default UI element (the Columns UI panel has none)."
     IDS_ALBUM_ART_POSITION_HELP "Where the album art goes. An [img100] section in the sprite list (Edit Sprites, on the MilkDrop page) overrides this, the size and the fades."
     IDS_ALBUM_ART_FADE_OUT_HELP "Fades the album art out this many seconds after it appears, when a track starts. Unchecked, it stays."
-    IDS_ALBUM_ART_FILES_HELP "Untick to have foobar2000's album art search skip image files, beside the track and in central folders alike, and find only covers embedded in it or looked up by other components. A file from the artwork display format still shows."
+    IDS_ALBUM_ART_FILES_HELP "Image files foobar2000's album art search finds, beside the track or in a covers folder. With If the folder..., one whose folder also holds other albums' tracks is skipped, unless it is named after the track or its album."
     IDS_ALBUM_ART_FADE_TIME_HELP "How many seconds the album art takes to fade in, and to fade out. 0: it appears and goes at once."
     IDS_ALBUM_ART_SIZE_HELP "The album art's longer side, as a share of the visualization's shorter side (its height, when it is wider than tall)."
     IDS_HOW_TO_SET_PRESET_LIBRARY "Right-click > Set Preset Library Folder..."

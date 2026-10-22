@@ -54,6 +54,9 @@
     <ClCompile Include="stored_path.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="album_art_files.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="cui_element.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -90,6 +93,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="stored_path.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="album_art_files.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

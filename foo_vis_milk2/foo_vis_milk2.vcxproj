@@ -617,6 +617,9 @@
     <ClCompile Include="stored_path.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="album_art_files.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="cui_element.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
@@ -633,6 +636,7 @@
     <ClInclude Include="favorites_manager.h" />
     <ClInclude Include="preset_browser.h" />
     <ClInclude Include="stored_path.h" />
+    <ClInclude Include="album_art_files.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="extrusionps.hlsl">

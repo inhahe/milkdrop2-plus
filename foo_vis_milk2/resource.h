@@ -548,7 +548,8 @@
 #define IDC_ALBUM_ART_FADE_TIME_CAPTION 1102
 #define IDC_ALBUM_ART_FADE_TIME         1103
 #define IDC_ALBUM_ART_FADE_TIME_UNIT    1104
-#define IDC_CB_ALBUM_ART_FILES          1105
+#define IDC_ALBUM_ART_FILES             1105
+#define IDC_ALBUM_ART_FILES_CAPTION     1106
 #define ID_SHOWHELP                     40007
 #define ID_SHOWPLAYLIST                 40008
 #define ID_QUIT                         40009
@@ -560,7 +561,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        103
 #define _APS_NEXT_COMMAND_VALUE         40011
-#define _APS_NEXT_CONTROL_VALUE         1106
+#define _APS_NEXT_CONTROL_VALUE         1107
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
