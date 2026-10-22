@@ -23,11 +23,12 @@ TEST_CLASS(AlbumArtFilesTest)
   private:
     const std::string dir = "file://D:\\Music\\Mixed\\";
     const std::string track = dir + "01 Track.flac";
+    const AlbumTags gladiator = {"Gladiator", ""};
 
     // Whether IsAlbumImage takes `image` as the cover of `track`, whose album is `album`, with
     // `albums` the tracks in the image's folder and their albums (nothing: unreadable). `asked`
     // gets the tracks whose album was read.
-    bool Check(const std::string& image, const std::string& album, const std::map<std::string, std::optional<std::string>>& albums,
+    bool Check(const std::string& image, const AlbumTags& album, const std::map<std::string, std::optional<AlbumTags>>& albums,
                std::vector<std::string>* asked = nullptr) const
     {
         std::vector<std::string> paths;
@@ -43,65 +44,78 @@ TEST_CLASS(AlbumArtFilesTest)
   public:
     TEST_METHOD(AFolderOfOneAlbumIsItsCover)
     {
-        Assert::IsTrue(Check(dir + "folder.jpg", "Gladiator", {{track, "Gladiator"}, {dir + "02 Track.flac", "Gladiator"}, {dir + "03 Track.mp3", "gladiator"}}));
+        Assert::IsTrue(Check(dir + "folder.jpg", gladiator,
+                             {{track, gladiator}, {dir + "02 Track.flac", gladiator}, {dir + "03 Track.mp3", AlbumTags{"gladiator", "Hans Zimmer"}}}));
     }
 
     TEST_METHOD(AnotherAlbumInTheFolderMakesItNot)
     {
-        Assert::IsFalse(Check(dir + "folder.jpg", "Gladiator", {{track, "Gladiator"}, {dir + "02 Track.flac", "Labyrinth"}}));
+        Assert::IsFalse(Check(dir + "folder.jpg", gladiator, {{track, gladiator}, {dir + "02 Track.flac", AlbumTags{"Labyrinth", ""}}}));
     }
 
-    TEST_METHOD(ATrackWithNoAlbumInTheFolderMakesItNot)
+    TEST_METHOD(AlbumsOfOneTitleAreToldApartByAlbumArtist)
     {
-        Assert::IsFalse(Check(dir + "cover.png", "Gladiator", {{track, "Gladiator"}, {dir + "02 Track.flac", ""}}));
+        const AlbumTags queen = {"Greatest Hits", "Queen"};
+        Assert::IsFalse(Check(dir + "folder.jpg", queen, {{track, queen}, {dir + "02 Track.flac", AlbumTags{"Greatest Hits", "ABBA"}}}));
+        // A compilation's tracks without an album artist are still one album.
+        Assert::IsTrue(Check(dir + "folder.jpg", queen, {{track, queen}, {dir + "02 Track.flac", AlbumTags{"Greatest Hits", ""}}}));
     }
 
-    TEST_METHOD(UnreadableTracksDoNotCount)
+    TEST_METHOD(TracksWithNoAlbumOrUnreadableDoNotCount)
     {
-        Assert::IsTrue(Check(dir + "folder.jpg", "Gladiator", {{track, "Gladiator"}, {dir + "02 Track.flac", std::nullopt}}));
+        // A cue sheet's untagged WAV beside it, say.
+        Assert::IsTrue(Check(dir + "folder.jpg", gladiator,
+                             {{track, gladiator}, {dir + "Album.wav", AlbumTags{}}, {dir + "02 Track.flac", std::nullopt}}));
+    }
+
+    TEST_METHOD(ATrackWithNoAlbumLeavesTheSearchsChoice)
+    {
+        std::vector<std::string> asked;
+        Assert::IsTrue(Check(dir + "folder.jpg", AlbumTags{}, {{track, AlbumTags{}}, {dir + "02 Track.flac", AlbumTags{"Labyrinth", ""}}}, &asked));
+        Assert::IsTrue(asked.empty());
     }
 
     TEST_METHOD(AFolderWithNoTracksIsTrusted)
     {
         // A covers folder, or the parent of an album's disc folders.
-        Assert::IsTrue(Check("file://D:\\Covers\\front.jpg", "Gladiator", {}));
+        Assert::IsTrue(Check("file://D:\\Covers\\front.jpg", gladiator, {}));
     }
 
     TEST_METHOD(TheTrackItselfIsNotReadAndPathsIgnoreCase)
     {
         std::vector<std::string> asked;
         const std::string sameTrack = "FILE://d:\\music\\MIXED\\01 track.FLAC";
-        Assert::IsTrue(Check(dir + "folder.jpg", "Gladiator", {{sameTrack, "Labyrinth"}, {dir + "02 Track.flac", "Gladiator"}}, &asked));
+        Assert::IsTrue(Check(dir + "folder.jpg", gladiator, {{sameTrack, AlbumTags{"Labyrinth", ""}}, {dir + "02 Track.flac", gladiator}}, &asked));
         Assert::AreEqual(size_t(1), asked.size());
         Assert::AreEqual(dir + "02 Track.flac", asked[0]);
     }
 
-    TEST_METHOD(ATrackWithNoAlbumOwnsOnlyAFolderOfItsOwn)
-    {
-        Assert::IsTrue(Check(dir + "folder.jpg", "", {{track, ""}}));
-        Assert::IsFalse(Check(dir + "folder.jpg", "", {{track, ""}, {dir + "02 Track.flac", ""}}));
-    }
-
     TEST_METHOD(AnImageNamedAfterTheTrackOrTheAlbumIsItsInAnyFolder)
     {
-        const std::map<std::string, std::optional<std::string>> mixed = {{track, "Gladiator"}, {dir + "02 Track.flac", "Labyrinth"}};
-        Assert::IsTrue(Check(dir + "01 Track.jpg", "Gladiator", mixed));
-        Assert::IsTrue(Check(dir + "gladiator.PNG", "Gladiator", mixed));
-        Assert::IsTrue(Check("D:/Music/Mixed/01 track.jpeg", "", {{track, ""}, {dir + "02 Track.flac", ""}}));
-        Assert::IsFalse(Check(dir + "Gladiator Live.jpg", "Gladiator", mixed));
+        const std::map<std::string, std::optional<AlbumTags>> mixed = {{track, gladiator}, {dir + "02 Track.flac", AlbumTags{"Labyrinth", ""}}};
+        Assert::IsTrue(Check(dir + "01 Track.jpg", gladiator, mixed));
+        Assert::IsTrue(Check(dir + "gladiator.PNG", gladiator, mixed));
+        Assert::IsTrue(Check("D:/Music/Mixed/01 track.jpeg", gladiator, mixed));
+        Assert::IsFalse(Check(dir + "Gladiator Live.jpg", gladiator, mixed));
     }
 
-    TEST_METHOD(NamesBeyondAsciiCompareWithoutCase)
+    TEST_METHOD(NamesCompareWithoutCaseOrComposition)
     {
-        Assert::IsTrue(Check(dir + "\xC3\x89T\xC3\x89.jpg", "\xC3\xA9t\xC3\xA9", {{track, "\xC3\xA9t\xC3\xA9"}, {dir + "02 Track.flac", "Labyrinth"}}));
-        Assert::IsTrue(Check(dir + "folder.jpg", "\xC3\xA9t\xC3\xA9", {{track, "x"}, {dir + "02 Track.flac", "\xC3\x89T\xC3\x89"}}));
+        // "ete" with an acute accent on each e: composed (U+00E9), then as e and U+0301.
+        const AlbumTags ete = {"\xC3\xA9t\xC3\xA9", ""};
+        const AlbumTags eteDecomposed = {"e\xCC\x81t\x65\xCC\x81", ""};
+        const std::map<std::string, std::optional<AlbumTags>> mixed = {{track, ete}, {dir + "02 Track.flac", AlbumTags{"Labyrinth", ""}}};
+        Assert::IsTrue(Check(dir + "\xC3\x89T\xC3\x89.jpg", ete, mixed));      // capitals
+        Assert::IsTrue(Check(dir + "E\xCC\x81T\x45\xCC\x81.jpg", ete, mixed)); // capitals, decomposed, as macOS names files
+        Assert::IsTrue(Check(dir + "folder.jpg", ete, {{track, ete}, {dir + "02 Track.flac", eteDecomposed}}));
     }
 
     TEST_METHOD(AlbumsAreReadOnlyUntilOneDiffers)
     {
         std::vector<std::string> asked;
-        Assert::IsFalse(Check(dir + "folder.jpg", "Gladiator",
-                              {{dir + "02 Track.flac", "Labyrinth"}, {dir + "03 Track.flac", "Gladiator"}, {dir + "04 Track.flac", "Gladiator"}}, &asked));
+        Assert::IsFalse(Check(dir + "folder.jpg", gladiator,
+                              {{dir + "02 Track.flac", AlbumTags{"Labyrinth", ""}}, {dir + "03 Track.flac", gladiator}, {dir + "04 Track.flac", gladiator}},
+                              &asked));
         Assert::AreEqual(size_t(1), asked.size());
     }
 };

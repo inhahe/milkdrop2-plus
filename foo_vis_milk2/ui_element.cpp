@@ -1420,25 +1420,35 @@ class album_art_config_without_files : public album_art_manager_config
     const bool m_embedded;
 };
 
-// The album of the audio file at `path`, as foobar2000 holds it or else as the file's tags say
-// (its first track's, for a file of several, such as a cue sheet); empty if it has none; nothing if
-// it cannot be read. Any thread.
-static std::optional<std::string> AlbumOf(const char* path, abort_callback& abort)
+// The album of the track at `path`, its subsong `subsong` or, with none, the file's first (a cue
+// sheet's first track, say), as foobar2000 holds its tags or else as the file says. Nothing if it
+// cannot be read. Any thread.
+static std::optional<AlbumTags> AlbumOf(const char* path, std::optional<uint32_t> subsong, abort_callback& abort)
 {
     const auto album = [](const file_info& info) {
-        const char* album = info.meta_get("album", 0);
-        return std::string(album ? album : "");
+        const auto tag = [&](const char* name) {
+            const char* value = info.meta_get(name, 0);
+            return std::string(value ? value : "");
+        };
+        AlbumTags album{tag("album"), tag("album artist")};
+        if (album.artist.empty())
+            album.artist = tag("albumartist"); // as some taggers write it
+        return album;
     };
     try
     {
-        if (metadb_info_container::ptr cached; metadb::get()->handle_create(path, 0)->get_info_ref(cached))
+        if (metadb_info_container::ptr cached; metadb::get()->handle_create(path, subsong.value_or(0))->get_info_ref(cached))
             return album(cached->info());
         input_info_reader::ptr reader;
         input_entry::g_open_for_info_read(reader, nullptr, path, abort);
-        if (reader->get_subsong_count() == 0)
-            return std::nullopt;
+        if (!subsong)
+        {
+            if (reader->get_subsong_count() == 0)
+                return std::nullopt;
+            subsong = reader->get_subsong(0);
+        }
         file_info_impl info;
-        reader->get_info(reader->get_subsong(0), info, abort);
+        reader->get_info(*subsong, info, abort);
         return album(info);
     }
     catch (const exception_aborted&)
@@ -1475,10 +1485,9 @@ static bool IsTheAlbumsArt(const metadb_handle_ptr& track, const album_art_extra
     const char* image = paths->get_path(0);
     if (input_entry::g_is_supported_path(image))
         return true; // embedded in the track's file, or in the one its cue sheet plays
-    std::string album;
-    if (metadb_info_container::ptr info; track->get_info_ref(info))
-        if (const char* trackAlbum = info->info().meta_get("album", 0))
-            album = trackAlbum;
+    const AlbumTags album = AlbumOf(track->get_path(), track->get_subsong_index(), abort).value_or(AlbumTags{});
+    if (album.title.empty())
+        return true; // nothing to compare (IsAlbumImage): no need to list the folder
     std::vector<std::string> folderTracks;
     try
     {
@@ -1494,7 +1503,7 @@ static bool IsTheAlbumsArt(const metadb_handle_ptr& track, const album_art_extra
     catch (const std::exception&) // a folder that cannot be listed (one on a web server): no tracks known
     {
     }
-    return IsAlbumImage(image, track->get_path(), album, folderTracks, [&](const std::string& path) { return AlbumOf(path.c_str(), abort); });
+    return IsAlbumImage(image, track->get_path(), album, folderTracks, [&](const std::string& path) { return AlbumOf(path.c_str(), std::nullopt, abort); });
 }
 
 // The front cover of `track` as an encoded image: the one embedded in its file, which is the

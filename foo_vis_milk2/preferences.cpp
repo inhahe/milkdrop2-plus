@@ -1000,7 +1000,7 @@ uint32_t milk2_album_art_page::get_state()
 
 void milk2_album_art_page::apply()
 {
-    Settings shown = ShownSettings(); // both combo boxes always have a selection (ShowSettings)
+    Settings shown = ShownSettings(); // every combo box always has a selection (ShowSettings)
     titleformat_object::ptr script;
     if (IsArtworkFormatScript(shown.format.c_str()) && !titleformat_compiler::get()->compile(script, shown.format.c_str()))
     {
@@ -1377,7 +1377,16 @@ void milk2_config::reset()
     settings.m_bShowAlbum = cfg_bShowAlbum;
     settings.m_nAlbumArtPosition = static_cast<int32_t>(cfg_nAlbumArtPosition);
     settings.m_nAlbumArtSize = static_cast<int32_t>(cfg_nAlbumArtSize);
-    settings.m_nAlbumArtFiles = static_cast<int32_t>(cfg_nAlbumArtFiles);
+    switch (static_cast<int64_t>(cfg_nAlbumArtFiles)) // a newer version's value means the default, as the page shows it
+    {
+        case ALBUM_ART_FILES_NEVER:
+        case ALBUM_ART_FILES_ALBUM:
+        case ALBUM_ART_FILES_ALWAYS:
+            settings.m_nAlbumArtFiles = static_cast<int32_t>(cfg_nAlbumArtFiles);
+            break;
+        default:
+            settings.m_nAlbumArtFiles = default_nAlbumArtFiles;
+    }
     settings.m_bAlbumArtFadeOut = cfg_bAlbumArtFadeOut;
     settings.m_dAlbumArtShowFor = cfg_fAlbumArtShowFor;
     settings.m_dAlbumArtFadeTime = cfg_fAlbumArtFadeTime;

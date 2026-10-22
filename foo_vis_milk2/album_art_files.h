@@ -21,17 +21,25 @@ enum AlbumArtFiles
     ALBUM_ART_FILES_ALWAYS = 2,
 };
 
+// An album as a track's tags name it: its title, and its album artist from the ALBUM ARTIST tag
+// alone (the artists of a compilation's tracks differ). Either may be empty.
+struct AlbumTags
+{
+    std::string title;
+    std::string artist;
+};
+
 // Whether the image file at `image`, which foobar2000's album art search found for the track at
-// `track`, is the cover of the track's album, `album` (empty if the track has none), rather than of
-// another album whose tracks share its folder. It is if it is named after the track or the album
-// (a cover for one file or one album, wherever it is kept), or if no other track in its folder has
-// another album, which includes a folder that holds no tracks, such as a covers folder or the
-// parent of an album's disc folders. A track with no album cannot be told from another album's, so
-// then any other track in the folder makes the image not its.
+// `track`, is the cover of the track's album, `album`, rather than of another album whose tracks
+// share its folder. It is unless a track in its folder is known to be of another album: its title
+// differs, or its album artist does where both have one. Tracks with no album title, or whose album
+// cannot be read, do not count, so a folder that holds no tracks (a covers folder, the parent of an
+// album's disc folders) never makes it another's. Nor does anything when the track has no album
+// title, which leaves nothing to compare, or when the image is named after the track or its album.
 // `folderTracks`: the audio files in the image's folder, the track's own among them or not.
-// `albumOf`: the album of the audio file at a path (empty if it has none), or nothing if it cannot
-//            be read, which then does not count. Called only until an album differs.
-// Paths are as foobar2000 gives them ("file://C:\Music\a.flac") or plain, UTF-8; names compare
-// without regard to case.
-bool IsAlbumImage(const std::string& image, const std::string& track, const std::string& album, const std::vector<std::string>& folderTracks,
-                  const std::function<std::optional<std::string>(const std::string&)>& albumOf);
+// `albumOf`: the album of the audio file at a path, or nothing if it cannot be read. Called only
+//            until an album differs.
+// Paths are as foobar2000 gives them ("file://C:\Music\a.flac") or plain, UTF-8. Names compare
+// without regard to case or to how accented letters are composed.
+bool IsAlbumImage(const std::string& image, const std::string& track, const AlbumTags& album, const std::vector<std::string>& folderTracks,
+                  const std::function<std::optional<AlbumTags>(const std::string&)>& albumOf);

@@ -16,9 +16,13 @@
 #endif
 #include <windows.h>
 
+#pragma comment(lib, "Normaliz.lib") // NormalizeString
+
 namespace
 {
-std::wstring Wide(const std::string& text)
+// `text`, UTF-8, as UTF-16 in normalization form C (accented letters composed), or as it is if it
+// is not valid Unicode.
+std::wstring Composed(const std::string& text)
 {
     std::wstring wide;
     if (const int n = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0); n > 0)
@@ -26,14 +30,38 @@ std::wstring Wide(const std::string& text)
         wide.resize(static_cast<size_t>(n));
         MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), n);
     }
+    if (wide.empty())
+        return wide;
+    int size = NormalizeString(NormalizationC, wide.data(), static_cast<int>(wide.size()), nullptr, 0);
+    for (int attempt = 0; attempt < 3 && size > 0; ++attempt) // the size is an estimate
+    {
+        std::wstring composed(static_cast<size_t>(size), L'\0');
+        const int written = NormalizeString(NormalizationC, wide.data(), static_cast<int>(wide.size()), composed.data(), size);
+        if (written > 0)
+        {
+            composed.resize(static_cast<size_t>(written));
+            return composed;
+        }
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+            break;
+        size = -written;
+    }
     return wide;
 }
 
-// Whether `a` and `b` are the same name, or the same path, but for case.
+// Whether `a` and `b` are the same name, or the same path, but for case and composition.
 bool SameName(const std::string& a, const std::string& b)
 {
-    const std::wstring wa = Wide(a), wb = Wide(b);
-    return CompareStringOrdinal(wa.data(), static_cast<int>(wa.size()), wb.data(), static_cast<int>(wb.size()), TRUE) == CSTR_EQUAL;
+    const std::wstring ca = Composed(a), cb = Composed(b);
+    return CompareStringOrdinal(ca.data(), static_cast<int>(ca.size()), cb.data(), static_cast<int>(cb.size()), TRUE) == CSTR_EQUAL;
+}
+
+// Whether `other`, a track's album, is known to be another album than `album`, which has a title.
+bool OtherAlbum(const AlbumTags& other, const AlbumTags& album)
+{
+    if (other.title.empty())
+        return false;
+    return !SameName(other.title, album.title) || (!other.artist.empty() && !album.artist.empty() && !SameName(other.artist, album.artist));
 }
 
 // The name of the file at `path`, without its folder or its extension.
@@ -47,19 +75,19 @@ std::string BaseName(const std::string& path)
 }
 } // namespace
 
-bool IsAlbumImage(const std::string& image, const std::string& track, const std::string& album, const std::vector<std::string>& folderTracks,
-                  const std::function<std::optional<std::string>(const std::string&)>& albumOf)
+bool IsAlbumImage(const std::string& image, const std::string& track, const AlbumTags& album, const std::vector<std::string>& folderTracks,
+                  const std::function<std::optional<AlbumTags>(const std::string&)>& albumOf)
 {
+    if (album.title.empty())
+        return true;
     const std::string name = BaseName(image);
-    if (SameName(name, BaseName(track)) || (!album.empty() && SameName(name, album)))
+    if (SameName(name, BaseName(track)) || SameName(name, album.title))
         return true;
     for (const std::string& other : folderTracks)
     {
         if (SameName(other, track))
             continue;
-        if (album.empty())
-            return false;
-        if (const std::optional<std::string> otherAlbum = albumOf(other); otherAlbum && !SameName(*otherAlbum, album))
+        if (const std::optional<AlbumTags> otherAlbum = albumOf(other); otherAlbum && OtherAlbum(*otherAlbum, album))
             return false;
     }
     return true;
