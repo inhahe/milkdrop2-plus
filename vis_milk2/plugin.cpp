@@ -1842,10 +1842,15 @@ void CPlugin::RelaunchSprites()
 {
     for (const int n : m_spritesToRelaunch)
     {
-        if (n == kAlbumArtSprite)
-            LaunchAlbumArt();
-        else
+        if (n != kAlbumArtSprite)
+        {
             LaunchSprite(n, -1);
+            continue;
+        }
+        LaunchAlbumArt();
+        for (int x = 0; x < NUM_TEX; x++) // its fades go on where they were, not from its launch
+            if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
+                m_texmgr.m_tex[x].fStartTime = m_albumArtLaunchTime;
     }
     m_spritesToRelaunch.clear();
 }
@@ -1859,35 +1864,12 @@ void CPlugin::SetAlbumArt(std::vector<uint8_t> image)
     LaunchAlbumArt();
 }
 
-// The album art's code when the image list has no [img100] section: the image in a corner, or the
-// centre, with a margin of a fortieth of the canvas's shorter side; fading in, and out after a
-// while if the settings say so (all from the inputs `artx`, `arty`, `artsize`, `arthide` and
-// `artfade`: CurrentSpriteInputs). Faded out, it stays, invisible, so that turning the fade off
-// brings it back. Not burned in: a burned sprite is also drawn into the preset's own image every
-// frame, which the preset then smears.
-// A sprite's x and y run from 0 to 1 across the canvas's longer side, centred on the canvas, and
-// sx and sy give the image's longer side as a fraction of it; a non-square image is shrunk about
-// its middle. Hence `aspect` (the canvas's width / height) and `imgaspect` (the image's). An image
-// too large for the margins on one axis is centred on it. The code's own variables must not take
-// the names of the sprite's inputs and outputs (r is its red, for one).
-static const char* const kAlbumArtInitCode = "burn = 0;";
-static const char* const kAlbumArtCode =
-    "side = min(aspect, 1 / aspect);"                         // the shorter side / the longer
-    "ex = 0.5 * min(aspect, 1); ey = 0.5 * min(1 / aspect, 1);" // the half width and half height shown
-    "hw = 0.5 * artsize * min(imgaspect, 1);"                  // the image's half width, and half
-    "hh = 0.5 * artsize * min(1 / imgaspect, 1);"              // height, / the shorter side
-    "sx = artsize * side; sy = sx;"
-    "x = 0.5 + artx * max(ex - side * (0.025 + hw), 0);"
-    "y = 0.5 + arty * max(ey - side * (0.025 + hh), 0);"
-    "fadein = if(above(artfade, 0), min(time / artfade, 1), 1);"
-    "fadeout = if(above(arthide, 0), if(above(artfade, 0), min(max((arthide + artfade - time) / artfade, 0), 1), below(time, arthide)), 1);"
-    "a = min(fadein, fadeout);";
-
-// Launches the album art sprite from what SetAlbumArt kept, if anything.
+// Launches the album art sprite from what SetAlbumArt kept, if anything, with the code for when the
+// image list has no [img100] section (album_art.h).
 void CPlugin::LaunchAlbumArt()
 {
     if (!m_albumArtImage.empty())
-        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, kAlbumArtInitCode, kAlbumArtCode);
+        LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, ALBUM_ART_INIT_CODE, ALBUM_ART_CODE);
 }
 
 static float fCubicInterpolate(float y0, float y1, float y2, float y3, float t)
@@ -3429,13 +3411,18 @@ void CPlugin::CleanUpMilkDropDX11(int final_cleanup)
 #endif
 
     // The sprites go only with the device, their textures' maker. Those on screen, from the image
-    // list or the album art, are launched again on the next device (RelaunchSprites).
+    // list or the album art, are launched again on the next device (RelaunchSprites); the album
+    // art keeps how long it has been up, which its fades go by.
     if (final_cleanup)
     {
         m_spritesToRelaunch.clear();
         for (int x = 0; x < NUM_TEX; x++)
             if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData >= 0 && m_texmgr.m_tex[x].nUserData <= kAlbumArtSprite)
+            {
                 m_spritesToRelaunch.push_back(m_texmgr.m_tex[x].nUserData);
+                if (m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
+                    m_albumArtLaunchTime = m_texmgr.m_tex[x].fStartTime;
+            }
         m_texmgr.Finish();
     }
 

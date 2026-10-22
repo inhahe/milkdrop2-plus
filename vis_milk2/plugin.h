@@ -514,6 +514,7 @@ class CPlugin : public CPluginShell
     double m_albumArtFadeTime = DEFAULT_ALBUM_ART_FADE_TIME;
     void LaunchAlbumArt();
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
+    float m_albumArtLaunchTime = 0.0f;    // and when the album art among them was launched (GetTime)
     void RelaunchSprites();
     // What the sprites' code is given, set before their init code and each frame: the canvas's
     // width / height (`aspect`) and the album art settings (`artx`, `arty`, `artsize`, `arthide`,

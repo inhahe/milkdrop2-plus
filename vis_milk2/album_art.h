@@ -43,6 +43,31 @@ struct AlbumArtInputs
     double fadeTime;
 };
 
+// The album art sprite's code when the image list has no [img100] section: the image in a corner,
+// or the centre, with a margin of a fortieth of the canvas's shorter side; fading in, and out after
+// a while if the settings say so, from the inputs above. The fade out begins `arthide` seconds
+// after the art appears, but not before its fade in has ended. Faded out, the sprite stays,
+// invisible, so that turning the fade off brings the art back. Not burned in: a burned sprite is
+// also drawn into the preset's own image every frame, which the preset then smears.
+// A sprite's x and y run from 0 to 1 across the canvas's longer side, centred on the canvas, and
+// sx and sy give the image's longer side as a fraction of it; a non-square image is shrunk about
+// its middle. Hence `aspect` (the canvas's width / height) and `imgaspect` (the image's). An image
+// too large for the margins on one axis is centred on it. The code's own variables must not take
+// the names of the sprite's inputs and outputs (r is its red, for one).
+inline constexpr const char* ALBUM_ART_INIT_CODE = "burn = 0;";
+inline constexpr const char* ALBUM_ART_CODE =
+    "side = min(aspect, 1 / aspect);"                           // the shorter side / the longer
+    "ex = 0.5 * min(aspect, 1); ey = 0.5 * min(1 / aspect, 1);" // the half width and half height shown
+    "hw = 0.5 * artsize * min(imgaspect, 1);"                    // the image's half width, and half
+    "hh = 0.5 * artsize * min(1 / imgaspect, 1);"                // height, / the shorter side
+    "sx = artsize * side; sy = sx;"
+    "x = 0.5 + artx * max(ex - side * (0.025 + hw), 0);"
+    "y = 0.5 + arty * max(ey - side * (0.025 + hh), 0);"
+    "fadein = if(above(artfade, 0), min(time / artfade, 1), 1);"
+    "outat = max(arthide, artfade);" // when the fade out begins, if there is one
+    "fadeout = if(above(arthide, 0), if(above(artfade, 0), min(max((outat + artfade - time) / artfade, 0), 1), below(time, outat)), 1);"
+    "a = min(fadein, fadeout);";
+
 // `seconds` held to [lo, hi]; not a number is `lo`.
 inline double ClampAlbumArtSeconds(double seconds, double lo, double hi)
 {

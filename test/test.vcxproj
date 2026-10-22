@@ -175,7 +175,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -199,7 +199,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -222,7 +222,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -246,7 +246,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -269,7 +269,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -293,7 +293,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -316,7 +316,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
     </Link>
   </ItemDefinitionGroup>
@@ -340,7 +340,7 @@
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(SolutionDir)Bin\$(Platform)\$(Configuration)\;..\external\foobar2000\shared\;$(VCInstallDir)UnitTest\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vis_milk2.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vis_milk2.lib;projectM_EEL.lib;foobar2000_SDK.lib;foobar2000_SDK_helpers.lib;PFC.lib;libPPUI.lib;shared-$(Platform).lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -350,6 +350,7 @@
     <ClCompile Include="dll.cpp" />
     <ClCompile Include="fft.cpp" />
     <ClCompile Include="stored_path_test.cpp" />
+    <ClCompile Include="album_art_code_test.cpp" />
     <ClCompile Include="album_art_test.cpp" />
     <ClCompile Include="texture_cache_test.cpp" />
     <ClCompile Include="utf8_file_test.cpp" />
