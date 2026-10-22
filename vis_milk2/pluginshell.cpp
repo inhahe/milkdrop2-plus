@@ -198,8 +198,7 @@ void CPluginShell::CleanUpDX11(int final_cleanup)
     // otherwise they might still have a hanging reference!
     if (m_lpDX && m_lpDX->m_lpDevice)
     {
-        for (int i = 0; i < 16; i++)
-            m_lpDX->m_lpDevice->SetTexture(i, NULL);
+        m_lpDX->m_lpDevice->ClearTextures();
     }
 
     CleanUpFonts();

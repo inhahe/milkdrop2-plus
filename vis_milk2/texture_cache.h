@@ -54,8 +54,9 @@ struct TexInfo
 int TextureSizeInBytes(unsigned w, unsigned h, unsigned d, int bitsPerPixel);
 
 // Whether the textures loaded from disk reach the cache limits, so that one must go before
-// another loads. `maxImages`, `maxBytes`: the MaxImages and MaxBytes settings; a negative one
-// (the preferences' "Auto") sets no limit of its own, leaving only running out of memory.
+// another loads. `maxImages`, `maxBytes`: the most textures and bytes to keep; a negative one sets
+// no limit. (The preferences' "Auto" is -1: MaxImages passes it on, while the caller turns
+// MaxBytes' into a limit from the adapter's memory.)
 bool TextureCacheIsFull(const std::vector<TexInfo>& textures, int maxImages, int maxBytes);
 
 // The index in `textures` of the one to drop to make room, or -1 if none may go.

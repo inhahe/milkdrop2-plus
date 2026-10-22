@@ -402,6 +402,12 @@ void D3D11Shim::SetTexture(unsigned int iSlot, ID3D11Resource* pResource)
         views[0]->Release();
 }
 
+void D3D11Shim::ClearTextures()
+{
+    ID3D11ShaderResourceView* views[16] = {};
+    m_pContext->PSSetShaderResources(0, static_cast<UINT>(std::size(views)), views);
+}
+
 void D3D11Shim::SetTransform(unsigned int transType, DirectX::XMMATRIX* pMatrix)
 {
     if (transType == 2) // view

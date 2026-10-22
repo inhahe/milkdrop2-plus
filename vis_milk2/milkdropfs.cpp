@@ -1453,8 +1453,7 @@ void CPlugin::BlurPasses()
     //ID3D11Texture2D* pNewTarget = NULL;
 
     // Clear texture bindings.
-    for (int i = 0; i < 16; i++)
-        lpDevice->SetTexture(i, NULL);
+    lpDevice->ClearTextures();
 
     // Set up fullscreen quad.
     MDVERTEX v[4]{};
@@ -3672,8 +3671,7 @@ void CPlugin::RestoreShaderParams()
     for (int i = 0; i < 2; i++)
         lpDevice->SetSamplerState(i, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_TEXTURE_ADDRESS_WRAP);
 
-    for (int i = 0; i < 16; i++)
-        lpDevice->SetTexture(i, NULL);
+    lpDevice->ClearTextures();
 
     //lpDevice->CreateInputLayout(NULL); // DirectX debug runtime complains heavily about this
     lpDevice->SetVertexShader(NULL, NULL);
@@ -3693,8 +3691,7 @@ void CPlugin::ApplyShaderParams(CShaderParams* p, CConstantTable* pCT, CState* p
     // a sampler whose texture is missing reads black rather than what an earlier draw left in its
     // texture register (which need not be its sampler's index), and emptying one sampler's index
     // cannot undo a texture another sampler bound there.
-    for (int i = 0; i < sizeof(p->m_texture_bindings) / sizeof(p->m_texture_bindings[0]); i++)
-        lpDevice->SetTexture(i, NULL);
+    lpDevice->ClearTextures();
     for (int i = 0; i < sizeof(p->m_texture_bindings) / sizeof(p->m_texture_bindings[0]); i++)
     {
         if (p->m_texcode[i] == TEX_VS)

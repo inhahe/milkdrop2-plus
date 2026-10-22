@@ -43,6 +43,7 @@ class D3D11Shim
     void SetSamplerState(UINT uSlot, D3D11_FILTER filter, D3D11_TEXTURE_ADDRESS_MODE addressMode);
     void SetShader(unsigned int iIndex);
     void SetTexture(unsigned int iSlot, ID3D11Resource* pResource);
+    void ClearTextures(); // empties the 16 texture slots the engine binds to, in one call
     void SetTransform(unsigned int transType, DirectX::XMMATRIX* pMatrix);
     void SetVertexColor(bool bUseColor);
 

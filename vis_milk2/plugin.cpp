@@ -388,37 +388,52 @@ static void OnUserEditedShapecodeInit(LPARAM param1, LPARAM param2)
     g_plugin.m_pState->RecompileExpressions(RECOMPILE_SHAPE_CODE, 1);
 }
 
+// The shader editor (UI thread) calls these on accepting an edit; the render thread recompiles
+// (CPlugin::DoShaderRequests).
 static void OnUserEditedWarpShaders(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    ++g_plugin.m_nTextureDirGeneration; // offer random textures added since
-    g_plugin.ClearErrors(ERR_PRESET);
-    if (g_plugin.m_nMaxPSVersion == 0)
-        return;
-    if (!g_plugin.RecompilePShader(g_plugin.m_pState->m_szWarpShadersText, &g_plugin.m_shaders.warp, SHADER_WARP, false, g_plugin.m_pState->m_nWarpPSVersion))
-    {
-        // Switch to fallback.
-        g_plugin.m_fallbackShaders_ps.warp.ptr->AddRef();
-        g_plugin.m_fallbackShaders_ps.warp.CT->AddRef();
-        g_plugin.m_shaders.warp = g_plugin.m_fallbackShaders_ps.warp;
-    }
+    g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_WARP;
 }
 
 static void OnUserEditedCompShaders(LPARAM param1, LPARAM param2)
 {
     UNREFERENCED_PARAMETER(param1);
     UNREFERENCED_PARAMETER(param2);
-    ++g_plugin.m_nTextureDirGeneration; // offer random textures added since
-    g_plugin.ClearErrors(ERR_PRESET);
-    if (g_plugin.m_nMaxPSVersion == 0)
-        return;
-    if (!g_plugin.RecompilePShader(g_plugin.m_pState->m_szCompShadersText, &g_plugin.m_shaders.comp, SHADER_COMP, false, g_plugin.m_pState->m_nCompPSVersion))
+    g_plugin.m_shaderRequests |= CPlugin::RECOMPILE_COMP;
+}
+
+// Carries out the shader work `requests` (RECOMPILE_WARP and the like) asks for. Render thread,
+// under g_cs: compiling binds textures, and a frame drawn meanwhile would race it.
+void CPlugin::DoShaderRequests(unsigned requests)
+{
+    if (requests & (RECOMPILE_WARP | RECOMPILE_COMP))
     {
-        // Switch to fallback.
-        g_plugin.m_fallbackShaders_ps.comp.ptr->AddRef();
-        g_plugin.m_fallbackShaders_ps.comp.CT->AddRef();
-        g_plugin.m_shaders.comp = g_plugin.m_fallbackShaders_ps.comp;
+        ++m_nTextureDirGeneration; // offer random textures added since
+        ClearErrors(ERR_PRESET);
+        if (m_nMaxPSVersion > 0)
+        {
+            if ((requests & RECOMPILE_WARP) && !RecompilePShader(m_pState->m_szWarpShadersText, &m_shaders.warp, SHADER_WARP, false, m_pState->m_nWarpPSVersion))
+            {
+                // Switch to fallback.
+                m_fallbackShaders_ps.warp.ptr->AddRef();
+                m_fallbackShaders_ps.warp.CT->AddRef();
+                m_shaders.warp = m_fallbackShaders_ps.warp;
+            }
+            if ((requests & RECOMPILE_COMP) && !RecompilePShader(m_pState->m_szCompShadersText, &m_shaders.comp, SHADER_COMP, false, m_pState->m_nCompPSVersion))
+            {
+                // Switch to fallback.
+                m_fallbackShaders_ps.comp.ptr->AddRef();
+                m_fallbackShaders_ps.comp.CT->AddRef();
+                m_shaders.comp = m_fallbackShaders_ps.comp;
+            }
+        }
+    }
+    if (requests & LOAD_MISSING_SHADERS)
+    {
+        LoadShaders(&m_shaders, m_pState, false);
+        SetMenusForPresetVersion(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion);
     }
 }
 
@@ -1115,6 +1130,21 @@ static int GetNearestPow2Size(int w, int h)
     return log2size;
 }
 
+// The texture cache's byte limit when MaxBytes is Auto: a quarter of the adapter's own video
+// memory or a sixteenth of the system memory it may share, whichever is larger (an integrated
+// adapter has little of its own), kept between 64 MB and 1 GB.
+static int AutoMaxTextureBytes(ID3D11Device* device)
+{
+    constexpr long long kMin = 64000000, kMax = 1000000000;
+    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+    DXGI_ADAPTER_DESC desc{};
+    if (!device || FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) || FAILED(dxgiDevice->GetAdapter(&adapter)) || FAILED(adapter->GetDesc(&desc)))
+        return static_cast<int>(kMin);
+    const long long bytes = std::max(static_cast<long long>(desc.DedicatedVideoMemory / 4), static_cast<long long>(desc.SharedSystemMemory / 16));
+    return static_cast<int>(std::clamp(bytes, kMin, kMax));
+}
+
 // Allocate and initialize all the DX11 stuff here: textures,
 // surfaces, vertex/index buffers, fonts, and so on.
 // If anything fails here, return FALSE to safely exit the plugin,
@@ -1137,19 +1167,6 @@ static int GetNearestPow2Size(int w, int h)
 // calls `AllocateMilkDropDX11()` afterwards, to get your plugin running again.
 // (...aka OnUserResizeWindow)
 // (...aka OnToggleFullscreen)
-// The texture cache's byte limit when MaxBytes is Auto: a quarter of the adapter's own video
-// memory, kept between 64 MB and 1 GB (an adapter that shares system memory reports little).
-static int AutoMaxTextureBytes(ID3D11Device* device)
-{
-    constexpr long long kMin = 64000000, kMax = 1000000000;
-    Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
-    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
-    DXGI_ADAPTER_DESC desc{};
-    if (!device || FAILED(device->QueryInterface(IID_PPV_ARGS(&dxgiDevice))) || FAILED(dxgiDevice->GetAdapter(&adapter)) || FAILED(adapter->GetDesc(&desc)))
-        return static_cast<int>(kMin);
-    return static_cast<int>(std::clamp(static_cast<long long>(desc.DedicatedVideoMemory / 4), kMin, kMax));
-}
-
 int CPlugin::AllocateMilkDropDX11()
 {
     //wchar_t buf[32768], title[64];
@@ -3350,6 +3367,8 @@ void CPlugin::MilkDropRenderFrame(int redraw)
 {
     EnterCriticalSection(&g_cs);
 
+    if (const unsigned requests = m_shaderRequests.exchange(0))
+        DoShaderRequests(requests);
     if (m_nLoadingPreset == 0 && m_bTextureDirChanged.exchange(false))
         ReloadDiskTextures();
 
@@ -5680,6 +5699,12 @@ bool CPlugin::SetPresetDir(const wchar_t* szDir)
 {
     if (wcsnlen_s(szDir, MAX_PRESET_DIR_LENGTH + 1) > MAX_PRESET_DIR_LENGTH)
         return false;
+    {
+        // Textures are looked up there too, from now on: presets may load from it before its scan
+        // ends. (The scan sets it again to the folder it read.)
+        std::lock_guard<std::mutex> lock(m_textureDirLock);
+        m_texturePresetDir = szDir;
+    }
     if (!g_bCsReady) // before initialization or after cleanup, when no other thread uses it
     {
         wcscpy_s(m_szPresetDir, szDir);
@@ -5765,7 +5790,7 @@ std::wstring CPlugin::GetDefaultTextureDir() const
 
 // The folders a preset's textures are looked up in, in order, each ending in a backslash: the
 // user's textures folder (if set), the default one, and, if `bWithPresetFolder`, the top of the
-// preset folder the last scan read (none before the first scan, when no preset is loaded yet).
+// preset folder.
 std::vector<std::wstring> CPlugin::GetTextureDirs(bool bWithPresetFolder) const
 {
     std::lock_guard<std::mutex> lock(m_textureDirLock);
@@ -5781,32 +5806,36 @@ std::vector<std::wstring> CPlugin::GetTextureDirs(bool bWithPresetFolder) const
 // Keeps the missing-texture message in step with the shaders on screen (`m_shaders`): shows which
 // textures they could not find, with how to point MilkDrop at a texture pack, in place of the
 // previous such message, or removes that message once nothing is missing. Runs every frame on the
-// render thread, the only one that reads or writes what it last showed. It acts when the list or
-// the preset changes, whatever recompiled the shaders (a shader edit, a mash-up, a device reset),
-// and when a finished load or a change of folder asks it to (`m_bMissingTexturesReportDue`), so
-// that the message shows again even if it is the same.
+// render thread, the only one that reads or writes what it last showed. It acts when the list
+// changes, whatever recompiled the shaders (a shader edit, a mash-up, a device reset), and when a
+// finished load or a change of folder asks it to (`m_bMissingTexturesReportDue`), so that the
+// message shows again even if it is the same.
 void CPlugin::ReportMissingTextures()
 {
     const bool bDue = m_bMissingTexturesReportDue.exchange(false);
-    std::vector<std::wstring> names;
+
+    // The names, each once, warp shader's first; compared in place, as they rarely change.
+    const wchar_t* names[2 * std::extent_v<decltype(CShaderParams::m_missingTextures)>];
+    size_t n = 0;
     for (const CShaderParams* p : {&m_shaders.warp.params, &m_shaders.comp.params})
         for (int i = 0; i < p->m_nMissingTextures; ++i)
-            if (std::find(names.begin(), names.end(), p->m_missingTextures[i]) == names.end())
-                names.push_back(p->m_missingTextures[i]);
-    if (!bDue && names == m_missingTexturesShown && m_missingTexturesShownFor == m_szCurrentPresetFile)
+            if (std::none_of(names, names + n, [&](const wchar_t* s) { return !wcscmp(s, p->m_missingTextures[i]); }))
+                names[n++] = p->m_missingTextures[i];
+    const bool bSame = n == m_missingTexturesShown.size() &&
+                       std::equal(names, names + n, m_missingTexturesShown.begin(), [](const wchar_t* a, const std::wstring& b) { return b == a; });
+    if (!bDue && bSame)
         return;
-    m_missingTexturesShown = names;
-    m_missingTexturesShownFor = m_szCurrentPresetFile;
+    m_missingTexturesShown.assign(names, names + n);
 
     ClearErrors(ERR_TEXTURES);
-    if (names.empty())
+    if (n == 0)
         return;
     constexpr size_t kShown = 3; // the message is one line in the upper-right corner
     std::wstring msg = WASABI_API_LNGSTRINGW(IDS_MISSING_TEXTURES);
-    for (size_t i = 0; i < names.size() && i < kShown; ++i)
-        msg += (i ? L", " : L"") + names[i];
-    if (names.size() > kShown)
-        msg += L" (+" + std::to_wstring(names.size() - kShown) + L")";
+    for (size_t i = 0; i < n && i < kShown; ++i)
+        msg += (i ? L", " : L"") + std::wstring(names[i]);
+    if (n > kShown)
+        msg += L" (+" + std::to_wstring(n - kShown) + L")";
     AddError(msg.c_str(), 6.0f, ERR_TEXTURES, true);
     AddError(WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_TEXTURE_FOLDER), 6.0f, ERR_TEXTURES, false);
 }
@@ -6187,7 +6216,7 @@ static unsigned int WINAPI __UpdatePresetList(void* lpVoid)
     {
         // Simple sort by filename.
         std::sort(temp_presets.begin(), temp_presets.end(), [](const PresetInfo& a, const PresetInfo& b) {
-            return _wcsicmp(a.szFilename.c_str(), b.szFilename.c_str()) < 0;
+            return CaseInsensitiveLess()(a.szFilename, b.szFilename);
         });
 
         // Update cumulative ratings after sort.

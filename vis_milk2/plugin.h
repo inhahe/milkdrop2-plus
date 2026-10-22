@@ -531,7 +531,9 @@ class CPlugin : public CPluginShell
     int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
                                      // presets loaded from them exclude those needing a newer pixel shader model
     // The folders textures are looked up in besides the default one, each ending in a backslash or
-    // empty: the user's (change it with SetTextureDir()) and the preset folder the last scan read.
+    // empty: the user's (change it with SetTextureDir()) and the preset folder (set by
+    // SetPresetDir(), and by each scan to the folder it read, which FindValidPresetDir() may have
+    // changed).
     // Their own lock, held only to copy them, rather than g_cs, which the render thread holds for
     // a whole frame while it sends the UI thread messages: a thread that compiles shaders outside
     // the frame (a shader edit, on the UI thread) must not wait on that.
@@ -541,10 +543,19 @@ class CPlugin : public CPluginShell
     std::atomic<bool> m_bTextureDirChanged{false};     // the render thread has yet to reload the textures for it
     std::atomic<unsigned> m_nTextureDirGeneration{0}; // counts those changes, and requests to list the folders again
     int m_nAutoMaxTextureBytes = 64000000;             // the cache's byte limit when MaxBytes is Auto; set from the adapter
-    // What ReportMissingTextures() last showed, render thread only: the names, and the preset.
-    std::vector<std::wstring> m_missingTexturesShown;
-    std::wstring m_missingTexturesShownFor;
+    std::vector<std::wstring> m_missingTexturesShown;      // what ReportMissingTextures() last listed; render thread only
     std::atomic<bool> m_bMissingTexturesReportDue{false}; // show the message at the next frame even if it is unchanged
+
+    // Shader work the UI thread asks the render thread for, done at the start of the next frame
+    // (DoShaderRequests()): compiling binds textures, which the frames drawn meanwhile use.
+    enum ShaderRequest : unsigned
+    {
+        RECOMPILE_WARP = 1,       // the shader editor changed the warp shader's text
+        RECOMPILE_COMP = 2,       // ... the composite shader's
+        LOAD_MISSING_SHADERS = 4, // the pixel shader upgrade gave a preset without shaders some
+    };
+    std::atomic<unsigned> m_shaderRequests{0};
+    void DoShaderRequests(unsigned requests);
 
     float m_fRandStart[4];
 
