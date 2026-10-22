@@ -16,8 +16,9 @@
 // falls back to Latin-1, line by line, for bytes that are not valid UTF-8.
 
 // Replaces the file at `path` with `text` encoded as UTF-8, each "\n" written as CRLF, through a
-// temporary file so that a failure leaves the old file whole. Returns false if it could not be
-// written (the old file is then unchanged).
+// temporary file so that a failure leaves the old file whole. Waits up to about a second for a
+// file another program holds open, as a virus scanner does for a moment. Returns false if it could
+// not be written (the old file is then unchanged).
 bool WriteUtf8TextFile(const std::wstring& path, const std::wstring& text);
 
 // Reads the file at `path` into `text`, with lines separated by "\n" (CRLF or LF in the file):

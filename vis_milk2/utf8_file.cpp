@@ -34,6 +34,23 @@ std::wstring DecodeLine(const char* p, size_t len)
     }
     return line;
 }
+
+// Puts the file at `from` in place of the one at `to`. A file just written is often opened for a
+// moment by a virus scanner, the search indexer or a sync client, which do not let it be replaced
+// meanwhile, so the move is tried again for about a second before it gives up. Returns whether it
+// was moved.
+bool MoveReplacing(const std::wstring& from, const std::wstring& to)
+{
+    for (DWORD delay = 1;; delay *= 2)
+    {
+        if (MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            return true;
+        const DWORD error = GetLastError();
+        if ((error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION && error != ERROR_LOCK_VIOLATION) || delay > 512)
+            return false;
+        Sleep(delay); // 1 + 2 + ... + 512 ms: about a second in all
+    }
+}
 } // namespace
 
 bool WriteUtf8TextFile(const std::wstring& path, const std::wstring& text)
@@ -74,7 +91,7 @@ bool WriteUtf8TextFile(const std::wstring& path, const std::wstring& text)
             return false;
         }
     }
-    if (!MoveFileExW(temp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+    if (!MoveReplacing(temp, path))
     {
         DeleteFileW(temp.c_str());
         return false;

@@ -142,7 +142,8 @@ void FavoritesManager::Save() const
         idx++;
     }
     ofs << L"count=" << m_favorites.size() << std::endl;
-    WriteUtf8TextFile(m_filePath, ofs.str());
+    if (!WriteUtf8TextFile(m_filePath, ofs.str()))
+        FB2K_console_formatter() << core_api::get_my_file_name() << ": Could not save the favorites to " << pfc::utf8FromWide(m_filePath.c_str());
 }
 
 void FavoritesManager::Load()

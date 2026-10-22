@@ -2424,7 +2424,8 @@ void milk2_ui_element::SaveBrowserConfig() const
     }
     ofs << std::endl;
 
-    WriteUtf8TextFile(configPath, ofs.str());
+    if (!WriteUtf8TextFile(configPath, ofs.str()))
+        FB2K_console_formatter() << core_api::get_my_file_name() << ": Could not save the preset browser's settings to " << pfc::utf8FromWide(configPath.c_str());
 }
 
 void milk2_ui_element::LoadBrowserConfig()

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vis_milk2/utf8_file.h>
 #include <CppUnitTest.h>
 
@@ -34,6 +35,15 @@ TEST_CLASS(Utf8FileTest)
     {
         std::ifstream ifs(dir / name, std::ios::binary);
         return std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    }
+
+    // Opens file `name` as a virus scanner does: others may read and write it, but not delete or
+    // replace it, until the handle returned is closed.
+    HANDLE HoldOpen(const wchar_t* name) const
+    {
+        const HANDLE h = CreateFileW(PathOf(name).c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+        Assert::IsTrue(h != INVALID_HANDLE_VALUE);
+        return h;
     }
 
   public:
@@ -101,6 +111,34 @@ TEST_CLASS(Utf8FileTest)
         Assert::IsTrue(WriteUtf8TextFile(PathOf(L"f.ini"), L"new\n"));
         Assert::AreEqual(std::string("new\r\n"), ReadBytes(L"f.ini"));
         Assert::IsFalse(std::filesystem::exists(dir / L"f.ini.tmp"));
+    }
+
+    TEST_METHOD(ReplacingWaitsForAFileBrieflyHeldOpen)
+    {
+        // A virus scanner or the search indexer may hold a file it has just seen written, without
+        // letting it be replaced, for a moment: the write must wait for it, not give up.
+        Assert::IsTrue(WriteUtf8TextFile(PathOf(L"h.ini"), L"old\n"));
+        const HANDLE held = HoldOpen(L"h.ini");
+        std::thread release([held] {
+            Sleep(100);
+            CloseHandle(held);
+        });
+        const bool written = WriteUtf8TextFile(PathOf(L"h.ini"), L"new\n");
+        release.join();
+        Assert::IsTrue(written);
+        Assert::AreEqual(std::string("new\r\n"), ReadBytes(L"h.ini"));
+        Assert::IsFalse(std::filesystem::exists(dir / L"h.ini.tmp"));
+    }
+
+    TEST_METHOD(AFileHeldOpenThroughoutIsLeftAsItWas)
+    {
+        Assert::IsTrue(WriteUtf8TextFile(PathOf(L"i.ini"), L"old\n"));
+        const HANDLE held = HoldOpen(L"i.ini");
+        const bool written = WriteUtf8TextFile(PathOf(L"i.ini"), L"new\n");
+        CloseHandle(held);
+        Assert::IsFalse(written);
+        Assert::AreEqual(std::string("old\r\n"), ReadBytes(L"i.ini"));
+        Assert::IsFalse(std::filesystem::exists(dir / L"i.ini.tmp"));
     }
 
     TEST_METHOD(KeyValueLines)
