@@ -4,11 +4,11 @@ Bugs and debt found but not yet fixed, each with where it lives and what the fix
 
 ## Fixed-size path buffers can end the process
 
-**Where:** `vis_milk2/plugin.cpp` and `foo_vis_milk2/keyboard.cpp`, wherever a path is assembled into a `wchar_t[MAX_PATH]` or `[512]` array with `wcscpy_s`, `wcscat_s` or `swprintf_s`: the texture lookup (`swprintf_s(szFilename, L"%s%s.%s", ...)` in the shader parameter setup), preset loading inside `LoadPreset`, the delete and rename prompts, and others.
+**Where:** `vis_milk2/plugin.cpp` and `foo_vis_milk2/keyboard.cpp`, wherever a path is assembled into a `wchar_t[MAX_PATH]` or `[512]` array with `wcscpy_s`, `wcscat_s` or `swprintf_s`: preset loading inside `LoadPreset`, the delete and rename prompts, and others.
 
-**What happens:** with the statically linked runtime, a `_s` function given a result longer than its buffer calls the invalid-parameter handler, which ends foobar2000. The preset folder itself is now bounded (`MAX_PRESET_DIR_LENGTH`), but a folder near that limit plus a long relative preset or texture name still overflows.
+**What happens:** with the statically linked runtime, a `_s` function given a result longer than its buffer calls the invalid-parameter handler, which ends foobar2000. The preset folder itself is now bounded (`MAX_PRESET_DIR_LENGTH`), but a folder near that limit plus a long relative preset name still overflows.
 
-**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` now does for preset loading.
+**Fix:** build these paths as `std::wstring` and pass `c_str()` on, as `CPlugin::GetPresetPath` and the texture lookup (`FindTextureFile`) now do.
 
 ## The UI thread reads the preset list without the lock
 

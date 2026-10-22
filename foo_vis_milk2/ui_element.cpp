@@ -675,15 +675,21 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
     }
 
     menu.AppendMenu(MF_SEPARATOR);
+    // A folder as a grayed menu line, shortened from the left if long.
+    const auto appendPathLabel = [&menu](std::wstring path) {
+        if (path.length() > 50)
+            path = L"..." + path.substr(path.length() - 47);
+        menu.AppendMenu(MF_GRAYED, static_cast<UINT_PTR>(0), path.c_str());
+    };
     menu.AppendMenu(MF_STRING, IDM_SET_PRESET_LIBRARY, TEXT("Set Preset Library Folder..."));
     menu.AppendMenu(MF_STRING, IDM_RESCAN_PRESETS, TEXT("Rescan Presets"));
     if (!m_presetLibraryPath.empty())
+        appendPathLabel(m_presetLibraryPath);
+    menu.AppendMenu(MF_STRING, IDM_SET_TEXTURE_FOLDER, TEXT("Set Texture Folder..."));
+    if (s_config.settings.m_szTextureDir[0])
     {
-        // Show current library path (truncated if long).
-        std::wstring pathLabel = m_presetLibraryPath;
-        if (pathLabel.length() > 50)
-            pathLabel = L"..." + pathLabel.substr(pathLabel.length() - 47);
-        menu.AppendMenu(MF_GRAYED, static_cast<UINT_PTR>(0), pathLabel.c_str());
+        menu.AppendMenu(MF_STRING, IDM_DEFAULT_TEXTURE_FOLDER, TEXT("Use Default Texture Folder"));
+        appendPathLabel(s_config.settings.m_szTextureDir);
     }
     menu.AppendMenu(MF_SEPARATOR);
 
@@ -814,6 +820,12 @@ void milk2_ui_element::OnContextMenu(CWindow wnd, CPoint point)
             break;
         case IDM_SET_PRESET_LIBRARY:
             BrowseForPresetLibrary();
+            break;
+        case IDM_SET_TEXTURE_FOLDER:
+            BrowseForTextureFolder();
+            break;
+        case IDM_DEFAULT_TEXTURE_FOLDER:
+            SetTextureFolder(std::wstring());
             break;
         case IDM_OPEN_PRESETS_URL:
             ShellExecute(get_wnd(), L"open", L"https://github.com/projectM-visualizer/presets-cream-of-the-crop", NULL, NULL, SW_SHOWNORMAL);
@@ -2505,7 +2517,7 @@ void milk2_ui_element::SaveBrowserConfig() const
     std::wostringstream ofs;
     ofs << L"[BrowserConfig]" << std::endl;
     ofs << L"ShuffleMode=" << static_cast<int>(m_shuffleMode) << std::endl;
-    ofs << L"PresetLibraryPath=" << (m_presetLibraryPath.empty() ? m_presetLibraryStored : milk2_config::preset_dir_to_stored(m_presetLibraryPath)) << std::endl;
+    ofs << L"PresetLibraryPath=" << (m_presetLibraryPath.empty() ? m_presetLibraryStored : milk2_config::folder_to_stored(m_presetLibraryPath)) << std::endl;
     ofs << L"CategoriesConfigured=" << (m_categoriesConfigured ? 1 : 0) << std::endl;
 
     // Save selected categories as a pipe-delimited list.
@@ -2545,7 +2557,7 @@ void milk2_ui_element::LoadBrowserConfig()
         }
         else if (key == L"PresetLibraryPath")
         {
-            m_presetLibraryPath = milk2_config::preset_dir_from_stored(value);
+            m_presetLibraryPath = milk2_config::folder_from_stored(value, MAX_PRESET_DIR_LENGTH);
             m_presetLibraryStored = m_presetLibraryPath.empty() ? value : std::wstring();
             if (!m_presetLibraryStored.empty())
                 FB2K_console_print(core_api::get_my_file_name(), ": the saved preset folder is too long to use here, so it is ignored: ", pfc::utf8FromWide(value.c_str()).c_str());
@@ -3241,88 +3253,118 @@ void milk2_ui_element::ShowFavoritesManager()
                            reinterpret_cast<LPARAM>(&state));
 }
 
-void milk2_ui_element::BrowseForPresetLibrary()
+// Shows a folder picker (which also lets the user type a path) titled `title`, starting in
+// `initialDir` if that exists. Returns the folder chosen, ending in a backslash, or an empty string
+// if the user cancelled.
+static std::wstring PickFolder(HWND owner, const wchar_t* title, const std::wstring& initialDir)
 {
-    // Use modern IFileDialog folder picker (allows typing paths).
     Microsoft::WRL::ComPtr<IFileDialog> pfd;
-    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd));
-    if (FAILED(hr))
-        return;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd))))
+        return std::wstring();
 
     DWORD options;
     pfd->GetOptions(&options);
     pfd->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
-    pfd->SetTitle(L"Select Preset Library Directory (folder with .milk files)");
-
-    // Set initial folder to current library path or preset dir.
-    if (!m_presetLibraryPath.empty() || g_plugin.m_szPresetDir[0])
+    pfd->SetTitle(title);
+    if (!initialDir.empty())
     {
         Microsoft::WRL::ComPtr<IShellItem> psi;
-        std::wstring initPath = m_presetLibraryPath.empty() ? g_plugin.m_szPresetDir : m_presetLibraryPath;
-        SHCreateItemFromParsingName(initPath.c_str(), NULL, IID_PPV_ARGS(&psi));
+        SHCreateItemFromParsingName(initialDir.c_str(), NULL, IID_PPV_ARGS(&psi));
         if (psi)
             pfd->SetFolder(psi.Get());
     }
 
-    hr = pfd->Show(get_wnd());
-    if (SUCCEEDED(hr))
+    Microsoft::WRL::ComPtr<IShellItem> psi;
+    if (FAILED(pfd->Show(owner)) || FAILED(pfd->GetResult(&psi)))
+        return std::wstring();
+    PWSTR szPath = nullptr;
+    if (FAILED(psi->GetDisplayName(SIGDN_FILESYSPATH, &szPath)) || !szPath)
+        return std::wstring();
+    std::wstring dir = szPath;
+    CoTaskMemFree(szPath);
+    if (!dir.empty() && dir.back() != L'\\')
+        dir += L'\\';
+    return dir;
+}
+
+void milk2_ui_element::BrowseForPresetLibrary()
+{
+    const std::wstring dir = PickFolder(get_wnd(), L"Select Preset Library Directory (folder with .milk files)",
+                                        m_presetLibraryPath.empty() ? std::wstring(g_plugin.m_szPresetDir) : m_presetLibraryPath);
+    if (dir.empty())
+        return;
+
+    // Update the engine's preset directory to match; it has no room for a longer path.
+    if (!g_plugin.SetPresetDir(dir.c_str()))
     {
-        Microsoft::WRL::ComPtr<IShellItem> psi;
-        hr = pfd->GetResult(&psi);
-        if (SUCCEEDED(hr))
-        {
-            PWSTR szPath = nullptr;
-            psi->GetDisplayName(SIGDN_FILESYSPATH, &szPath);
-            if (szPath)
-            {
-            std::wstring dir = szPath;
-            if (!dir.empty() && dir.back() != L'\\')
-                dir += L'\\';
-
-            // Update the engine's preset directory to match; it has no room for a longer path.
-            if (!g_plugin.SetPresetDir(dir.c_str()))
-            {
-                wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
-                g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
-                CoTaskMemFree(szPath);
-                return;
-            }
-            m_presetLibraryPath = dir;
-            m_presetLibraryStored.clear();
-
-            // Reset so the deferred load in MilkDropRenderFrame fires again.
-            g_plugin.m_bInitialPresetSelected = false;
-
-            SaveBrowserConfig();
-
-            // Re-scan browser with the new directory.
-            m_browserInitialized = false;
-            m_presetBrowser.ScanDirectory(m_presetLibraryPath);
-            m_browserInitialized = true;
-
-            // Reset category selections — select all in the new directory.
-            m_selectedCategories.clear();
-            m_selectedFavCategories.clear();
-            auto cats = m_presetBrowser.GetCategories();
-            for (const auto& c : cats)
-                m_selectedCategories.insert(c);
-            m_categoriesConfigured = true;
-            SaveBrowserConfig();
-
-            // Trigger engine rescan with the new directory.
-            SyncFiltersToEngine();
-
-            wchar_t buf[512];
-            swprintf_s(buf, L"Preset library: %s (%zu presets, %zu categories)",
-                       m_presetLibraryPath.c_str(),
-                       m_presetBrowser.GetPresetCount(),
-                       m_presetBrowser.GetCategoryCount());
-            g_plugin.AddError(buf, 4.0f, ERR_NOTIFY, false);
-
-                CoTaskMemFree(szPath);
-            }
-        }
+        wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
+        g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
+        return;
     }
+    m_presetLibraryPath = dir;
+    m_presetLibraryStored.clear();
+
+    // Reset so the deferred load in MilkDropRenderFrame fires again.
+    g_plugin.m_bInitialPresetSelected = false;
+
+    SaveBrowserConfig();
+
+    // Re-scan browser with the new directory.
+    m_browserInitialized = false;
+    m_presetBrowser.ScanDirectory(m_presetLibraryPath);
+    m_browserInitialized = true;
+
+    // Reset category selections — select all in the new directory.
+    m_selectedCategories.clear();
+    m_selectedFavCategories.clear();
+    auto cats = m_presetBrowser.GetCategories();
+    for (const auto& c : cats)
+        m_selectedCategories.insert(c);
+    m_categoriesConfigured = true;
+    SaveBrowserConfig();
+
+    // Trigger engine rescan with the new directory.
+    SyncFiltersToEngine();
+
+    wchar_t buf[512];
+    swprintf_s(buf, L"Preset library: %s (%zu presets, %zu categories)",
+               m_presetLibraryPath.c_str(),
+               m_presetBrowser.GetPresetCount(),
+               m_presetBrowser.GetCategoryCount());
+    g_plugin.AddError(buf, 4.0f, ERR_NOTIFY, false);
+}
+
+void milk2_ui_element::BrowseForTextureFolder()
+{
+    std::wstring dir = PickFolder(get_wnd(), L"Select Texture Folder (folder with texture images, such as a texture pack's)",
+                                  s_config.settings.m_szTextureDir[0] ? std::wstring(s_config.settings.m_szTextureDir) : g_plugin.GetDefaultTextureDir());
+    if (dir.empty())
+        return;
+
+    // A texture pack's own folder keeps its images in a "textures" subfolder: take that one.
+    if (CPlugin::CountTextureFiles(dir) == 0 && CPlugin::CountTextureFiles(dir + L"textures\\") > 0)
+        dir += L"textures\\";
+    if (dir.size() >= MAX_PATH)
+    {
+        wchar_t msg[] = L"That folder's path is too long for MilkDrop.";
+        g_plugin.AddError(msg, 4.0f, ERR_MISC, true);
+        return;
+    }
+    SetTextureFolder(dir);
+}
+
+// Makes `dir` the user's textures folder, searched before the default one, and saves it. `dir`: an
+// absolute folder path ending in a backslash, shorter than MAX_PATH, or empty to use only the
+// default folder. Presets loaded from now on find their textures there.
+void milk2_ui_element::SetTextureFolder(const std::wstring& dir)
+{
+    wcscpy_s(s_config.settings.m_szTextureDir, dir.c_str());
+    milk2_config::save_texture_dir(dir);
+    g_plugin.SetTextureDir(dir.c_str());
+
+    const std::wstring shown = dir.empty() ? g_plugin.GetDefaultTextureDir() : dir;
+    std::wstring msg = L"Texture folder: " + shown + L" (" + std::to_wstring(CPlugin::CountTextureFiles(shown)) + L" textures)";
+    g_plugin.AddError(msg.data(), 4.0f, ERR_NOTIFY, false);
 }
 
 #pragma endregion

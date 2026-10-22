@@ -54,6 +54,8 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 - **Configurable preset library** - Point the plugin at any directory containing `.milk` presets via right-click > Set Preset Library Folder.
 - **Portable preset library path** - A preset folder inside the foobar2000 profile, or anywhere inside a portable foobar2000 installation, is saved relative to the profile, so the setting survives moving or copying the installation to another folder, drive or computer.
 - **No-presets notice** - When the preset folder holds no presets, the visualization says so in its upper-right corner, points to Set Preset Library Folder, and names the folder it looked in; when the folder has presets but the shuffle mode excludes them all, it says that instead. It shows a plain waveform on black meanwhile.
+- **Texture folder** - Right-click > Set Texture Folder... points the plugin at a folder of texture images, so a texture pack can stay where it is (pick the pack's own folder and its `textures` subfolder is used). `<profile>\milkdrop2\textures` is still searched after it. Use Default Texture Folder undoes it; the same setting is the Texture directory advanced setting.
+- **Missing-texture warning** - When a preset uses textures that are not installed, the visualization names them in its upper-right corner and points to Set Texture Folder. The preset still runs, with black where those textures would be.
 - **Fullscreen hotkeys** - In fullscreen mode, keyboard shortcuts are shown in the right-click menu (Space, Backspace, R, F11, Shift+F11, etc.).
 - **DX11 rendering fix** - Removed DX9-era half-texel offset that caused a thin unrendered border on right/bottom edges.
 
@@ -139,9 +141,9 @@ The foobar2000 component is not packaged with any presets. Some presets enjoyed 
 Many presets draw with texture images that are not part of the preset files. Without them, those presets get black where the texture should be. To install the [Base Milkdrop Texture Pack](https://github.com/projectM-visualizer/presets-milkdrop-texture-pack):
 
 1. Download it (Code > Download ZIP on its GitHub page, or `git clone https://github.com/projectM-visualizer/presets-milkdrop-texture-pack.git`).
-2. Copy the image files from its `textures` folder into `<foobar2000 profile folder>\milkdrop2\textures\` (in a portable installation, `<foobar2000>\profile\milkdrop2\textures\`; otherwise usually `%APPDATA%\foobar2000-v2\milkdrop2\textures\`). Create the folder if it does not exist.
+2. Either right-click the visualization > Set Texture Folder... and pick the pack's folder (or its `textures` subfolder), or copy the image files from its `textures` folder into `<foobar2000 profile folder>\milkdrop2\textures\` (in a portable installation, `<foobar2000>\profile\milkdrop2\textures\`; otherwise usually `%APPDATA%\foobar2000-v2\milkdrop2\textures\`), creating the folder if it does not exist.
 
-The plugin also looks for a texture at the top level of the preset folder (not in its subfolders).
+A texture is looked up in the folder chosen with Set Texture Folder, then in `<foobar2000 profile folder>\milkdrop2\textures\`, then at the top level of the preset folder (not in its subfolders). When a preset uses textures found in none of them, the visualization lists them.
 
 ## Repository Notes
 

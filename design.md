@@ -22,6 +22,8 @@ Each frame (`CPlugin::RenderFrame`, `milkdropfs.cpp`) works on two textures that
 4. The composite pass draws VS1 to the back buffer; the running song title animation and user sprites go on top.
 5. VS0 and VS1 swap.
 
+When a shader is loaded, `CShaderParams::CacheParams` binds its textures and parameters. A texture it cannot find is left unbound (it samples black) and added to `m_missingTextures`; when the preset has finished loading, `ReportMissingTextures` lists them in the upper-right corner (`ERR_PRESET` messages, cleared when the next preset load starts).
+
 The shim keeps one current pixel shader; a draw that needs a particular one (for instance `ShowSongTitleAnim`, which needs the textured shader 0) must select it, because the previous draw may have left an untextured one.
 
 Text (preset name, notices, menus) is retained-mode: each line is a `TextElement` registered with `CTextManager`, laid out by `MilkDropRenderUI` each frame, and hidden and unregistered when no longer shown. An upper-right box is one line high, so multi-line notices use one element per line.
@@ -43,11 +45,12 @@ Text (preset name, notices, menus) is retained-mode: each line is a `TextElement
 | Shuffle mode, categories | `<profile>\browser_config.ini` |
 | Favorites | `<profile>\favorites.ini` |
 | Preset scan cache | `preset_cache.dat` in the preset folder |
-| Textures, sprites, messages | `<profile>\milkdrop2\textures\`, `milk2_img.ini`, `milk2_msg.ini`. A texture is looked up in `textures\`, then in the preset folder. |
+| Textures | The folder chosen with Set Texture Folder (`milk2.szTextureDir`, saved like the preset folder; empty for none), then `<profile>\milkdrop2\textures\`, then the top of the preset folder (`CPlugin::GetTextureDirs`). Random textures (`randNN`) are picked from the first two. |
+| Sprites, messages | `milk2_img.ini`, `milk2_msg.ini` in `<profile>\milkdrop2\`. |
 
 browser_config.ini, favorites.ini and preset_cache.dat are UTF-8, through `WriteUtf8TextFile`/`ReadTextFile`/`ReadKeyValueFile` (`utf8_file.h`). Writing goes through a temporary file, so a failure leaves the old file whole; reading falls back to Latin-1 line by line, so files from earlier versions still read and one bad line spoils only itself.
 
-Both stores of the preset folder go through `milk2_config::preset_dir_to_stored`/`preset_dir_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path gets its trailing backslash there, and one longer than `MAX_PRESET_DIR_LENGTH` is not used; the Default UI element saves such a `PresetLibraryPath` back as it was, so that moving the installation back restores it. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
+Both stores of the preset folder, and the textures folder setting, go through `milk2_config::folder_to_stored`/`folder_from_stored`, and so `ToStoredPath`/`FromStoredPath` (`stored_path.h`): a folder inside the profile, or anywhere inside a portable installation (the profile's parent), is saved relative to the profile, so a moved or copied installation keeps finding it; anything else stays absolute, and absolute values saved by older versions still load. A loaded path gets its trailing backslash there, and one longer than `MAX_PRESET_DIR_LENGTH` is not used; the Default UI element saves such a `PresetLibraryPath` back as it was, so that moving the installation back restores it. When the folder is missing, `FindValidPresetDir` falls back to `<profile>\milkdrop2\presets\`, then `<profile>\milkdrop2\`, then the profile.
 
 ## One-file installer
 

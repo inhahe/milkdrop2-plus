@@ -1560,6 +1560,8 @@ BEGIN
     IDS_HOW_TO_CHANGE_SHUFFLE_MODE "Right-click > Shuffle Mode to change it."
     IDS_NO_PRESET_CAN_LOAD  "None of these presets could be loaded."
     IDS_PRESETS_MAY_NEED_NEWER_SHADERS "They need a newer pixel shader model, or are unreadable."
+    IDS_MISSING_TEXTURES    "Missing textures: "
+    IDS_HOW_TO_SET_TEXTURE_FOLDER "Right-click > Set Texture Folder... to use a texture pack."
 END
 
 #endif    // English (United States) resources

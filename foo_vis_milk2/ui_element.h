@@ -202,6 +202,8 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
         IDM_MANAGE_FAVORITES = 114,
         IDM_SELECT_CATEGORIES_DLG = 115,
         IDM_OPEN_PRESETS_URL = 116,
+        IDM_SET_TEXTURE_FOLDER = 117,
+        IDM_DEFAULT_TEXTURE_FOLDER = 118,
         // Dynamic IDs
         IDM_BROWSE_CATEGORY_BASE = 200,        // 200..399: browse-by-category (loads random from category)
         IDM_SHUFFLE_CATEGORY_BASE = 400,       // 400..599: shuffle category toggles (checkboxes)
@@ -353,6 +355,8 @@ class milk2_ui_element : public ui_element_instance, public CWindowImpl<milk2_ui
     void LoadBrowserConfig();
     void SyncFiltersToEngine();
     void BrowseForPresetLibrary();
+    void BrowseForTextureFolder();
+    void SetTextureFolder(const std::wstring& dir);
     void ShowFavoritesManager();
     void ShowCategorySelector();
 

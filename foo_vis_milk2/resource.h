@@ -634,6 +634,8 @@
 #define IDS_HOW_TO_CHANGE_SHUFFLE_MODE  652
 #define IDS_NO_PRESET_CAN_LOAD          653
 #define IDS_PRESETS_MAY_NEED_NEWER_SHADERS 654
+#define IDS_MISSING_TEXTURES            655
+#define IDS_HOW_TO_SET_TEXTURE_FOLDER   656
 #define IDD_PREFS                       700
 //#define IDC_CB_FOG                      1000
 //#define IDC_CB_SUPERTEX                 1001

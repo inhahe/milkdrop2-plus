@@ -70,6 +70,7 @@ static cfg_blob cfg_stFontInfo(guid_cfg_stFontInfo, default_stFontInfo, sizeof(t
 static advconfig_branch_factory g_advconfigBranch("MilkDrop", guid_advconfig_branch, advconfig_branch::guid_branch_vis, 0);
 static advconfig_checkbox_factory cfg_bDebugOutput("Debug output", "milk2.bDebugOutput", guid_cfg_bDebugOutput, guid_advconfig_branch, order_bDebugOutput, default_bDebugOutput, 0);
 static advconfig_string_factory cfg_szPresetDir("Preset directory", "milk2.szPresetDir", guid_cfg_szPresetDir, guid_advconfig_branch, order_szPresetDir, "", advconfig_entry_string::flag_is_folder_path);
+static advconfig_string_factory cfg_szTextureDir("Texture directory", "milk2.szTextureDir", guid_cfg_szTextureDir, guid_advconfig_branch, order_szTextureDir, "", advconfig_entry_string::flag_is_folder_path);
 // clang-format on
 } // namespace
 
@@ -1316,37 +1317,46 @@ void milk2_config::initialize_paths()
     swprintf_s(default_szImgIniFile, L"%ls%ls", szConfigDir, IMG_INIFILE);
 }
 
-std::wstring milk2_config::preset_dir_to_stored(const std::wstring& dir)
+std::wstring milk2_config::folder_to_stored(const std::wstring& dir)
 {
     return ToStoredPath(dir, default_szPluginsDirPath, core_api::is_portable_mode_enabled());
 }
 
-std::wstring milk2_config::preset_dir_from_stored(const std::wstring& stored)
+std::wstring milk2_config::folder_from_stored(const std::wstring& stored, size_t maxLength)
 {
     std::wstring dir = FromStoredPath(stored, default_szPluginsDirPath);
     if (dir.empty())
         return dir;
     if (dir.back() != L'\\')
         dir += L'\\'; // the engine appends file names to it
-    if (dir.size() > MAX_PRESET_DIR_LENGTH)
+    if (dir.size() > maxLength)
         return std::wstring();
     return dir;
+}
+
+void milk2_config::save_texture_dir(const std::wstring& dir)
+{
+    cfg_szTextureDir.set(pfc::utf8FromWide(folder_to_stored(dir).c_str()));
 }
 
 void milk2_config::update_paths()
 {
     const std::wstring stored = m_version >= 2 ? std::wstring(pfc::wideFromUTF8(cfg_szPresetDir.get()).c_str()) : std::wstring();
-    const std::wstring dir = preset_dir_from_stored(stored);
+    const std::wstring dir = folder_from_stored(stored, MAX_PRESET_DIR_LENGTH);
     if (dir.empty())
     {
         wcscpy_s(settings.m_szPresetDir, default_szPresetDir);
         if (stored.empty()) // a saved folder that cannot be used here is left as it is
-            cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(default_szPresetDir).c_str()));
+            cfg_szPresetDir.set(pfc::utf8FromWide(folder_to_stored(default_szPresetDir).c_str()));
     }
     else
     {
         wcscpy_s(settings.m_szPresetDir, dir.c_str());
     }
+    // Only the menu command and the Advanced preferences page change this setting; an empty or
+    // unusable value means the default textures folder alone.
+    const std::wstring textureDir = folder_from_stored(pfc::wideFromUTF8(cfg_szTextureDir.get()).c_str(), MAX_PATH - 1);
+    wcscpy_s(settings.m_szTextureDir, textureDir.c_str());
     wcscpy_s(settings.m_szPluginsDirPath, default_szPluginsDirPath);
     wcscpy_s(settings.m_szConfigIniFile, default_szConfigIniFile);
     wcscpy_s(settings.m_szMsgIniFile, default_szMsgIniFile);
@@ -1496,7 +1506,7 @@ void milk2_config::build(ui_element_config_builder& builder, const bool full_res
         cfg_szTitleFormat = pfc::utf8FromWide(settings.m_szTitleFormat);
         cfg_szArtworkFormat = pfc::utf8FromWide(settings.m_szArtworkFormat);
 
-        cfg_szPresetDir.set(pfc::utf8FromWide(preset_dir_to_stored(settings.m_szPresetDir).c_str()));
+        cfg_szPresetDir.set(pfc::utf8FromWide(folder_to_stored(settings.m_szPresetDir).c_str()));
     }
 }
 #pragma endregion

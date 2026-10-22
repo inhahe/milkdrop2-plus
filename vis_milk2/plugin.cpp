@@ -916,6 +916,7 @@ bool CPlugin::PanelSettings(plugin_config* settings)
     m_skip_comp_shaders = settings->m_bSkipCompShader;
 
     SetPresetDir(settings->m_szPresetDir); // keeps the current folder if this one is too long
+    SetTextureDir(settings->m_szTextureDir);
     //wcscpy_s(m_szConfigIniFile, settings->m_szConfigIniFile);
     wcscpy_s(m_szMsgIniFile, settings->m_szMsgIniFile);
     wcscpy_s(m_szImgIniFile, settings->m_szImgIniFile);
@@ -1780,7 +1781,10 @@ int CPlugin::AllocateMilkDropDX11()
         // First preset will be loaded in MilkDropRenderFrame once scan completes.
     }
     else
+    {
         LoadShaders(&m_shaders, m_pState, false); // also force-load the shaders - otherwise they'd only get compiled on a preset switch.
+        m_missingTextures.clear(); // the running preset's; reported when it loaded
+    }
 
     return true;
 }
@@ -2269,50 +2273,77 @@ bool CPlugin::EvictSomeTexture()
 }
 
 std::wstring texture_exts[] = {L"jpg", L"png", L"dds", L"tga", L"bmp", L"dib"};
-const wchar_t szExtsWithSlashes[] = L"jpg|png|dds|etc.";
 typedef std::vector<std::wstring> StringVec;
+
+// Whether `name` ("heart.jpg") has the extension of an image a texture can be loaded from.
+static bool IsTextureFileName(const std::wstring& name)
+{
+    const size_t dot = name.rfind(L'.');
+    if (dot == std::wstring::npos)
+        return false;
+    for (const auto& ext : texture_exts)
+        if (!_wcsicmp(name.c_str() + dot + 1, ext.c_str()))
+            return true;
+    return false;
+}
+
+// Calls `f(fileName)` for each texture image directly in `dir` (not in its subfolders); nothing if
+// the folder is missing.
+template <typename F>
+static void ForEachTextureFile(const std::wstring& dir, F f)
+{
+    std::error_code ec;
+    for (auto it = std::filesystem::directory_iterator(dir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+    {
+        const std::wstring name = it->path().filename().wstring();
+        std::error_code ec2;
+        if (it->is_regular_file(ec2) && IsTextureFileName(name))
+            f(name);
+    }
+}
+
+size_t CPlugin::CountTextureFiles(const std::wstring& dir)
+{
+    size_t n = 0;
+    ForEachTextureFile(dir, [&n](const std::wstring&) { ++n; });
+    return n;
+}
+
+// The image file of the texture a shader names `rootName` ("clouds"): the first that exists,
+// trying the texture folders in order and, in each, every image extension. Empty if none does.
+static std::wstring FindTextureFile(const std::wstring& rootName)
+{
+    for (const auto& dir : g_plugin.GetTextureDirs(true))
+    {
+        for (const auto& ext : texture_exts)
+        {
+            std::wstring path = dir + rootName + L"." + ext;
+            if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES)
+                return path;
+        }
+    }
+    return std::wstring();
+}
+
 static bool PickRandomTexture(const wchar_t* prefix, wchar_t* szRetTextureFilename) // should be MAX_PATH chars
 {
     static StringVec texfiles;
-    static DWORD texfiles_timestamp = 0; // update this a max of every ~2 seconds or so
 
-    // If it's been more than a few seconds since the last textures dir scan, redo it.
-    // (..just enough to make sure we don't do it more than once per preset load)
-    //DWORD t = timeGetTime(); // in milliseconds
-    //if (abs(t - texfiles_timestamp) > 2000)
+    // Rebuilt when presets are reloaded or the textures folder changes, not on every pick.
     if (g_plugin.m_bNeedRescanTexturesDir)
     {
-        g_plugin.m_bNeedRescanTexturesDir = false; //texfiles_timestamp = t;
+        g_plugin.m_bNeedRescanTexturesDir = false;
         texfiles.clear();
 
-        wchar_t szMask[MAX_PATH];
-        swprintf_s(szMask, L"%stextures\\*.*", g_plugin.m_szMilkdrop2Path);
-
-        WIN32_FIND_DATAW ffd = {0};
-
-        HANDLE hFindFile = INVALID_HANDLE_VALUE;
-        if ((hFindFile = FindFirstFile(szMask, &ffd)) == INVALID_HANDLE_VALUE) // note: returns filename without path
-            return false;
-
-        // First, count valid texture files.
-        do
+        // Random textures come from the textures folders, not from the preset folder.
+        for (const auto& dir : g_plugin.GetTextureDirs(false))
         {
-            if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-                continue;
-
-            wchar_t* ext = wcsrchr(ffd.cFileName, L'.');
-            if (!ext)
-                continue;
-
-            for (int i = 0; i < sizeof(texture_exts) / sizeof(texture_exts[0]); i++)
-                if (!_wcsicmp(texture_exts[i].c_str(), ext + 1))
-                {
-                    // Valid texture found - add it to the list. ("heart.jpg", for example).
-                    texfiles.push_back(ffd.cFileName);
-                    continue;
-                }
-        } while (FindNextFileW(hFindFile, &ffd));
-        FindClose(hFindFile);
+            ForEachTextureFile(dir, [](const std::wstring& name) {
+                const bool bKnown = std::any_of(texfiles.begin(), texfiles.end(), [&name](const std::wstring& t) { return !_wcsicmp(t.c_str(), name.c_str()); });
+                if (!bKnown)
+                    texfiles.push_back(name); // "heart.jpg", for example
+            });
+        }
     }
 
     if (texfiles.size() == 0)
@@ -2521,10 +2552,11 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                     {
                         if (!PickRandomTexture(prefix, szRootName))
                         {
+                            // No texture to pick from; this is also the name the warning shows.
                             if (prefix[0])
-                                swprintf_s(szRootName, L"[rand%02d] %s*", rand_slot, prefix);
+                                swprintf_s(szRootName, L"any %s* texture", prefix);
                             else
-                                swprintf_s(szRootName, L"[rand%02d] *", rand_slot);
+                                wcscpy_s(szRootName, L"any texture");
                         }
                         else
                         {
@@ -2583,22 +2615,13 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                     }
 
                     // Load the texture.
-                    wchar_t szFilename[MAX_PATH];
-                    for (int z = 0; z < sizeof(texture_exts) / sizeof(texture_exts[0]); z++)
+                    const std::wstring file = FindTextureFile(szRootName);
+                    if (!file.empty())
                     {
-                        swprintf_s(szFilename, L"%stextures\\%s.%s", g_plugin.m_szMilkdrop2Path, szRootName, texture_exts[z].c_str());
-                        if (GetFileAttributes(szFilename) == INVALID_FILE_ATTRIBUTES)
-                        {
-                            // Try again, but in presets directory.
-                            swprintf_s(szFilename, L"%s%s.%s", g_plugin.m_szPresetDir, szRootName, texture_exts[z].c_str());
-                            if (GetFileAttributes(szFilename) == INVALID_FILE_ATTRIBUTES)
-                                continue;
-                        }
-
                         // Keep trying to load it - if it fails due to memory, evict something and try again.
                         while (1)
                         {
-                            HRESULT hr = g_plugin.GetDevice()->CreateTextureFromFile(szFilename, &x.texptr);
+                            HRESULT hr = g_plugin.GetDevice()->CreateTextureFromFile(file.c_str(), &x.texptr);
                             if (hr == E_OUTOFMEMORY)
                             {
                                 // Out of memory - try evicting something old and/or big.
@@ -2642,7 +2665,11 @@ void CShaderParams::CacheParams(CConstantTable* pCT, bool /* bHardErrors */)
                     if (!x.texptr)
                     {
                         // Not installed (or not loadable): leave this sampler unbound, so it reads
-                        // black, and go on binding the shader's other parameters.
+                        // black, and go on binding the shader's other parameters; the preset's
+                        // load then lists what was missing (ReportMissingTextures()).
+                        auto& missing = g_plugin.m_missingTextures;
+                        if (std::find(missing.begin(), missing.end(), szRootName) == missing.end())
+                            missing.push_back(szRootName);
                         continue;
                     }
 
@@ -4362,6 +4389,7 @@ void CPlugin::MilkDropRenderUI(int* upper_left_corner_y, int* upper_right_corner
                         if (ApplyFlags & STATE_COMP)
                             SafeRelease(m_shaders.comp.ptr);
                         LoadShaders(&m_shaders, m_pState, false);
+                        ReportMissingTextures();
 
                         SetMenusForPresetVersion(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion);
                     }
@@ -5403,9 +5431,9 @@ void CPlugin::LoadPreset(const wchar_t* szPresetFilename, float fBlendTime)
 {
     OutputDebugString(szPresetFilename);
     //OutputDebugString(L"\n");
-    // Clear old error message.
-    //if (m_nFramesSinceResize > 4)
-    //    ClearErrors(ERR_PRESET);
+    // The previous preset's messages (missing textures, shader errors) no longer apply.
+    ClearErrors(ERR_PRESET);
+    m_missingTextures.clear();
 
     // Make sure preset still exists. (might not if they are using the "back"/fwd buttons
     //  in RANDOM preset order and a file was renamed or deleted!)
@@ -5506,6 +5534,7 @@ void CPlugin::OnFinishedLoadingPreset()
 {
     SetMenusForPresetVersion(m_pState->m_nWarpPSVersion, m_pState->m_nCompPSVersion);
     m_nPresetsLoadedTotal++; // only increment this on COMPLETION of the load
+    ReportMissingTextures();
 
     for (int mash = 0; mash < MASH_SLOTS; mash++)
         m_nMashPreset[mash] = m_nCurrentPreset;
@@ -5616,6 +5645,64 @@ std::wstring CPlugin::GetPresetPath(int i) const
     if (g_bCsReady)
         LeaveCriticalSection(&g_cs);
     return path;
+}
+
+// Sets the user's textures folder, searched before the default one. `szDir`: an absolute folder
+// path ending in a backslash, or empty for none. Takes the lock the render thread loads shaders under.
+void CPlugin::SetTextureDir(const wchar_t* szDir)
+{
+    if (g_bCsReady)
+        EnterCriticalSection(&g_cs);
+    m_textureDir = szDir ? szDir : L"";
+    m_bNeedRescanTexturesDir = true; // the random-texture list comes from the textures folders
+    if (g_bCsReady)
+        LeaveCriticalSection(&g_cs);
+}
+
+// The textures folder in the MilkDrop data folder, ending in a backslash.
+std::wstring CPlugin::GetDefaultTextureDir() const
+{
+    return std::wstring(m_szMilkdrop2Path) + L"textures\\";
+}
+
+// The folders a preset's textures are looked up in, in order, each ending in a backslash: the
+// user's textures folder (if set), the default one, and, if `bWithPresetFolder`, the top of the
+// preset folder.
+std::vector<std::wstring> CPlugin::GetTextureDirs(bool bWithPresetFolder) const
+{
+    std::vector<std::wstring> dirs;
+    if (g_bCsReady)
+        EnterCriticalSection(&g_cs);
+    if (!m_textureDir.empty())
+        dirs.push_back(m_textureDir);
+    dirs.push_back(GetDefaultTextureDir());
+    if (bWithPresetFolder)
+        dirs.push_back(m_scannedPresetDir.empty() ? std::wstring(m_szPresetDir) : m_scannedPresetDir);
+    if (g_bCsReady)
+        LeaveCriticalSection(&g_cs);
+    return dirs;
+}
+
+// Shows which textures the shaders loaded since the last call could not find, if any, with how
+// to point MilkDrop at a texture pack, and forgets them.
+void CPlugin::ReportMissingTextures()
+{
+    if (m_missingTextures.empty())
+        return;
+    constexpr size_t kShown = 3; // the message is one line in the upper-right corner
+    std::wstring msg = WASABI_API_LNGSTRINGW(IDS_MISSING_TEXTURES);
+    for (size_t i = 0; i < m_missingTextures.size() && i < kShown; ++i)
+    {
+        if (i)
+            msg += L", ";
+        msg += m_missingTextures[i];
+    }
+    if (m_missingTextures.size() > kShown)
+        msg += L" (+" + std::to_wstring(m_missingTextures.size() - kShown) + L")";
+    AddError(msg.data(), 6.0f, ERR_PRESET, true);
+    std::wstring hint = WASABI_API_LNGSTRINGW(IDS_HOW_TO_SET_TEXTURE_FOLDER);
+    AddError(hint.data(), 6.0f, ERR_PRESET, false);
+    m_missingTextures.clear();
 }
 
 // The folder the last finished scan read, ending in a backslash; empty before the first one.

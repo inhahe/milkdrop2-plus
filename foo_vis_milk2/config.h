@@ -131,6 +131,9 @@ static constexpr GUID guid_cfg_bDebugOutput = {
 static constexpr GUID guid_cfg_szPresetDir = {
     0xfa9e467b, 0xfe6d, 0x4d79, {0x83, 0x98, 0xcd, 0x3d, 0x8b, 0xf4, 0x7a, 0x63}
 }; // {FA9E467B-FE6D-4D79-8398-CD3D8BF47A63}
+static constexpr GUID guid_cfg_szTextureDir = {
+    0x2510b0ae, 0x1155, 0x410e, {0x85, 0xfe, 0x9d, 0x02, 0xdc, 0xe8, 0xd4, 0x23}
+}; // {2510B0AE-1155-410E-85FE-9D02DCE8D423}
 
 // State settings saved on close and restored on launch.
 // Controlled in either the context menu or via the keyboard shortcuts.
@@ -284,6 +287,7 @@ enum
 {
     order_bDebugOutput,
     order_szPresetDir,
+    order_szTextureDir,
 };
 } // namespace
 
@@ -445,13 +449,17 @@ class milk2_config
     static void resolve_profile();
     static void initialize_paths();
 
-    // The preset folder in the form browser_config.ini and the milk2.szPresetDir setting save it
-    // (see stored_path.h). `dir`: an absolute folder path.
-    static std::wstring preset_dir_to_stored(const std::wstring& dir);
-    // `stored`: a saved preset folder. Returns it as an absolute path ending in a backslash, or an
-    // empty string if `stored` is empty or the path is longer than the engine can use
-    // (MAX_PRESET_DIR_LENGTH; a relative value resolved against a longer profile path can grow).
-    static std::wstring preset_dir_from_stored(const std::wstring& stored);
+    // A folder (the preset or the textures folder) in the form the configuration saves it: see
+    // stored_path.h. `dir`: an absolute folder path.
+    static std::wstring folder_to_stored(const std::wstring& dir);
+    // `stored`: a saved folder. `maxLength`: the longest path, with its trailing backslash, the
+    // engine can use for it (MAX_PRESET_DIR_LENGTH for presets). Returns it as an absolute path
+    // ending in a backslash, or an empty string if `stored` is empty or the path is too long (a
+    // relative value resolved against a longer profile path can grow).
+    static std::wstring folder_from_stored(const std::wstring& stored, size_t maxLength);
+    // Saves the user's textures folder in the milk2.szTextureDir setting. `dir`: an absolute folder
+    // path, or empty to use only the default textures folder.
+    static void save_texture_dir(const std::wstring& dir);
 
     // `milk2.ini`
     plugin_config settings{};

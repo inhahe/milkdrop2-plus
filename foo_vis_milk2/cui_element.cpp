@@ -101,7 +101,7 @@ class milk2_cui_panel : public uie::window,
             {
                 const auto values = ReadKeyValueFile(BrowserConfigPath());
                 const auto it = values.find(L"PresetLibraryPath");
-                const std::wstring dir = it != values.end() ? milk2_config::preset_dir_from_stored(it->second) : std::wstring();
+                const std::wstring dir = it != values.end() ? milk2_config::folder_from_stored(it->second, MAX_PRESET_DIR_LENGTH) : std::wstring();
                 if (!dir.empty())
                     wcscpy_s(s_config.settings.m_szPresetDir, dir.c_str());
             }

@@ -515,6 +515,8 @@ class CPlugin : public CPluginShell
     int m_nPresetFilesFound = 0;     // .milk files in it
     int m_nPresetFilesInShuffle = 0; // those of them the shuffle mode's category and favorites filters keep; the
                                      // presets loaded from them exclude those needing a newer pixel shader model
+    std::wstring m_textureDir; // the user's textures folder, ending in a backslash, or empty; change it with SetTextureDir()
+    std::vector<std::wstring> m_missingTextures; // textures the shaders loaded since the last ReportMissingTextures() could not find
 
     float m_fRandStart[4];
 
@@ -599,6 +601,11 @@ class CPlugin : public CPluginShell
     bool SetPresetDir(const wchar_t* szDir);
     std::wstring GetPresetPath(int i) const;
     std::wstring GetScannedPresetDir() const;
+    void SetTextureDir(const wchar_t* szDir);
+    std::vector<std::wstring> GetTextureDirs(bool bWithPresetFolder) const;
+    std::wstring GetDefaultTextureDir() const;
+    static size_t CountTextureFiles(const std::wstring& dir);
+    void ReportMissingTextures();
     td_fontinfo* GetFontInfo() const {return const_cast<td_fontinfo*>(m_fontinfo); };
     void SavePresetAs(wchar_t* szNewFile); // overwrites the file if it was already there.
     void DeletePresetFile(wchar_t* szDelFile);

@@ -181,6 +181,7 @@ typedef struct
     wchar_t m_szMsgIniFile[MAX_PATH];
     wchar_t m_szImgIniFile[MAX_PATH];
     wchar_t m_szPresetDir[MAX_PATH];
+    wchar_t m_szTextureDir[MAX_PATH]; // the user's textures folder, ending in a backslash, or empty
 
     //--- Formats
     wchar_t m_szTitleFormat[256];
