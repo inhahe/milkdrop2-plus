@@ -64,7 +64,7 @@ This fork by Inhahe adds category selection, preset management, and favorites. B
 [`install-milkdrop2-plus.cmd`](install-milkdrop2-plus.cmd) installs everything in one step, with nothing to build: the latest release of the plugin, the [original MilkDrop presets](https://github.com/projectM-visualizer/presets-milkdrop-original), the [Base Milkdrop Texture Pack](https://github.com/projectM-visualizer/presets-milkdrop-texture-pack), and, if you want it, a Default UI layout with MilkDrop on the right and a spectrum, an oscilloscope, a spectrogram and the playlists on the left.
 
 1. Install [foobar2000](https://www.foobar2000.org/download) v2.x (64-bit), and close it.
-2. Download `install-milkdrop2-plus.cmd`: open it on GitHub and click "Download raw file".
+2. Download [`install-milkdrop2-plus.cmd`](https://github.com/inhahe/milkdrop2-plus/releases/latest/download/install-milkdrop2-plus.cmd) (it comes with each release).
 3. Double-click it. It finds foobar2000 and asks before installing there (or lets you pick `foobar2000.exe`), then asks whether to install the layout. If Windows says "Windows protected your PC", click More info, then Run anyway.
 4. Start foobar2000.
 
