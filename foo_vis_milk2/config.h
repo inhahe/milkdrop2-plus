@@ -389,11 +389,15 @@ class milk2_preferences_page : public preferences_page_instance, public CDialogI
 
     const preferences_page_callback::ptr m_callback;
     bool m_resetpage;
-    // What the page last showed for Show album art. The context menu saves the same setting while
-    // the page may be open, so the page compares its check box with this, not with the setting,
-    // and applies it only when the user changed it here.
-    bool m_bShowAlbumShown = false;
-    void ShowAlbumSetting(bool bShowAlbum);
+
+  public:
+    // Shows the Show album art setting the context menu has just saved (milk2_config::
+    // save_menu_toggles) in the page, if it is open, so that the page shows, compares and applies
+    // the setting as it now is. Main thread.
+    static void OnMenuTogglesSaved();
+
+  private:
+    inline static milk2_preferences_page* s_openPage = nullptr; // the page on screen, if any; main thread
 
     CToolTipCtrl m_tooltips;
 

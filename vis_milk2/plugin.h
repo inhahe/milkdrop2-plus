@@ -31,6 +31,7 @@
 #ifndef __NULLSOFT_DX_PLUGIN_H__
 #define __NULLSOFT_DX_PLUGIN_H__
 
+#include "album_art.h"
 #include "texture_cache.h"
 #include <atomic>
 #include <list>
@@ -502,21 +503,21 @@ class CPlugin : public CPluginShell
     wchar_t m_szSongTitle[256];
     unsigned m_nSongTitleTrack = 0; // the NowPlaying::track the song title animation last ran for
 
-    std::wstring m_albumArtFile; // what SetAlbumArt shows
-    std::vector<uint8_t> m_albumArtImage;
+    std::vector<uint8_t> m_albumArtImage; // the encoded image SetAlbumArt shows
     // Where and how large the album art is drawn when the image list does not say: an
     // AlbumArtPosition, and its longer side in percent of the canvas's shorter side.
     int m_albumArtPosition = ALBUM_ART_LOWER_RIGHT;
     int m_albumArtSize = DEFAULT_ALBUM_ART_SIZE;
     void LaunchAlbumArt();
-    // Sets the album art sprite's (slot `iSlot`'s) `artx`, `arty` and `artsize` inputs from the
-    // settings above (PlaceAlbumArt). Each frame, before its per-frame code: a change of the
-    // settings moves the art at the next frame, and an [img100] section's code may use them too.
-    void SetAlbumArtInputs(int iSlot);
     std::vector<int> m_spritesToRelaunch; // numbers of the sprites a lost device had on screen
     void RelaunchSprites();
-    // The canvas's width / height, as the sprites are placed by (their `aspect`).
-    double CanvasAspect() const { return GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0; }
+    // What the sprites are placed by, set before their init code and each frame: the canvas's
+    // width / height (`aspect`) and the album art settings (`artx`, `arty`, `artsize`), so that a
+    // change of those moves the art at the next frame.
+    SpritePlacement SpritePlacementInputs() const
+    {
+        return {GetHeight() > 0 ? GetWidth() / static_cast<double>(GetHeight()) : 1.0, PlaceAlbumArt(m_albumArtPosition, m_albumArtSize)};
+    }
 
     // Stuff for the menu system.
     CMilkMenu* m_pCurMenu; // should always be valid!
@@ -570,11 +571,11 @@ class CPlugin : public CPluginShell
     // take (0-99). A section [img100] there says how it is drawn; without one, the album art
     // settings do (LaunchAlbumArt).
     static constexpr int kAlbumArtSprite = 100;
-    // Shows the image file `file`, or else the encoded image `image`, as the album art sprite in
-    // place of the last, or removes it when both are empty. Other sprites stay. Kept, and shown
+    // Shows `image`, an encoded image (the bytes of a JPEG or PNG file, say), as the album art
+    // sprite in place of the last, or removes it when empty. Other sprites stay. Kept, and shown
     // again on a new device after a device reset if it was on screen (RelaunchSprites). Render
     // thread.
-    void SetAlbumArt(std::wstring file, std::vector<uint8_t> image);
+    void SetAlbumArt(std::vector<uint8_t> image);
 
   private:
     int PixelShaderUpgradeTarget() const;

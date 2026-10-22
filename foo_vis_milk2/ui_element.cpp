@@ -1356,29 +1356,50 @@ void milk2_ui_element::UpdateChannelMode()
 }
 // clang-format on
 
-// Raised when foobar2000 quits (milk2_initquit), so that a worker still reading album art gives up
-// rather than use the core as it shuts down.
-static abort_callback_impl s_albumArtAbort;
-// Counts the album art reads ShowAlbumArt has started. A read's art is shown only if no later read
-// has started, so that a slow read cannot replace a newer track's art. Main thread.
+// Counts the album art reads ShowAlbumArt has started, or cancelled. A read's art is shown only if
+// the count has not moved since it started, so that a slow read cannot replace newer art. Main
+// thread.
 static unsigned s_albumArtReads = 0;
+// The abort of the read running last, raised when another replaces it or foobar2000 quits
+// (milk2_initquit): a read nobody will show stops, and none uses the core as it shuts down. Main
+// thread; the read itself holds a reference.
+static std::shared_ptr<abort_callback_impl> s_albumArtAbort;
+// The largest image file read as album art: the artwork format may name something else entirely.
+static constexpr size_t kMaxAlbumArtFileBytes = 64 * 1024 * 1024;
 
-// The image file `format` (the artwork format setting) names for `track`, if the format is set and
-// the file exists; or else empty. Any thread.
-static std::wstring AlbumArtFile(const metadb_handle_ptr& track, const pfc::string8& format, abort_callback& abort)
+// Stops the album art read running, if any, and keeps any read started before from showing its
+// art. Returns the count a read started now has. Main thread.
+static unsigned CancelAlbumArtReads()
+{
+    if (s_albumArtAbort)
+        s_albumArtAbort->abort();
+    s_albumArtAbort.reset();
+    return ++s_albumArtReads;
+}
+
+// The image file `format` (the artwork format setting) names for `track`, read whole through
+// foobar2000's filesystem, if the format is set and names a file it can read; or else empty. A
+// format with no field (%...%) and no function ($...) is a path as written, not a script: in a
+// script, brackets, quotes and commas are syntax, and folder names often have them, as in
+// "(2000) Gladiator". Any thread.
+static std::vector<uint8_t> AlbumArtFile(const metadb_handle_ptr& track, const pfc::string8& format, abort_callback& abort)
 {
     if (format.is_empty())
         return {};
-    titleformat_object::ptr script;
-    pfc::string8 path;
-    if (!titleformat_compiler::get()->compile(script, format) || !track->format_title(nullptr, path, script, nullptr) || path.is_empty())
-        return {};
+    pfc::string8 path = format;
+    if (strchr(format, '%') || strchr(format, '$'))
+    {
+        titleformat_object::ptr script;
+        if (!titleformat_compiler::get()->compile(script, format) || !track->format_title(nullptr, path, script, nullptr) || path.is_empty())
+            return {};
+    }
     try
     {
-        if (filesystem::g_exists(path, abort))
-            return std::wstring(pfc::wideFromUTF8(path));
+        const fb2k::memBlockRef image = filesystem::g_readWholeFile(path, kMaxAlbumArtFileBytes, abort);
+        const auto data = static_cast<const uint8_t*>(image->data());
+        return std::vector<uint8_t>(data, data + image->size());
     }
-    catch (const std::exception&) // not a path foobar2000 can open, or aborted
+    catch (const std::exception&) // no such file, none foobar2000 can read, too large, or aborted
     {
     }
     return {};
@@ -1420,42 +1441,42 @@ static std::vector<uint8_t> AlbumArtImage(const metadb_handle_ptr& track, abort_
 }
 
 // Shows `track`'s album art in place of the last, if that option is on: the file the artwork
-// format names, if that exists, or else the track's front cover. Otherwise, or with no track,
-// removes it. Other sprites stay. Nothing with no engine running. The art is read on a worker
-// thread, as a file on a slow disk or a network share must not hold up foobar2000's windows.
-// Main thread.
+// format names, if foobar2000 can read it, or else the track's front cover. With the option off,
+// removes it. With the option on and no track (playback stopped), leaves the art, shown or being
+// read, as a stop does. Other sprites stay. Nothing with no engine running. The art is read on a
+// worker thread, as a file on a slow disk or a network share must not hold up foobar2000's
+// windows, nor the render thread, which decodes it from memory. Main thread.
 static void ShowAlbumArt(const metadb_handle_ptr& track)
 {
+    if (s_config.settings.m_bShowAlbum && !track.is_valid())
+        return;
+    const unsigned read = CancelAlbumArtReads(); // even with no engine: a later one shows this track's
     if (!s_milk2)
         return;
-    const unsigned read = ++s_albumArtReads;
     // Hands the engine the art read, on the render thread, which draws the sprites. Main thread.
-    const auto show = [read](std::wstring file, std::vector<uint8_t> raster) {
-        if (read != s_albumArtReads || !s_milk2) // a later read started, or the engine stopped
+    const auto show = [read](std::vector<uint8_t> image) {
+        if (read != s_albumArtReads || !s_milk2) // another read replaced it, or the engine stopped
             return;
-        g_plugin.RunOnRenderThread([file = std::move(file), raster = std::move(raster)]() mutable {
-            g_plugin.SetAlbumArt(std::move(file), std::move(raster));
-        });
+        g_plugin.RunOnRenderThread([image = std::move(image)]() mutable { g_plugin.SetAlbumArt(std::move(image)); });
     };
-    if (!s_config.settings.m_bShowAlbum || !track.is_valid())
+    if (!s_config.settings.m_bShowAlbum)
     {
-        show({}, {});
+        show({});
         return;
     }
-    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), show] {
-        std::wstring file = AlbumArtFile(track, format, s_albumArtAbort);
-        std::vector<uint8_t> raster = file.empty() ? AlbumArtImage(track, s_albumArtAbort) : std::vector<uint8_t>();
-        fb2k::inMainThread([show, file = std::move(file), raster = std::move(raster)]() mutable {
-            show(std::move(file), std::move(raster));
-        });
+    s_albumArtAbort = std::make_shared<abort_callback_impl>();
+    fb2k::splitTask([track, format = pfc::utf8FromWide(s_config.settings.m_szArtworkFormat), abort = s_albumArtAbort, show] {
+        std::vector<uint8_t> image = AlbumArtFile(track, format, *abort);
+        if (image.empty())
+            image = AlbumArtImage(track, *abort);
+        fb2k::inMainThread([show, image = std::move(image)]() mutable { show(std::move(image)); });
     });
 }
 
 void ShowNowPlayingAlbumArt()
 {
     metadb_handle_ptr track;
-    if (!playback_control::get()->get_now_playing(track) && s_config.settings.m_bShowAlbum)
-        return; // stopped: the last track's art stays up, as it does when playback stops
+    playback_control::get()->get_now_playing(track);
     ShowAlbumArt(track);
 }
 
@@ -1790,7 +1811,7 @@ class milk2_initquit : public initquit
     {
         MILK2_CONSOLE_LOG("on_quit")
         //NSEEL_quit();
-        s_albumArtAbort.abort();
+        CancelAlbumArtReads();
         s_playbackFeed.reset();
         s_titleScript.release();
         if (core_api::is_quiet_mode_enabled())

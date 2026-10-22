@@ -33,11 +33,20 @@
 
 #include "md_defines.h"
 #include "d3d11shim.h"
+#include "album_art.h"
 #ifdef NS_EEL2
 #include <eel2/ns-eel.h>
 #else
 #include <projectm-eval/ns-eel2-shim/ns-eel.h>
 #endif
+
+// What a sprite's code is given to place it by: inputs set before its init code and each frame
+// (texmgr::SetPlacementInputs).
+struct SpritePlacement
+{
+    double canvasAspect;   // the canvas's width / height: `aspect`
+    AlbumArtPlacement art; // the album art settings (PlaceAlbumArt): `artx`, `arty`, `artsize`
+};
 
 #define NUM_TEX 16
 #define TEXMGR_ERROR_MASK 0x0F
@@ -80,7 +89,8 @@ typedef struct
     double *var_time, *var_frame, *var_fps, *var_progress;
     double *var_bass, *var_bass_att, *var_mid, *var_mid_att, *var_treb, *var_treb_att;
     double* var_aspect;    // the canvas's width / height, and
-    double* var_imgaspect; // the image's: both set before the init code and each frame, to place by
+    double* var_imgaspect; // the image's: both set before the init code and each frame, to place by,
+    double *var_artx, *var_arty, *var_artsize; // as are the album art settings (SpritePlacement::art)
 
     // Expression outputs
     double *var_x, *var_y;
@@ -103,12 +113,12 @@ class texmgr
     // they are and returns false, so that they outlive a reallocation of the engine's other
     // resources (a resize, a change of settings, a window swap).
     bool Init(D3D11Shim* lpDD);
-    // Sets slot `iSlot`'s `aspect` and `imgaspect` inputs: `canvasAspect` (the canvas's width /
-    // height) and its image's.
-    void SetPlacementInputs(int iSlot, double canvasAspect);
-    // `canvasAspect`: the canvas's width / height, for the init code's `aspect`.
-    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, double canvasAspect);
-    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, double canvasAspect);
+    // Sets slot `iSlot`'s placement inputs: `aspect`, `artx`, `arty` and `artsize` from
+    // `placement`, and `imgaspect` from its image.
+    void SetPlacementInputs(int iSlot, const SpritePlacement& placement);
+    // `placement`: what the init code is given to place the sprite by.
+    int LoadTex(wchar_t* szFilename, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpritePlacement& placement);
+    int LoadTex(std::vector<uint8_t> rawdata, int iSlot, char* szInitCode, char* szCode, float time, uint32_t frame, unsigned int ck, const SpritePlacement& placement);
     void KillTex(int iSlot);
     void Finish();
 
@@ -119,7 +129,7 @@ class texmgr
     void FreeVars(int iSlot);
     void FreeCode(int iSlot);
     void RegisterBuiltInVariables(int iSlot);
-    bool RunInitCode(int iSlot, char* szInitCode, double canvasAspect);
+    bool RunInitCode(int iSlot, char* szInitCode, const SpritePlacement& placement);
     bool RecompileExpressions(int iSlot);
     void StripLinefeedCharsAndComments(char* src, char* dest);
 

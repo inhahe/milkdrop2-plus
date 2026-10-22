@@ -307,7 +307,9 @@ BOOL milk2_preferences_page::OnInitDialog(CWindow, LPARAM)
     }
     if (SelectItemByValue(ctrl, static_cast<LRESULT>(cfg_nAlbumArtSize)) < 0)
         SelectItemByValue(ctrl, default_nAlbumArtSize); // a size the list does not offer
-    ShowAlbumSetting(cfg_bShowAlbum);
+    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
+    AutoEnableAlbumArt();
+    s_openPage = this;
 
     // Push buttons.
     milk2_config::initialize_paths();
@@ -382,6 +384,8 @@ void milk2_preferences_page::OnClose()
 void milk2_preferences_page::OnDestroy()
 {
     PREFS_CONSOLE_LOG("OnDestroy")
+    if (s_openPage == this)
+        s_openPage = nullptr;
     //if (m_tooltips.IsWindow())
     //    m_tooltips.DestroyWindow();
 }
@@ -460,12 +464,13 @@ void milk2_preferences_page::OnHScroll(UINT nSBCode, UINT nPos, CScrollBar pScro
     }
 }
 
-// Shows `bShowAlbum`, the Show album art setting, in its check box.
-void milk2_preferences_page::ShowAlbumSetting(bool bShowAlbum)
+void milk2_preferences_page::OnMenuTogglesSaved()
 {
-    CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(bShowAlbum));
-    m_bShowAlbumShown = bShowAlbum;
-    AutoEnableAlbumArt();
+    if (!s_openPage)
+        return;
+    s_openPage->CheckDlgButton(IDC_CB_SHOW_ALBUM, static_cast<UINT>(cfg_bShowAlbum));
+    s_openPage->AutoEnableAlbumArt();
+    s_openPage->OnChanged();
 }
 
 // Greys the album art's position and size out while album art is off.
@@ -636,9 +641,7 @@ void milk2_preferences_page::apply()
         SetDlgItemText(IDC_ARTWORK_FORMAT, L"<ERROR>");
     }
 
-    if (const bool bShowAlbum = IsDlgButtonChecked(IDC_CB_SHOW_ALBUM) == BST_CHECKED; bShowAlbum != m_bShowAlbumShown)
-        cfg_bShowAlbum = bShowAlbum; // changed here; otherwise what the context menu last saved stands
-    ShowAlbumSetting(cfg_bShowAlbum);
+    cfg_bShowAlbum = static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM));
     cfg_nAlbumArtPosition = ReadCBValue(IDC_ALBUM_ART_POSITION); // both always have a selection (OnInitDialog)
     cfg_nAlbumArtSize = ReadCBValue(IDC_ALBUM_ART_SIZE);
 
@@ -667,7 +670,7 @@ bool milk2_preferences_page::HasChanged() const
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_FSPT)) != cfg_allow_page_tearing_fs) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_HARDCUTS)) != cfg_bHardCutsDisabled) ||
                             (static_cast<bool>(IsDlgButtonChecked(IDC_CB_TITLE_ANIMS)) != cfg_bSongTitleAnims) ||
-                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != m_bShowAlbumShown);
+                            (static_cast<bool>(IsDlgButtonChecked(IDC_CB_SHOW_ALBUM)) != cfg_bShowAlbum);
 
     bool combobox_changes = false;
     LRESULT n = SendMessage(GetDlgItem(IDC_FS_MAXFPS2), CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
@@ -1356,6 +1359,7 @@ void milk2_config::save_menu_toggles() const
 {
     cfg_bShowAlbum = settings.m_bShowAlbum;
     cfg_bEnableDownmix = settings.m_bEnableDownmix;
+    milk2_preferences_page::OnMenuTogglesSaved();
 }
 
 void milk2_config::update_paths()

@@ -1087,8 +1087,7 @@ void CPlugin::CleanUpMilkDropNonDX11()
         std::lock_guard<std::mutex> lock(m_renderTasksLock);
         m_renderTasks.clear();
     }
-    m_albumArtFile.clear(); // the next session shows its own
-    m_albumArtImage.clear();
+    m_albumArtImage.clear(); // the next session shows its own
     m_spritesToRelaunch.clear();
 
     m_menuPreset.Finish();
@@ -1848,9 +1847,8 @@ void CPlugin::RelaunchSprites()
     m_spritesToRelaunch.clear();
 }
 
-void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
+void CPlugin::SetAlbumArt(std::vector<uint8_t> image)
 {
-    m_albumArtFile = std::move(file);
     m_albumArtImage = std::move(image);
     for (int x = 0; x < NUM_TEX; x++)
         if (m_texmgr.m_tex[x].pSurface && m_texmgr.m_tex[x].nUserData == kAlbumArtSprite)
@@ -1858,19 +1856,10 @@ void CPlugin::SetAlbumArt(std::wstring file, std::vector<uint8_t> image)
     LaunchAlbumArt();
 }
 
-void CPlugin::SetAlbumArtInputs(int iSlot)
-{
-    const AlbumArtPlacement placement = PlaceAlbumArt(m_albumArtPosition, m_albumArtSize);
-    const NSEEL_VMCTX vm = m_texmgr.m_tex[iSlot].tex_eel_ctx;
-    *NSEEL_VM_regvar(vm, "artx") = placement.x;
-    *NSEEL_VM_regvar(vm, "arty") = placement.y;
-    *NSEEL_VM_regvar(vm, "artsize") = placement.size;
-}
-
 // The album art's code when the image list has no [img100] section: the image in a corner, or the
-// centre, as the settings say (the inputs `artx`, `arty` and `artsize`: SetAlbumArtInputs), with a
-// margin of a fortieth of the canvas's shorter side, fading in. Not burned in: a burned sprite is
-// also drawn into the preset's own image every frame, which the preset then smears.
+// centre, as the settings say (the inputs `artx`, `arty` and `artsize`: SpritePlacementInputs),
+// with a margin of a fortieth of the canvas's shorter side, fading in. Not burned in: a burned
+// sprite is also drawn into the preset's own image every frame, which the preset then smears.
 // A sprite's x and y run from 0 to 1 across the canvas's longer side, centred on the canvas, and
 // sx and sy give the image's longer side as a fraction of it; a non-square image is shrunk about
 // its middle. Hence `aspect` (the canvas's width / height) and `imgaspect` (the image's). An image
@@ -1890,9 +1879,7 @@ static const char* const kAlbumArtCode =
 // Launches the album art sprite from what SetAlbumArt kept, if anything.
 void CPlugin::LaunchAlbumArt()
 {
-    if (!m_albumArtFile.empty())
-        LaunchSprite(kAlbumArtSprite, -1, m_albumArtFile, {}, kAlbumArtInitCode, kAlbumArtCode);
-    else if (!m_albumArtImage.empty())
+    if (!m_albumArtImage.empty())
         LaunchSprite(kAlbumArtSprite, -1, L"", m_albumArtImage, kAlbumArtInitCode, kAlbumArtCode);
 }
 
@@ -7267,11 +7254,11 @@ bool CPlugin::LaunchSprite(int nSpriteNum, int nSlot, const std::wstring& filena
     int ret = -1;
     if ((nSpriteNum >= 0 && nSpriteNum < 100) || !filename.empty())
     {
-        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck, CanvasAspect());
+        ret = m_texmgr.LoadTex(img, nSlot, initcode, code, GetTime(), GetFrame(), ck, SpritePlacementInputs());
     }
     else if (!data.empty())
     {
-        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck, CanvasAspect());
+        ret = m_texmgr.LoadTex(data, nSlot, initcode, code, GetTime(), GetFrame(), ck, SpritePlacementInputs());
     }
     else
         return false;
